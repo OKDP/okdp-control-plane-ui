@@ -1,0 +1,68 @@
+/* Unified Table Styles
+   PrimeNG table theming is handled via CSS vars in variables.css:
+   --p-datatable-header-cell-background, --p-datatable-row-background, etc.
+   This file only adds custom styling beyond what PrimeNG vars cover. */
+
+.p-datatable.minimal-table {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: var(--db-radius-2xl);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.03);
+}
+
+.p-datatable.minimal-table .p-datatable-header {
+  display: none;
+}
+
+.p-datatable.minimal-table .p-datatable-thead > tr > th {
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--db-text-secondary);
+  font-weight: 700;
+  font-size: var(--db-font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 16px 20px;
+  text-align: left;
+  border: none;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr {
+  transition: background-color var(--db-transition-fast);
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr > td {
+  padding: 18px 20px;
+  color: var(--db-text-primary);
+  font-size: var(--db-font-size-base);
+  font-weight: 500;
+  line-height: var(--db-line-height-base);
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
+  border-bottom: none;
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr:hover {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Compact monospace data cells */
+.p-datatable .mono-cell {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: var(--db-font-size-sm);
+  color: var(--db-text-secondary);
+}
+
+.empty-message {
+  text-align: center;
+  padding: 32px;
+  color: var(--db-text-muted);
+  font-size: var(--db-font-size-base);
+  background: transparent;
+}

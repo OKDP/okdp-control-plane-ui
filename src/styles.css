@@ -1,0 +1,16 @@
+/* Main Global Styles Entry Point */
+@import 'primeicons/primeicons.css';
+
+/* 1. Tokens & Base */
+@import './styles/variables.css';
+@import './styles/base.css';
+
+/* 2. Components */
+@import './styles/components/layout.css';
+@import './styles/components/tables.css';
+@import './styles/components/dialogs.css';
+@import './styles/components/forms.css';
+@import './styles/components/okdp-design.css';
+
+/* Note: Component-specific styles should be minimized. 
+   Use the shared classes defined above. */
