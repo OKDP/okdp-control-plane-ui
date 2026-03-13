@@ -1,0 +1,70 @@
+/* Global Dialog Styles
+   Base PrimeNG dialog theming is handled via CSS vars in variables.css:
+   --p-dialog-border-radius, --p-dialog-header-background, etc.
+   This file adds layout patterns for dialog content. */
+
+.db-dialog .p-dialog-header {
+  padding: var(--db-space-lg) var(--db-space-xl) var(--db-space-sm) var(--db-space-xl);
+  border-bottom: none;
+}
+
+.db-dialog .p-dialog-content {
+  padding: var(--db-space-sm) var(--db-space-xl) var(--db-space-lg) var(--db-space-xl);
+}
+
+.db-dialog .p-dialog-footer {
+  padding: var(--db-space-md) var(--db-space-xl);
+  border-top: 1px solid var(--db-border-light);
+}
+
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-sm);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Dialog Cancel / Submit buttons — consolidated */
+.btn-cancel {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-color);
+  padding: 7px 16px;
+  border-radius: var(--db-radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--db-text-primary);
+  font-size: var(--db-font-size-md);
+  transition:
+    background var(--db-transition-base),
+    border-color var(--db-transition-base);
+}
+
+.btn-cancel:hover {
+  background: var(--db-bg-tertiary);
+}
+
+.btn-create {
+  background: var(--db-primary);
+  border: none;
+  padding: 7px 16px;
+  border-radius: var(--db-radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  color: white;
+  font-size: var(--db-font-size-md);
+  transition: background var(--db-transition-base);
+}
+
+.btn-create:hover {
+  background-color: var(--db-primary-hover);
+}
+
+.btn-create:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

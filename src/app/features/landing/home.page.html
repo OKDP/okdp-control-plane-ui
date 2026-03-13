@@ -1,0 +1,57 @@
+<section class="login-page">
+    <div class="login-card">
+        <!-- Logo -->
+        <div class="logo-section">
+            <img src="/images/okdp-notext.svg" alt="okdp" class="logo" />
+            <div class="logo-text">
+                <span class="logo-title">okdp</span>
+                <span class="logo-subtitle">console</span>
+            </div>
+        </div>
+
+        <!-- Welcome Message -->
+        <div class="welcome-section">
+            <h1>Welcome</h1>
+            <p class="description">
+                Sign in to access your workspace
+            </p>
+        </div>
+
+        <!-- Auth States -->
+        @if (auth.ready()) {
+        @if (auth.isAuthenticated()) {
+        <!-- Authenticated State -->
+        <div class="session-info">
+            <div class="user-greeting">
+                <i class="pi pi-user-check"></i>
+                <span>Signed in as <strong>{{ auth.profile()?.firstName || auth.profile()?.username
+                        }}</strong></span>
+            </div>
+            <div class="actions">
+                <button pButton type="button" label="My Account" icon="pi pi-user" class="p-button-outlined"
+                    (click)="openAccount()"></button>
+                <button pButton type="button" label="Sign out" icon="pi pi-sign-out" severity="secondary"
+                    (click)="logout()"></button>
+            </div>
+        </div>
+        } @else {
+        <!-- Guest State -->
+        <div class="login-action">
+            <button pButton type="button" label="Sign in" icon="pi pi-sign-in" class="login-btn"
+                (click)="login()"></button>
+        </div>
+        }
+        } @else {
+        <!-- Loading State -->
+        <div class="loading-state">
+            <i class="pi pi-spin pi-spinner"></i>
+            <span>Initializing...</span>
+        </div>
+        }
+    </div>
+
+    <!-- Footer -->
+    <footer class="login-footer">
+        <span>© 2026 OKDP</span>
+    </footer>
+</section>
