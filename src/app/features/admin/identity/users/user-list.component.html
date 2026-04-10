@@ -1,0 +1,143 @@
+<div class="user-container">
+    <p-toast></p-toast>
+    <p-confirmDialog styleClass="db-confirm-dialog" [style]="{width: '400px'}" acceptButtonStyleClass="p-button-danger"
+        rejectButtonStyleClass="p-button-text">
+    </p-confirmDialog>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="left-group">
+            <h1>Users</h1>
+            <p-iconfield>
+                <p-inputicon styleClass="pi pi-search" />
+                <input type="text" pInputText placeholder="Filter users..."
+                    (input)="dt.filterGlobal($any($event.target).value, 'contains')" />
+            </p-iconfield>
+        </div>
+
+        <p-button label="Create user" (onClick)="openNew()" styleClass="create-btn">
+        </p-button>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrapper">
+        <p-table #dt [value]="users()" [loading]="loading()" [globalFilterFields]="['name', 'email']"
+            styleClass="minimal-table">
+
+            <ng-template pTemplate="header">
+                <tr>
+                    <th style="width: 20%">Name</th>
+                    <th style="width: 25%">Email</th>
+                    <th style="width: 25%">Groups</th>
+                    <th style="width: 15%">Status</th>
+                    <th style="width: 15%"></th>
+                </tr>
+            </ng-template>
+
+            <ng-template pTemplate="body" let-user>
+                <tr class="user-row">
+                    <td>
+                        <div class="user-info">
+                            <span class="user-name">{{ user.name }}</span>
+                        </div>
+                    </td>
+                    <td class="email-cell">
+                        {{ user.email?.join(', ') || '-' }}
+                    </td>
+                    <td>
+                        <div class="groups-list">
+                            @for (group of user.groups?.slice(0, 3); track group) {
+                            <span class="group-badge">{{ group }}</span>
+                            }
+                            @if (user.groups?.length > 3) {
+                            <span class="group-more">+{{ user.groups.length - 3 }}</span>
+                            }
+                        </div>
+                    </td>
+                    <td>
+                        @if (user.disabled) {
+                        <span class="status-badge disabled">Disabled</span>
+                        } @else {
+                        <span class="status-badge active">Active</span>
+                        }
+                    </td>
+                    <td style="text-align: right">
+                        <div class="actions">
+                            <p-button icon="pi pi-ellipsis-v" [text]="true" [rounded]="true"
+                                (onClick)="menu.toggle($event); selectedUser = user">
+                            </p-button>
+                            <p-menu #menu [model]="menuItems" [popup]="true" appendTo="body"></p-menu>
+                        </div>
+                    </td>
+                </tr>
+            </ng-template>
+
+            <ng-template pTemplate="emptymessage">
+                <tr>
+                    <td colspan="5" class="empty-message">
+                        No users found.
+                    </td>
+                </tr>
+            </ng-template>
+        </p-table>
+    </div>
+
+    <!-- Create/Edit Dialog -->
+    <p-dialog [header]="isEditMode ? 'Edit user' : 'Create new user'" [(visible)]="userDialog" [modal]="true"
+        [draggable]="false" [resizable]="false" [style]="{ width: '500px' }" styleClass="db-dialog" [closable]="true">
+
+        <div class="dialog-content">
+            <div class="field">
+                <label for="username">Username</label>
+                <input pInputText id="username" [(ngModel)]="user.username" class="w-full dialog-input"
+                    placeholder="e.g., john.doe" [disabled]="isEditMode" />
+                <small class="p-error" *ngIf="submitted && !user.username">Username is required.</small>
+            </div>
+
+            <div class="field">
+                <label for="name">Display Name</label>
+                <input pInputText id="name" [(ngModel)]="user.name" class="w-full dialog-input"
+                    placeholder="e.g., John Doe" />
+            </div>
+
+            <div class="field">
+                <label for="email">Email <span class="optional">(comma-separated for multiple)</span></label>
+                <input pInputText id="email" [(ngModel)]="emailInput" class="w-full dialog-input"
+                    placeholder="e.g., john@example.com" />
+            </div>
+
+            <div class="field">
+                <label for="password">Password <span class="optional" *ngIf="isEditMode">(leave empty to keep
+                        current)</span></label>
+                <p-password [(ngModel)]="user.password" [toggleMask]="true" [feedback]="false" styleClass="w-full">
+                </p-password>
+            </div>
+
+            <div class="field">
+                <label for="groups">Groups</label>
+                <p-multiselect [options]="availableGroups()" [(ngModel)]="selectedGroups" optionLabel="name"
+                    optionValue="name" placeholder="Select groups" [style]="{'width':'100%'}" appendTo="body"
+                    display="chip">
+                </p-multiselect>
+            </div>
+
+            <div class="field">
+                <label for="comment">Comment <span class="optional">(optional)</span></label>
+                <textarea pInputTextarea id="comment" [(ngModel)]="user.comment" rows="3" class="w-full dialog-input"
+                    placeholder="Add a note about this user..."></textarea>
+            </div>
+
+            <div class="field-checkbox">
+                <p-checkbox [(ngModel)]="user.disabled" [binary]="true" inputId="disabled"></p-checkbox>
+                <label for="disabled">Disable account</label>
+            </div>
+        </div>
+
+        <ng-template pTemplate="footer">
+            <div class="dialog-actions">
+                <p-button severity="secondary" [outlined]="true" label="Cancel" (onClick)="hideDialog()"></p-button>
+                <p-button severity="primary" [disabled]="!user.name || !user.username" (onClick)="saveUser()" [label]="isEditMode ? 'Save' : 'Create'"></p-button>
+            </div>
+        </ng-template>
+    </p-dialog>
+</div>
