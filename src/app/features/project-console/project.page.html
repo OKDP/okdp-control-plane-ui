@@ -1,0 +1,229 @@
+<div class="admin-shell">
+    <!-- Header unifié -->
+    <header class="main-header">
+        <div class="header-left">
+            <button class="toggle-btn" (click)="toggleSidebar()" [title]="sidebarCollapsed() ? 'Expand' : 'Collapse'"
+                [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
+                <i [class]="sidebarCollapsed() ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+            </button>
+            <div class="logo-container">
+                <img src="/images/okdp-notext.svg" alt="okdp" class="logo" />
+                <div class="logo-text">
+                    <span class="logo-title">okdp</span>
+                    <span class="logo-subtitle">console</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="header-center">
+            <!-- Reserved -->
+        </div>
+
+        <div class="header-right">
+            @if (context.availableProjects().length > 0) {
+            <div class="project-switcher">
+                <p-select [options]="context.availableProjects()" [ngModel]="context.currentProject()"
+                    (ngModelChange)="context.selectProject($event.name)" optionLabel="name" placeholder="Select Project"
+                    styleClass="project-dropdown" appendTo="body">
+                    <ng-template pTemplate="selectedItem" let-project>
+                        <span class="selected-project">
+                            @if (project) {
+                            {{ project.name }}
+                            } @else {
+                            Select Project
+                            }
+                        </span>
+                    </ng-template>
+                    <ng-template pTemplate="item" let-project>
+                        <div class="project-item">
+                            <span class="project-name">{{ project.name }}</span>
+                            @if (project.description) {
+                            <small class="project-desc">{{ project.description }}</small>
+                            }
+                        </div>
+                    </ng-template>
+                </p-select>
+            </div>
+            }
+            @if (auth.hasRole('admins')) {
+            <a routerLink="/admin" class="space-switcher-btn" aria-label="Go to Administration">
+                <span>Administration</span>
+                <i class="pi pi-arrow-right"></i>
+            </a>
+            }
+            <a [href]="githubUrl" target="_blank" class="topbar-btn" title="GitHub">
+                <i class="pi pi-github"></i>
+            </a>
+
+            <div class="user-card" (click)="menu.toggle($event)" tabindex="0" aria-label="User menu" role="button"
+                (keydown.enter)="menu.toggle($event)">
+                <p-avatar [label]="initials()" shape="circle" size="normal"></p-avatar>
+                <div class="user-info">
+                    <span class="user-name">{{ displayName() }}</span>
+                </div>
+                <i class="pi pi-angle-down"></i>
+            </div>
+            <p-menu #menu [model]="profileMenu" [popup]="true"></p-menu>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" [class.collapsed]="sidebarCollapsed()">
+
+        <nav class="nav">
+            <a class="nav-link" [routerLink]="['/project', context.currentProject()?.name]" routerLinkActive="active"
+                [routerLinkActiveOptions]="{exact: true}" [title]="sidebarCollapsed() ? 'Home' : ''">
+                <i class="pi pi-home"></i>
+                <span>Home</span>
+            </a>
+            <!-- Lakehouse -->
+            <div class="nav-section">
+                <button class="nav-section-header" (click)="toggleLakehouse()"
+                    [title]="sidebarCollapsed() ? 'Lakehouse' : ''" type="button">
+                    <i class="pi pi-database"></i>
+                    <span>Lakehouse</span>
+                    <i class="chevron pi" [class.pi-chevron-down]="lakehouseExpanded()"
+                        [class.pi-chevron-right]="!lakehouseExpanded()"></i>
+                </button>
+                <div class="nav-section-items" [class.expanded]="lakehouseExpanded()">
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'lakehouse', 'polaris']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'Polaris' : ''">
+                        <i class="pi pi-table"></i>
+                        <span>Polaris</span>
+                    </a>
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'lakehouse', 'trino']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'Trino' : ''">
+                        <i class="pi pi-bolt"></i>
+                        <span>Trino</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Data Engineering -->
+            <div class="nav-section">
+                <button class="nav-section-header" (click)="toggleDataEng()"
+                    [title]="sidebarCollapsed() ? 'Data Engineering' : ''" type="button">
+                    <i class="pi pi-cog"></i>
+                    <span>Data Engineering</span>
+                    <i class="chevron pi" [class.pi-chevron-down]="dataEngExpanded()"
+                        [class.pi-chevron-right]="!dataEngExpanded()"></i>
+                </button>
+                <div class="nav-section-items" [class.expanded]="dataEngExpanded()">
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'data-engineering', 'airflow']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'Airflow' : ''">
+                        <i class="pi pi-sitemap"></i>
+                        <span>Airflow</span>
+                    </a>
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'spark', 'applications']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'Spark Applications' : ''">
+                        <i class="pi pi-play"></i>
+                        <span>Spark Applications</span>
+                    </a>
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'spark', 'history-server']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'Spark History' : ''">
+                        <i class="pi pi-history"></i>
+                        <span>Spark History</span>
+                    </a>
+                    <span class="nav-link sub-link disabled" [title]="sidebarCollapsed() ? 'Kafka — exploration' : 'Direction future, non engagé'">
+                        <i class="pi pi-share-alt"></i>
+                        <span>Kafka</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Notebooks -->
+            <div class="nav-section">
+                <button class="nav-section-header" (click)="toggleNotebook()"
+                    [title]="sidebarCollapsed() ? 'Notebooks' : ''" type="button">
+                    <i class="pi pi-book"></i>
+                    <span>Notebooks</span>
+                    <i class="chevron pi" [class.pi-chevron-down]="notebookExpanded()"
+                        [class.pi-chevron-right]="!notebookExpanded()"></i>
+                </button>
+                <div class="nav-section-items" [class.expanded]="notebookExpanded()">
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'services']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'JupyterHub' : ''">
+                        <i class="pi pi-desktop"></i>
+                        <span>JupyterHub</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- SQL & BI -->
+            <div class="nav-section">
+                <button class="nav-section-header" (click)="toggleSqlBi()"
+                    [title]="sidebarCollapsed() ? 'SQL & BI' : ''" type="button">
+                    <i class="pi pi-chart-bar"></i>
+                    <span>SQL & BI</span>
+                    <i class="chevron pi" [class.pi-chevron-down]="sqlBiExpanded()"
+                        [class.pi-chevron-right]="!sqlBiExpanded()"></i>
+                </button>
+                <div class="nav-section-items" [class.expanded]="sqlBiExpanded()">
+                    <a class="nav-link sub-link" [routerLink]="['/project', context.currentProject()?.name, 'bi', 'superset']"
+                        routerLinkActive="active" [title]="sidebarCollapsed() ? 'Superset' : ''">
+                        <i class="pi pi-chart-line"></i>
+                        <span>Superset</span>
+                    </a>
+                    <span class="nav-link sub-link disabled" [title]="sidebarCollapsed() ? 'SQL Editor — exploration' : 'Direction future, non engagé'">
+                        <i class="pi pi-pencil"></i>
+                        <span>SQL Editor</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Machine Learning -->
+            <div class="nav-section">
+                <button class="nav-section-header" (click)="toggleMl()"
+                    [title]="sidebarCollapsed() ? 'Machine Learning' : ''" type="button">
+                    <i class="pi pi-microchip"></i>
+                    <span>Machine Learning</span>
+                    <i class="chevron pi" [class.pi-chevron-down]="mlExpanded()"
+                        [class.pi-chevron-right]="!mlExpanded()"></i>
+                </button>
+                <div class="nav-section-items" [class.expanded]="mlExpanded()">
+                    <span class="nav-link sub-link disabled" [title]="sidebarCollapsed() ? 'Kubeflow — exploration' : 'Direction future, non engagé'">
+                        <i class="pi pi-sitemap"></i>
+                        <span>Kubeflow</span>
+                    </span>
+                    <span class="nav-link sub-link disabled" [title]="sidebarCollapsed() ? 'MLflow — exploration' : 'Direction future, non engagé'">
+                        <i class="pi pi-flag"></i>
+                        <span>MLflow</span>
+                    </span>
+                    <span class="nav-link sub-link disabled" [title]="sidebarCollapsed() ? 'KServe — exploration' : 'Direction future, non engagé'">
+                        <i class="pi pi-send"></i>
+                        <span>KServe</span>
+                    </span>
+                </div>
+            </div>
+        </nav>
+
+        <nav class="nav-bottom" aria-label="Project tools">
+            <a class="nav-link" [routerLink]="['/project', context.currentProject()?.name, 'secret-stores']"
+                routerLinkActive="active" [title]="sidebarCollapsed() ? 'Secrets' : ''">
+                <i class="pi pi-lock"></i>
+                <span>Secrets</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main layout -->
+    <div class="main-layout">
+
+        <!-- Content -->
+        <main class="main-content">
+            <div class="content-wrapper">
+                <router-outlet></router-outlet>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="main-footer">
+            <div class="footer-left">
+                <span>© 2026 OKDP. All rights reserved.</span>
+            </div>
+            <div class="footer-right">
+                <span>v1.0.0</span>
+            </div>
+        </footer>
+    </div>
+</div>

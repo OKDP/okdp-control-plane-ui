@@ -1,0 +1,239 @@
+:host {
+  display: block;
+  height: 100vh;
+}
+
+.space-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--db-primary);
+  color: #ffffff;
+  border-radius: var(--db-radius-md);
+  text-decoration: none;
+  font-size: var(--db-font-size-sm);
+  font-weight: 500;
+  transition: background var(--db-transition-base);
+  border: none;
+  cursor: pointer;
+
+  i {
+    font-size: var(--db-font-size-sm);
+  }
+
+  &:hover {
+    background: var(--db-primary-hover);
+  }
+}
+
+/* Project Switcher in Header */
+.project-switcher {
+  display: flex;
+  align-items: center;
+}
+
+/* PrimeNG Select overrides — use encapsulation-piercing only where unavoidable */
+:host ::ng-deep .project-switcher .p-select {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  transition: background var(--db-transition-fast);
+  border-radius: var(--db-radius-md);
+  padding: 2px 6px;
+
+  .p-select-label {
+    padding: 4px 6px;
+    font-weight: 600;
+    font-size: var(--db-font-size-md);
+    color: var(--db-text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .p-select-dropdown {
+    color: var(--db-text-muted);
+    width: 1.5rem;
+  }
+
+  &:not(.p-disabled):hover {
+    background: var(--db-bg-tertiary);
+  }
+
+  &:focus-within {
+    box-shadow: none;
+  }
+}
+
+/* Dropdown Panel Styling */
+:host ::ng-deep .p-select-overlay {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-lg);
+  box-shadow: var(--db-shadow-lg);
+  margin-top: 4px;
+  padding: 4px;
+
+  .p-select-list-container {
+    padding: 0;
+  }
+
+  .p-select-option {
+    border-radius: var(--db-radius-sm);
+    margin-bottom: 1px;
+    padding: 6px 10px;
+    transition: background var(--db-transition-fast);
+    color: var(--db-text-secondary);
+    font-size: var(--db-font-size-base);
+
+    &:hover,
+    &.p-focus {
+      background: var(--db-bg-secondary);
+      color: var(--db-text-primary);
+    }
+
+    &.p-select-option-selected {
+      background: var(--db-primary-50);
+      color: var(--db-primary);
+      font-weight: 500;
+    }
+  }
+}
+
+.selected-project {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.project-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  .project-name {
+    font-weight: 500;
+  }
+
+  .project-desc {
+    font-size: var(--db-font-size-xs);
+    color: var(--db-text-muted);
+  }
+}
+
+/* Services Section */
+.nav-section {
+  margin-top: 0.25rem;
+}
+
+.nav-section-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 0 var(--db-radius-md) var(--db-radius-md) 0;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--db-text-secondary);
+  font-size: var(--db-font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color var(--db-transition-fast),
+    background var(--db-transition-fast);
+
+  i:first-child {
+    font-size: 1rem;
+    width: 18px;
+    text-align: center;
+    color: var(--db-text-muted);
+    transition: color var(--db-transition-fast);
+  }
+
+  span {
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 200px;
+    margin-left: 8px;
+    transition:
+      max-width var(--db-transition-slow),
+      margin var(--db-transition-slow);
+  }
+
+  .chevron {
+    margin-left: auto;
+    font-size: 0.6rem;
+    transition: transform var(--db-transition-base);
+    color: var(--db-text-muted);
+  }
+
+  &:hover {
+    background: var(--db-bg-secondary);
+    color: var(--db-text-primary);
+
+    i:first-child {
+      color: var(--db-text-secondary);
+    }
+  }
+}
+
+.nav-section-items {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+
+  // Bumped from 200px — Data Engineering now holds 4 sub-items and
+  // Machine Learning holds 3, all of which need to fit when expanded.
+  &.expanded {
+    max-height: 320px;
+  }
+
+  .nav-link.sub-link {
+    padding-left: 2.1rem;
+    font-size: var(--db-font-size-sm);
+  }
+
+  // "Exploration" placeholders rendered as <span> instead of <a>: visible
+  // in the menu but inert. Tooltip carries the rationale.
+  .nav-link.sub-link.disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    pointer-events: auto;        // keep tooltip on hover
+    color: var(--db-text-muted);
+
+    &:hover {
+      background: transparent;
+      color: var(--db-text-muted);
+    }
+  }
+}
+
+:host ::ng-deep .sidebar.collapsed {
+  .nav-section-header {
+    justify-content: center;
+    padding: 0.5rem;
+    border-left: none;
+
+    span {
+      max-width: 0;
+      margin-left: 0;
+    }
+
+    .chevron {
+      display: none;
+    }
+  }
+
+  .nav-section-items .nav-link {
+    justify-content: center;
+    padding: 0.5rem;
+    padding-left: 0.5rem;
+    border-left: none;
+  }
+
+  .nav-section-items .nav-link span {
+    max-width: 0;
+    margin-left: 0;
+  }
+}
