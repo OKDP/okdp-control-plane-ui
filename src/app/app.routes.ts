@@ -114,46 +114,96 @@ export const appRoutes: Routes = [
             path: 'spark/applications',
             loadComponent: () => import('./features/project-console/spark/spark-apps-page.component').then(m => m.SparkAppsPageComponent)
           },
-          // Placeholder pages — services on the OKDP roadmap but not yet
-          // packaged. They share a single component driven by route.data.
+          // Polaris (Lakehouse / data-catalog) — kubocd Package: polaris@0.1.0
+          {
+            path: 'lakehouse/polaris/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'lakehouse/polaris/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'lakehouse/polaris/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
+          },
           {
             path: 'lakehouse/polaris',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'Lakehouse',
               title: 'Polaris',
-              subtitle: 'Iceberg-native data catalog. Centralize table metadata across engines (Spark, Trino, Flink).',
-              icon: 'pi pi-database'
+              deployLabel: 'Deploy',
+              serviceFilter: 'polaris',
+              emptyMessage: 'No Polaris instances deployed yet.'
             }
+          },
+          // Trino (Lakehouse / data-querying) — kubocd Package: trino@0.1.0
+          {
+            path: 'lakehouse/trino/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'lakehouse/trino/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'lakehouse/trino/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
           },
           {
             path: 'lakehouse/trino',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'Lakehouse',
               title: 'Trino',
-              subtitle: 'Distributed SQL query engine. Query data across the lakehouse and federated sources.',
-              icon: 'pi pi-bolt'
+              deployLabel: 'Deploy',
+              serviceFilter: 'trino',
+              emptyMessage: 'No Trino instances deployed yet.'
             }
+          },
+          // Airflow (Data Engineering / orchestration) — kubocd Package: airflow@0.1.0
+          {
+            path: 'data-engineering/airflow/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'data-engineering/airflow/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'data-engineering/airflow/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
           },
           {
             path: 'data-engineering/airflow',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'Data Engineering',
               title: 'Airflow',
-              subtitle: 'Workflow orchestrator. Schedule and monitor data pipelines as DAGs.',
-              icon: 'pi pi-sitemap'
+              deployLabel: 'Deploy',
+              serviceFilter: 'airflow',
+              emptyMessage: 'No Airflow instances deployed yet.'
             }
+          },
+          // Superset (SQL & BI / data-visualization) — kubocd Package: superset@0.1.0
+          {
+            path: 'bi/superset/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'bi/superset/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'bi/superset/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
           },
           {
             path: 'bi/superset',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'SQL & BI',
               title: 'Superset',
-              subtitle: 'Open-source dashboarding and ad-hoc data exploration.',
-              icon: 'pi pi-chart-bar'
+              deployLabel: 'Deploy',
+              serviceFilter: 'superset',
+              emptyMessage: 'No Superset instances deployed yet.'
             }
           }
         ]

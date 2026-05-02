@@ -406,6 +406,10 @@ export class ServiceDeployPageComponent implements OnInit, OnDestroy {
         const svc = this.service();
         if (svc?.name === 'jupyterhub') return 'Jupyter';
         if (svc?.name === 'spark-history-server') return 'History Server';
+        if (svc?.name === 'polaris') return 'Polaris';
+        if (svc?.name === 'trino') return 'Trino';
+        if (svc?.name === 'airflow') return 'Airflow';
+        if (svc?.name === 'superset') return 'Superset';
         return svc?.name || 'Services';
     }
 

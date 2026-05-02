@@ -62,10 +62,16 @@ export class ServicesPageComponent {
         this.deployLabel = data['deployLabel'] || 'New instance';
         this.serviceFilter = data['serviceFilter'] || '';
         this.emptyMessage = data['emptyMessage'] || 'No instances deployed yet.';
+        // Each service may live under a section-specific URL prefix; the
+        // breadcrumb back-link must follow that prefix (otherwise clicking
+        // "Polaris" from the detail page would land on /services).
         this.basePath =
-            this.serviceFilter === 'spark-history-server'
-                ? ['spark', 'history-server']
-                : ['services'];
+            this.serviceFilter === 'spark-history-server' ? ['spark', 'history-server']
+            : this.serviceFilter === 'polaris'            ? ['lakehouse', 'polaris']
+            : this.serviceFilter === 'trino'              ? ['lakehouse', 'trino']
+            : this.serviceFilter === 'airflow'            ? ['data-engineering', 'airflow']
+            : this.serviceFilter === 'superset'           ? ['bi', 'superset']
+            : ['services'];
 
         // Derive breadcrumb + subtitle from the service filter when not provided.
         if (this.serviceFilter === 'jupyterhub') {
@@ -82,6 +88,34 @@ export class ServicesPageComponent {
                 data['subtitle'] ||
                 'Browse completed Spark applications and stream live job monitoring UIs.';
             this.emptyTitle = data['emptyTitle'] || 'Deploy a Spark History Server';
+        } else if (this.serviceFilter === 'polaris') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'Lakehouse';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Polaris';
+            this.subtitle =
+                data['subtitle'] ||
+                'Iceberg-native data catalog. Centralize table metadata across engines.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Polaris';
+        } else if (this.serviceFilter === 'trino') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'Lakehouse';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Trino';
+            this.subtitle =
+                data['subtitle'] ||
+                'Distributed SQL query engine. Query data across the lakehouse and federated sources.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Trino';
+        } else if (this.serviceFilter === 'airflow') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'Data Engineering';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Airflow';
+            this.subtitle =
+                data['subtitle'] ||
+                'Workflow orchestrator. Schedule and monitor data pipelines as DAGs.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Airflow';
+        } else if (this.serviceFilter === 'superset') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'SQL & BI';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Superset';
+            this.subtitle =
+                data['subtitle'] ||
+                'Open-source dashboarding and ad-hoc data exploration.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Superset';
         } else {
             this.breadcrumbParent = data['breadcrumbParent'] || 'Services';
             this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Instances';
