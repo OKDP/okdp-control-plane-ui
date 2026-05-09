@@ -172,14 +172,27 @@ export const appRoutes: Routes = [
               icon: 'pi pi-sitemap'
             }
           },
+          // Superset (SQL & BI / data-visualization) — kubocd Package: superset@0.1.0
+          {
+            path: 'bi/superset/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'bi/superset/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'bi/superset/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
+          },
           {
             path: 'bi/superset',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'SQL & BI',
               title: 'Superset',
-              subtitle: 'Open-source dashboarding and ad-hoc data exploration.',
-              icon: 'pi pi-chart-bar'
+              deployLabel: 'Deploy',
+              serviceFilter: 'superset',
+              emptyMessage: 'No Superset instances deployed yet.'
             }
           }
         ]
