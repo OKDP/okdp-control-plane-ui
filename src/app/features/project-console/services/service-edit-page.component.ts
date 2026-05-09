@@ -257,6 +257,7 @@ export class ServiceEditPageComponent implements OnInit {
         const svc = this.instance()?.service;
         if (svc === 'jupyterhub') return 'Jupyter';
         if (svc === 'spark-history-server') return 'History Server';
+        if (svc === 'trino') return 'Trino';
         return svc || 'Services';
     }
 
