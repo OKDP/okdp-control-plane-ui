@@ -67,6 +67,7 @@ export class ServicesPageComponent {
         // "Trino" from the detail page would land on /services).
         this.basePath =
             this.serviceFilter === 'spark-history-server' ? ['spark', 'history-server']
+            : this.serviceFilter === 'polaris'            ? ['lakehouse', 'polaris']
             : this.serviceFilter === 'trino'              ? ['lakehouse', 'trino']
             : ['services'];
 
@@ -92,6 +93,13 @@ export class ServicesPageComponent {
                 data['subtitle'] ||
                 'Distributed SQL query engine. Query data across the lakehouse and federated sources.';
             this.emptyTitle = data['emptyTitle'] || 'Deploy Trino';
+        } else if (this.serviceFilter === 'polaris') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'Lakehouse';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Polaris';
+            this.subtitle =
+                data['subtitle'] ||
+                'Iceberg-native data catalog. Centralize table metadata across engines.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Polaris';
         } else {
             this.breadcrumbParent = data['breadcrumbParent'] || 'Services';
             this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Instances';

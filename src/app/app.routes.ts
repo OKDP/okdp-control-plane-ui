@@ -116,14 +116,27 @@ export const appRoutes: Routes = [
           },
           // Placeholder pages — services on the OKDP roadmap but not yet
           // packaged. They share a single component driven by route.data.
+          // Polaris (Lakehouse / data-catalog) — kubocd Package: polaris@0.1.0
+          {
+            path: 'lakehouse/polaris/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'lakehouse/polaris/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'lakehouse/polaris/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
+          },
           {
             path: 'lakehouse/polaris',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'Lakehouse',
               title: 'Polaris',
-              subtitle: 'Iceberg-native data catalog. Centralize table metadata across engines (Spark, Trino, Flink).',
-              icon: 'pi pi-database'
+              deployLabel: 'Deploy',
+              serviceFilter: 'polaris',
+              emptyMessage: 'No Polaris instances deployed yet.'
             }
           },
           // Trino (Lakehouse / data-querying) — kubocd Package: trino@0.1.0
