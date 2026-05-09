@@ -126,14 +126,27 @@ export const appRoutes: Routes = [
               icon: 'pi pi-database'
             }
           },
+          // Trino (Lakehouse / data-querying) — kubocd Package: trino@0.1.0
+          {
+            path: 'lakehouse/trino/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'lakehouse/trino/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'lakehouse/trino/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
+          },
           {
             path: 'lakehouse/trino',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'Lakehouse',
               title: 'Trino',
-              subtitle: 'Distributed SQL query engine. Query data across the lakehouse and federated sources.',
-              icon: 'pi pi-bolt'
+              deployLabel: 'Deploy',
+              serviceFilter: 'trino',
+              emptyMessage: 'No Trino instances deployed yet.'
             }
           },
           {
