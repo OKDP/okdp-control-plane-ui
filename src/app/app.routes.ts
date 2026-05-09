@@ -162,14 +162,27 @@ export const appRoutes: Routes = [
               emptyMessage: 'No Trino instances deployed yet.'
             }
           },
+          // Airflow (Data Engineering / orchestration) — kubocd Package: airflow@0.1.0
+          {
+            path: 'data-engineering/airflow/deploy',
+            loadComponent: () => import('./features/project-console/services/service-deploy-page.component').then(m => m.ServiceDeployPageComponent)
+          },
+          {
+            path: 'data-engineering/airflow/:serviceName/edit',
+            loadComponent: () => import('./features/project-console/services/service-edit-page.component').then(m => m.ServiceEditPageComponent)
+          },
+          {
+            path: 'data-engineering/airflow/:serviceName',
+            loadComponent: () => import('./features/project-console/services/service-detail-page.component').then(m => m.ServiceDetailPageComponent)
+          },
           {
             path: 'data-engineering/airflow',
-            loadComponent: () => import('./features/project-console/services/service-placeholder-page.component').then(m => m.ServicePlaceholderPageComponent),
+            loadComponent: () => import('./features/project-console/services/services-page.component').then(m => m.ServicesPageComponent),
             data: {
-              section: 'Data Engineering',
               title: 'Airflow',
-              subtitle: 'Workflow orchestrator. Schedule and monitor data pipelines as DAGs.',
-              icon: 'pi pi-sitemap'
+              deployLabel: 'Deploy',
+              serviceFilter: 'airflow',
+              emptyMessage: 'No Airflow instances deployed yet.'
             }
           },
           // Superset (SQL & BI / data-visualization) — kubocd Package: superset@0.1.0
