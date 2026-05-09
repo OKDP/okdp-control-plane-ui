@@ -408,6 +408,7 @@ export class ServiceDeployPageComponent implements OnInit, OnDestroy {
         if (svc?.name === 'spark-history-server') return 'History Server';
         if (svc?.name === 'trino') return 'Trino';
         if (svc?.name === 'polaris') return 'Polaris';
+        if (svc?.name === 'superset') return 'Superset';
         return svc?.name || 'Services';
     }
 

@@ -69,6 +69,7 @@ export class ServicesPageComponent {
             this.serviceFilter === 'spark-history-server' ? ['spark', 'history-server']
             : this.serviceFilter === 'polaris'            ? ['lakehouse', 'polaris']
             : this.serviceFilter === 'trino'              ? ['lakehouse', 'trino']
+            : this.serviceFilter === 'superset'           ? ['bi', 'superset']
             : ['services'];
 
         // Derive breadcrumb + subtitle from the service filter when not provided.
@@ -100,6 +101,13 @@ export class ServicesPageComponent {
                 data['subtitle'] ||
                 'Iceberg-native data catalog. Centralize table metadata across engines.';
             this.emptyTitle = data['emptyTitle'] || 'Deploy Polaris';
+        } else if (this.serviceFilter === 'superset') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'SQL & BI';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Superset';
+            this.subtitle =
+                data['subtitle'] ||
+                'Open-source dashboarding and ad-hoc data exploration.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Superset';
         } else {
             this.breadcrumbParent = data['breadcrumbParent'] || 'Services';
             this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Instances';
