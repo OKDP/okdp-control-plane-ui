@@ -409,6 +409,7 @@ export class ServiceDeployPageComponent implements OnInit, OnDestroy {
         if (svc?.name === 'trino') return 'Trino';
         if (svc?.name === 'polaris') return 'Polaris';
         if (svc?.name === 'superset') return 'Superset';
+        if (svc?.name === 'airflow') return 'Airflow';
         return svc?.name || 'Services';
     }
 
