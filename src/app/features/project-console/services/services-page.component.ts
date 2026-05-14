@@ -62,10 +62,13 @@ export class ServicesPageComponent {
         this.deployLabel = data['deployLabel'] || 'New instance';
         this.serviceFilter = data['serviceFilter'] || '';
         this.emptyMessage = data['emptyMessage'] || 'No instances deployed yet.';
+        // Each service may live under a section-specific URL prefix; the
+        // breadcrumb back-link must follow that prefix (otherwise clicking
+        // "Trino" from the detail page would land on /services).
         this.basePath =
-            this.serviceFilter === 'spark-history-server'
-                ? ['spark', 'history-server']
-                : ['services'];
+            this.serviceFilter === 'spark-history-server' ? ['spark', 'history-server']
+            : this.serviceFilter === 'trino'              ? ['lakehouse', 'trino']
+            : ['services'];
 
         // Derive breadcrumb + subtitle from the service filter when not provided.
         if (this.serviceFilter === 'jupyterhub') {
@@ -82,6 +85,13 @@ export class ServicesPageComponent {
                 data['subtitle'] ||
                 'Browse completed Spark applications and stream live job monitoring UIs.';
             this.emptyTitle = data['emptyTitle'] || 'Deploy a Spark History Server';
+        } else if (this.serviceFilter === 'trino') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'Lakehouse';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Trino';
+            this.subtitle =
+                data['subtitle'] ||
+                'Distributed SQL query engine. Query data across the lakehouse and federated sources.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Trino';
         } else {
             this.breadcrumbParent = data['breadcrumbParent'] || 'Services';
             this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Instances';

@@ -257,6 +257,7 @@ export class ServiceEditPageComponent implements OnInit {
         const svc = this.instance()?.service;
         if (svc === 'jupyterhub') return 'Jupyter';
         if (svc === 'spark-history-server') return 'History Server';
+        if (svc === 'trino') return 'Trino';
         return svc || 'Services';
     }
 
@@ -372,7 +373,13 @@ export class ServiceEditPageComponent implements OnInit {
         if (!project || !svc) return;
 
         this.saving.set(true);
-        const mergedParams = { ...this.parameters, profiles: this.profiles };
+        // Only include `profiles` when the service schema actually expects it
+        // (e.g. JupyterHub). Other services (Trino, Polaris, Superset, Airflow)
+        // have `additionalProperties: false` and reject unknown keys.
+        const mergedParams: Record<string, any> = { ...this.parameters };
+        if (this.needsProfileEditor()) {
+            mergedParams['profiles'] = this.profiles;
+        }
         const body: { tag?: string; parameters: Record<string, any> } = { parameters: mergedParams };
         if (this.selectedTag && this.selectedTag !== this.originalTag) {
             body.tag = this.selectedTag;
