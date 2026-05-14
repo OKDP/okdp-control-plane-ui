@@ -548,6 +548,7 @@ export class ServiceDetailPageComponent implements OnInit, OnDestroy {
         if (svc === 'jupyterhub') return 'Jupyter';
         if (svc === 'spark-history-server') return 'History Server';
         if (svc === 'trino') return 'Trino';
+        if (svc === 'polaris') return 'Polaris';
         return svc || 'Services';
     }
 
