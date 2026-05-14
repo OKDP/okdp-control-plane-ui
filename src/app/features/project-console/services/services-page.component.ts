@@ -69,6 +69,7 @@ export class ServicesPageComponent {
             this.serviceFilter === 'spark-history-server' ? ['spark', 'history-server']
             : this.serviceFilter === 'polaris'            ? ['lakehouse', 'polaris']
             : this.serviceFilter === 'trino'              ? ['lakehouse', 'trino']
+            : this.serviceFilter === 'airflow'            ? ['data-engineering', 'airflow']
             : this.serviceFilter === 'superset'           ? ['bi', 'superset']
             : ['services'];
 
@@ -108,6 +109,13 @@ export class ServicesPageComponent {
                 data['subtitle'] ||
                 'Open-source dashboarding and ad-hoc data exploration.';
             this.emptyTitle = data['emptyTitle'] || 'Deploy Superset';
+        } else if (this.serviceFilter === 'airflow') {
+            this.breadcrumbParent = data['breadcrumbParent'] || 'Data Engineering';
+            this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Airflow';
+            this.subtitle =
+                data['subtitle'] ||
+                'Workflow orchestrator. Schedule and monitor data pipelines as DAGs.';
+            this.emptyTitle = data['emptyTitle'] || 'Deploy Airflow';
         } else {
             this.breadcrumbParent = data['breadcrumbParent'] || 'Services';
             this.breadcrumbCurrent = data['breadcrumbCurrent'] || 'Instances';

@@ -260,6 +260,7 @@ export class ServiceEditPageComponent implements OnInit {
         if (svc === 'trino') return 'Trino';
         if (svc === 'polaris') return 'Polaris';
         if (svc === 'superset') return 'Superset';
+        if (svc === 'airflow') return 'Airflow';
         return svc || 'Services';
     }
 
