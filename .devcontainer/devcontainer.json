@@ -1,0 +1,66 @@
+{
+  "name": "okdp-control-plane-ui",
+  "build": {
+    "context": "..",
+    "dockerfile": "Dockerfile",
+    "args": {
+      "NODE_VERSION": "22.15.0",
+      "ANGULAR_CLI_VERSION": "20"
+    }
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/okdp-control-plane-ui",
+
+  // Named volumes keep node_modules and the npm cache out of the bind mount,
+  // so installs are fast and rebuilds don't re-download everything
+  // (same idea as kubocd's gomodcache / gobuildcache volumes).
+  "mounts": [
+    "source=okdp-ui-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+    "source=okdp-ui-npm-cache,target=/home/vscode/.npm,type=volume"
+  ],
+
+  // node_modules and the cache volume start out root-owned; hand them to the
+  // non-root user before installing dependencies.
+  "postCreateCommand": "sudo chown -R vscode:vscode node_modules /home/vscode/.npm && npm ci",
+
+  // Angular dev server (ng serve)
+  "forwardPorts": [4200],
+  "portsAttributes": {
+    "4200": {
+      "label": "Angular dev server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Angular.ng-template",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Orta.vscode-jest",
+        "firsttris.vscode-jest-runner",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[html]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[scss]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        }
+      }
+    }
+  }
+}
