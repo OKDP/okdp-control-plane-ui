@@ -1,0 +1,4 @@
+/* Unique component styles only */
+.user-container .user-name {
+  font-weight: 500;
+}

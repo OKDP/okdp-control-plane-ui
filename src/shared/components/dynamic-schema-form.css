@@ -1,0 +1,142 @@
+/* Scoped styles for DynamicSchemaForm (was Angular component styles). */
+.dsf-root .dynamic-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.dsf-root .field-invalid,
+.dsf-root .field-invalid.p-inputtext {
+  border-color: var(--db-danger, #dc2626) !important;
+  background-color: rgba(220, 38, 38, 0.04);
+}
+.dsf-root .field-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--db-danger, #dc2626);
+  font-size: 12px;
+  font-weight: 500;
+}
+.dsf-root .field-error-msg i {
+  font-size: 13px;
+}
+.dsf-root .form-section-card {
+  animation: fadeInUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  padding-bottom: var(--db-space-xl);
+}
+.dsf-root .form-section-card:not(:last-child) {
+  border-bottom: 1px solid var(--db-border-light);
+  margin-bottom: var(--db-space-xl);
+}
+.dsf-root .section-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--db-space-lg);
+}
+.dsf-root .section-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--db-radius-md);
+  background: var(--db-primary-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.dsf-root .section-icon-badge i {
+  font-size: 0.85rem;
+  color: var(--db-primary);
+}
+.dsf-root .section-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--db-text-primary);
+  letter-spacing: -0.01em;
+}
+.dsf-root .section-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-md);
+}
+.dsf-root .field-grid {
+  display: grid;
+  gap: var(--db-space-lg) 20px;
+}
+.dsf-root .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dsf-root .field label {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--db-text-secondary);
+  letter-spacing: -0.005em;
+}
+.dsf-root .advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: var(--db-space-lg) 0 var(--db-space-sm);
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.dsf-root .advanced-toggle-line {
+  flex: 1;
+  height: 1px;
+  background: var(--db-border-light);
+}
+.dsf-root .advanced-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--db-primary);
+  white-space: nowrap;
+  padding: 4px 12px;
+  border-radius: var(--db-radius-full);
+  background: var(--db-primary-50);
+  transition: background var(--db-transition-base);
+}
+.dsf-root .advanced-toggle:hover .advanced-toggle-label {
+  background: var(--db-primary-100);
+}
+.dsf-root .advanced-toggle-label i {
+  font-size: 10px;
+}
+.dsf-root .advanced-fields-container {
+  animation: fadeInUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  padding-top: var(--db-space-sm);
+}
+.dsf-root .no-params {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-md);
+  padding: var(--db-space-lg);
+  color: var(--db-text-secondary);
+  font-size: 14px;
+  background: var(--db-bg-secondary);
+  border-radius: var(--db-radius-lg);
+  border: 1px dashed var(--db-border-light);
+}
+.dsf-root .no-params-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--db-radius-md);
+  background: var(--db-accent-blue-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.dsf-root .no-params-icon i {
+  color: var(--db-accent-blue);
+  font-size: 1rem;
+}

@@ -1,0 +1,472 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { InputText } from 'primereact/inputtext';
+import { InputNumber } from 'primereact/inputnumber';
+import { InputTextarea } from 'primereact/inputtextarea';
+import { Dropdown } from 'primereact/dropdown';
+import { InputSwitch } from 'primereact/inputswitch';
+import { Password } from 'primereact/password';
+import './dynamic-schema-form.css';
+
+export interface SchemaField {
+  name: string;
+  type: string;
+  default: any;
+  description?: string;
+  title?: string;
+  enum?: any[];
+  required?: boolean;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  multipleOf?: number;
+  'x-ui-order'?: number;
+  'x-ui-group'?: string;
+  'x-ui-widget'?: string;
+  'x-ui-condition'?: { field: string; value: any };
+  'x-ui-advanced'?: boolean;
+  'x-ui-columns'?: number;
+  'x-ui-col-span'?: number;
+  'x-ui-placeholder'?: string;
+}
+
+export interface FieldGroup {
+  name: string;
+  columns: number;
+  fields: SchemaField[];
+  advancedFields: SchemaField[];
+}
+
+export interface DynamicSchemaFormProps {
+  schema: any;
+  initialValues?: Record<string, any>;
+  onParametersChange: (params: Record<string, any>) => void;
+  /**
+   * Called with true when every field passes local validation (currently K8s
+   * quantity format on CPU/memory fields). Parent components can wire this
+   * to disable the Save/Deploy button.
+   */
+  onValidityChange?: (valid: boolean) => void;
+}
+
+const GROUP_ICONS: Record<string, string> = {
+  General: 'pi-sliders-h',
+  Networking: 'pi-globe',
+  Storage: 'pi-database',
+  Security: 'pi-shield',
+  Resources: 'pi-server',
+  Authentication: 'pi-lock',
+};
+
+function getGroupIcon(groupName: string): string {
+  return GROUP_ICONS[groupName] || 'pi-cog';
+}
+
+function formatLabel(name: string): string {
+  return name
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
+}
+
+function resolveWidget(field: SchemaField): string {
+  const widget = field['x-ui-widget'];
+  if (widget) return widget;
+
+  if (field.enum && field.enum.length > 0) return 'select';
+  if (field.type === 'boolean') return 'toggle';
+  if (field.type === 'integer' || field.type === 'number') return 'number';
+  return 'text';
+}
+
+function toOptions(enumValues: any[]): { label: string; value: any }[] {
+  return enumValues.map((v) => ({ label: String(v), value: v }));
+}
+
+function buildFields(schema: any): SchemaField[] {
+  const properties = schema?.properties || {};
+  const required = new Set<string>(schema?.required || []);
+
+  const fields: SchemaField[] = Object.entries(properties).map(([name, def]: [string, any]) => ({
+    name,
+    type: def.type || 'string',
+    default: def.default,
+    description: def.description,
+    title: def.title,
+    enum: def.enum,
+    required: required.has(name),
+    minimum: def.minimum,
+    maximum: def.maximum,
+    minLength: def.minLength,
+    maxLength: def.maxLength,
+    pattern: def.pattern,
+    multipleOf: def.multipleOf,
+    'x-ui-order': def['x-ui-order'] ?? 999,
+    'x-ui-group': def['x-ui-group'] || 'General',
+    'x-ui-widget': def['x-ui-widget'],
+    'x-ui-condition': def['x-ui-condition'],
+    'x-ui-advanced': def['x-ui-advanced'] || false,
+    'x-ui-columns': def['x-ui-columns'],
+    'x-ui-col-span': def['x-ui-col-span'],
+    'x-ui-placeholder': def['x-ui-placeholder'],
+  }));
+
+  const visibleFields = fields.filter((f) => f['x-ui-widget'] !== 'profile-editor');
+  visibleFields.sort((a, b) => a['x-ui-order']! - b['x-ui-order']!);
+  return visibleFields;
+}
+
+function buildGroups(visibleFields: SchemaField[]): FieldGroup[] {
+  const groupMap = new Map<string, FieldGroup>();
+  const groupOrder: string[] = [];
+
+  for (const field of visibleFields) {
+    const groupName = field['x-ui-group']!;
+    if (!groupMap.has(groupName)) {
+      groupMap.set(groupName, {
+        name: groupName,
+        columns: field['x-ui-columns'] || 1,
+        fields: [],
+        advancedFields: [],
+      });
+      groupOrder.push(groupName);
+    }
+    const group = groupMap.get(groupName)!;
+    if (field['x-ui-columns'] && field['x-ui-columns'] > group.columns) {
+      group.columns = field['x-ui-columns'];
+    }
+    if (field['x-ui-advanced']) {
+      group.advancedFields.push(field);
+    } else {
+      group.fields.push(field);
+    }
+  }
+
+  return groupOrder.map((name) => groupMap.get(name)!);
+}
+
+function initialFormValues(
+  fields: SchemaField[],
+  initialValues: Record<string, any>,
+): Record<string, any> {
+  const values: Record<string, any> = {};
+  for (const f of fields) {
+    if (initialValues[f.name] !== undefined) {
+      values[f.name] = initialValues[f.name];
+    } else if (f.type === 'array') {
+      values[f.name] = Array.isArray(f.default) ? [...f.default] : [];
+    } else {
+      values[f.name] =
+        f.default ??
+        (f.type === 'boolean' ? false : f.type === 'number' || f.type === 'integer' ? 0 : '');
+    }
+  }
+  return values;
+}
+
+// A K8s resource.Quantity accepts:
+//   - a bare decimal: "1", "1.5"
+//   - decimal + binary SI suffix: "500Mi", "2Gi", "10Ki"
+//   - decimal + metric SI suffix: "500m" (milli for CPU), "1k", "1G"
+//   - scientific notation: "1.5e3"
+// Empty values are allowed — a missing optional parameter falls back to
+// the schema default server-side.
+const K8S_QUANTITY_RE = /^[0-9]+(\.[0-9]+)?(m|n|u|[kKMGTPE]i?|e[-+]?[0-9]+)?$/;
+
+function isQuantityField(field: SchemaField): boolean {
+  if (field.type !== 'string') return false;
+  const hay = `${field.name} ${field.description ?? ''} ${field.title ?? ''}`.toLowerCase();
+  return /\b(cpu|memory|mem)\b/.test(hay) || /request|limit/.test(field.name.toLowerCase());
+}
+
+function validateField(field: SchemaField, value: unknown): string {
+  if (value === undefined || value === null || value === '') return '';
+  if (!isQuantityField(field)) return '';
+  const v = String(value).trim();
+  if (!K8S_QUANTITY_RE.test(v)) {
+    return `Invalid Kubernetes quantity. Use a number with an optional suffix (e.g. "500Mi", "2Gi", "500m", "1").`;
+  }
+  // A bare digit means BYTES for memory or CORES for CPU — almost never
+  // what the user wants. "1" for memory = 1 byte, "1" for CPU = 1 core.
+  // Catch the ambiguous case and nudge towards an explicit suffix.
+  if (/^[0-9]+(\.[0-9]+)?$/.test(v)) {
+    const lower = field.name.toLowerCase();
+    if (lower.includes('memory') || lower.includes('mem')) {
+      return `"${v}" would be interpreted as ${v} byte(s). Did you mean "${v}Mi" or "${v}Gi"?`;
+    }
+    if (lower.includes('cpu')) {
+      return `"${v}" would be interpreted as ${v} core(s). Add an "m" suffix for milli-cores if that is not intended.`;
+    }
+  }
+  return '';
+}
+
+// Stable default — an inline `{}` default would change identity on every
+// parent render and re-trigger the values-rebuild effect in a loop.
+const EMPTY_VALUES: Record<string, any> = {};
+
+export function DynamicSchemaForm({
+  schema,
+  initialValues = EMPTY_VALUES,
+  onParametersChange,
+  onValidityChange,
+}: DynamicSchemaFormProps) {
+  const fields = useMemo(() => (schema ? buildFields(schema) : []), [schema]);
+  const groups = useMemo(() => buildGroups(fields), [fields]);
+
+  const [values, setValues] = useState<Record<string, any>>({});
+  const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
+
+  // Rebuild values when the schema or the initial values change
+  useEffect(() => {
+    if (schema) {
+      setValues(initialFormValues(buildFields(schema), initialValues));
+    }
+  }, [schema, initialValues]);
+
+  const fieldErrors = useMemo(() => {
+    const errors: Record<string, string> = {};
+    for (const group of groups) {
+      for (const field of [...group.fields, ...group.advancedFields]) {
+        const msg = validateField(field, values[field.name]);
+        if (msg) errors[field.name] = msg;
+      }
+    }
+    return errors;
+  }, [groups, values]);
+
+  // Emit on every change, including initialization (legacy behavior).
+  // Refs keep parent re-renders from re-triggering the effect.
+  const onParametersChangeRef = useRef(onParametersChange);
+  onParametersChangeRef.current = onParametersChange;
+  const onValidityChangeRef = useRef(onValidityChange);
+  onValidityChangeRef.current = onValidityChange;
+
+  useEffect(() => {
+    onValidityChangeRef.current?.(Object.keys(fieldErrors).length === 0);
+
+    const filtered: Record<string, any> = {};
+    for (const [key, val] of Object.entries(values)) {
+      if (Array.isArray(val) || (val !== '' && val !== null && val !== undefined)) {
+        filtered[key] = val;
+      }
+    }
+    onParametersChangeRef.current(filtered);
+  }, [values, fieldErrors]);
+
+  const setValue = (name: string, value: any) => {
+    setValues((v) => ({ ...v, [name]: value }));
+  };
+
+  const isFieldVisible = (field: SchemaField): boolean => {
+    const cond = field['x-ui-condition'];
+    if (!cond) return true;
+    return values[cond.field] === cond.value;
+  };
+
+  const toggleAdvanced = (groupName: string) => {
+    setAdvancedOpen((open) => ({ ...open, [groupName]: !open[groupName] }));
+  };
+
+  const renderWidget = (field: SchemaField) => {
+    const value = values[field.name];
+    switch (resolveWidget(field)) {
+      case 'password':
+        return (
+          <Password
+            inputId={field.name}
+            value={value ?? ''}
+            placeholder={field['x-ui-placeholder'] || ''}
+            feedback={false}
+            toggleMask
+            className="w-full"
+            onChange={(e) => setValue(field.name, e.target.value)}
+          />
+        );
+      case 'textarea':
+        return (
+          <InputTextarea
+            id={field.name}
+            value={value ?? ''}
+            placeholder={field['x-ui-placeholder'] || ''}
+            rows={3}
+            className="w-full"
+            onChange={(e) => setValue(field.name, e.target.value)}
+          />
+        );
+      case 'select':
+        return (
+          <Dropdown
+            inputId={field.name}
+            value={value}
+            options={toOptions(field.enum!)}
+            optionLabel="label"
+            optionValue="value"
+            placeholder={field['x-ui-placeholder'] || 'Select...'}
+            className="w-full"
+            onChange={(e) => setValue(field.name, e.value)}
+          />
+        );
+      case 'stepper':
+        return (
+          <InputNumber
+            inputId={field.name}
+            value={value ?? null}
+            showButtons
+            buttonLayout="horizontal"
+            step={field.multipleOf || 1}
+            min={field.minimum}
+            max={field.maximum}
+            minFractionDigits={field.type === 'number' ? 1 : 0}
+            maxFractionDigits={field.type === 'number' ? 2 : 0}
+            incrementButtonIcon="pi pi-plus"
+            decrementButtonIcon="pi pi-minus"
+            className="w-full"
+            onValueChange={(e) => setValue(field.name, e.value)}
+          />
+        );
+      case 'number':
+        return (
+          <InputNumber
+            inputId={field.name}
+            value={value ?? null}
+            min={field.minimum}
+            max={field.maximum}
+            step={field.multipleOf || 1}
+            minFractionDigits={field.type === 'number' ? 1 : 0}
+            maxFractionDigits={field.type === 'number' ? 2 : 0}
+            className="w-full"
+            onValueChange={(e) => setValue(field.name, e.value)}
+          />
+        );
+      case 'toggle':
+        return <InputSwitch checked={!!value} onChange={(e) => setValue(field.name, e.value)} />;
+      case 'url':
+        return (
+          <InputText
+            id={field.name}
+            type="url"
+            value={value ?? ''}
+            placeholder={field['x-ui-placeholder'] || ''}
+            className="w-full"
+            onChange={(e) => setValue(field.name, e.target.value)}
+          />
+        );
+      default:
+        return (
+          <>
+            <InputText
+              id={field.name}
+              type="text"
+              value={value ?? ''}
+              placeholder={field['x-ui-placeholder'] || ''}
+              className={`w-full${fieldErrors[field.name] ? ' field-invalid' : ''}`}
+              onChange={(e) => setValue(field.name, e.target.value)}
+            />
+            {fieldErrors[field.name] && (
+              <small className="field-error-msg">
+                <i className="pi pi-exclamation-triangle"></i>
+                {fieldErrors[field.name]}
+              </small>
+            )}
+          </>
+        );
+    }
+  };
+
+  const renderFieldGrid = (group: FieldGroup, groupFields: SchemaField[]) => (
+    <div
+      className="field-grid"
+      style={{ gridTemplateColumns: group.columns === 2 ? '1fr 1fr' : '1fr' }}
+    >
+      {groupFields.map(
+        (field) =>
+          isFieldVisible(field) && (
+            <div
+              key={field.name}
+              className="field"
+              style={{
+                gridColumn:
+                  (field['x-ui-col-span'] || 1) > 1
+                    ? `span ${field['x-ui-col-span'] || 1}`
+                    : undefined,
+              }}
+            >
+              <label htmlFor={field.name}>{field.title || formatLabel(field.name)}</label>
+              {renderWidget(field)}
+              {field.description && <small className="field-help">{field.description}</small>}
+            </div>
+          ),
+      )}
+    </div>
+  );
+
+  if (groups.length === 0) {
+    return (
+      <div className="dsf-root">
+        <div className="no-params">
+          <div className="no-params-icon">
+            <i className="pi pi-info-circle"></i>
+          </div>
+          <span>This service has no configurable parameters.</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dsf-root">
+      <div className="dynamic-form">
+        {groups.map((group, i) => (
+          <div
+            key={group.name}
+            className="form-section-card"
+            style={{ animationDelay: `${i * 0.06}s` }}
+          >
+            {(groups.length > 1 || group.name !== 'General') && (
+              <div className="section-card-header">
+                <div className="section-icon-badge">
+                  <i className={'pi ' + getGroupIcon(group.name)}></i>
+                </div>
+                <h4 className="section-card-title">{group.name}</h4>
+              </div>
+            )}
+
+            <div className="section-card-body">
+              {renderFieldGrid(group, group.fields)}
+
+              {group.advancedFields.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="advanced-toggle"
+                    onClick={() => toggleAdvanced(group.name)}
+                  >
+                    <span className="advanced-toggle-line"></span>
+                    <span className="advanced-toggle-label">
+                      <i
+                        className={
+                          'pi ' + (advancedOpen[group.name] ? 'pi-chevron-up' : 'pi-chevron-down')
+                        }
+                      ></i>
+                      {advancedOpen[group.name] ? 'Hide' : 'Show'} advanced options
+                    </span>
+                    <span className="advanced-toggle-line"></span>
+                  </button>
+                  {advancedOpen[group.name] && (
+                    <div className="advanced-fields-container">
+                      {renderFieldGrid(group, group.advancedFields)}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,15 @@
+export interface UserProfile {
+  sub: string;
+  email?: string;
+  variable_email?: string;
+  email_verified?: boolean;
+  name?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  groups?: string[];
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
+  [key: string]: unknown;
+}

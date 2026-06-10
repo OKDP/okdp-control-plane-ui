@@ -1,0 +1,388 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Dropdown } from 'primereact/dropdown';
+import { Toast } from 'primereact/toast';
+import { serviceApi } from '../../../core/api/service-api';
+import type { ServiceInstance } from '../../../core/models/service.model';
+import { DynamicSchemaForm } from '../../../shared/components/dynamic-schema-form';
+import { ProfileListEditor, type Profile } from '../../../shared/components/profile-list-editor';
+import {
+  apiErrorMessage,
+  areaBasePath,
+  hasProfileEditorWidget,
+  parentLabel,
+  stripProfileEditorFields,
+  tagClass,
+} from './service-utils';
+
+export default function ServiceEditPage() {
+  const navigate = useNavigate();
+  const { projectId: projectName, serviceName } = useParams<{
+    projectId: string;
+    serviceName: string;
+  }>();
+  const [searchParams] = useSearchParams();
+  const toast = useRef<Toast>(null);
+
+  const [instance, setInstance] = useState<ServiceInstance | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  // Mirrors the validity state of the dynamic schema form so Save can be
+  // disabled when a CPU/memory quantity is malformed (e.g. "1" instead of
+  // "1Gi"). Starts true so an untouched form with valid defaults is saveable.
+  const [paramsValid, setParamsValid] = useState(true);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [rawSchema, setRawSchema] = useState<any>(null);
+  const [profileImages, setProfileImages] = useState<
+    Record<string, { label: string; image: string }[]>
+  >({});
+  const [parameterValues, setParameterValues] = useState<Record<string, any>>({});
+  const [existingProfiles, setExistingProfiles] = useState<Profile[]>([]);
+  const [versionOptions, setVersionOptions] = useState<{ label: string; value: string }[]>([]);
+  const [selectedTag, setSelectedTag] = useState('');
+
+  const originalTagRef = useRef('');
+  const parametersRef = useRef<Record<string, any>>({});
+  const profilesRef = useRef<Profile[]>([]);
+
+  const hasPendingChanges = selectedTag !== originalTagRef.current;
+  const filteredSchema = useMemo(
+    () => (rawSchema ? stripProfileEditorFields(rawSchema) : null),
+    [rawSchema],
+  );
+
+  const loadSchema = useCallback((service: string, tag: string) => {
+    setSchemaLoading(true);
+    serviceApi
+      .getServiceSchema(service, tag)
+      .then((schema) => {
+        setRawSchema(schema);
+        setSchemaLoading(false);
+      })
+      .catch(() => {
+        toast.current?.show({
+          severity: 'warn',
+          summary: 'Schema unavailable',
+          detail: 'Could not load configuration schema.',
+        });
+        setSchemaLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!projectName || !serviceName) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    Promise.all([
+      serviceApi.getService(projectName, serviceName),
+      serviceApi.getProfileImages(),
+      serviceApi.getPlatformServices(),
+    ])
+      .then(([inst, images, platformServices]) => {
+        if (cancelled) return;
+        setInstance(inst);
+        setProfileImages(images);
+
+        setSelectedTag(inst.serviceTag);
+        originalTagRef.current = inst.serviceTag;
+
+        const svc = platformServices.find((s) => s.name === inst.service);
+        if (svc?.versions?.length) {
+          setVersionOptions(
+            svc.versions.map((v) => ({
+              label: v === svc.defaultVersion ? `${v} (recommended)` : v,
+              value: v,
+            })),
+          );
+        }
+
+        const { profiles, ...params } = inst.parameters || {};
+        setParameterValues(params);
+        parametersRef.current = { ...params };
+
+        if (Array.isArray(profiles) && profiles.length > 0) {
+          setExistingProfiles(profiles);
+          profilesRef.current = [...profiles];
+        }
+
+        loadSchema(inst.service, inst.serviceTag);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load instance',
+        });
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectName, serviceName, loadSchema]);
+
+  const onVersionChange = (tag: string) => {
+    if (!instance || !tag) return;
+    setSelectedTag(tag);
+    setRawSchema(null);
+    loadSchema(instance.service, tag);
+  };
+
+  const navigateBack = (project: string) => {
+    const returnTo = searchParams.get('returnTo');
+    if (returnTo) {
+      navigate(returnTo);
+    } else {
+      navigate(`/project/${project}/${areaBasePath(instance?.service).join('/')}`);
+    }
+  };
+
+  const goBack = () => {
+    if (projectName) {
+      navigateBack(projectName);
+    }
+  };
+
+  const save = () => {
+    if (!projectName || !instance) return;
+
+    setSaving(true);
+    // Only include `profiles` when the service schema actually expects it
+    // (e.g. JupyterHub). Other services (Trino, Polaris, Superset, Airflow)
+    // have `additionalProperties: false` and reject unknown keys.
+    const mergedParams: Record<string, any> = { ...parametersRef.current };
+    if (hasProfileEditorWidget(rawSchema)) {
+      mergedParams['profiles'] = profilesRef.current;
+    }
+    const body: { tag?: string; parameters: Record<string, any> } = { parameters: mergedParams };
+    if (selectedTag && selectedTag !== originalTagRef.current) {
+      body.tag = selectedTag;
+    }
+    serviceApi
+      .updateServiceParameters(projectName, instance.name, body)
+      .then(() => {
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Changes saved',
+          detail: `${instance.name} has been updated.`,
+        });
+        setSaving(false);
+        navigateBack(projectName);
+      })
+      .catch((err) => {
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Error',
+          detail: apiErrorMessage(err, 'Failed to save changes'),
+        });
+        setSaving(false);
+      });
+  };
+
+  return (
+    <>
+      <Toast ref={toast} />
+
+      <div className="deploy-page animate-in">
+        <div className="page-header">
+          <nav className="breadcrumb">
+            <a
+              className="breadcrumb-link"
+              onClick={goBack}
+              onKeyDown={(e) => e.key === 'Enter' && goBack()}
+              tabIndex={0}
+            >
+              <i className="pi pi-arrow-left" style={{ fontSize: '11px' }}></i>
+              {parentLabel(instance?.service)}
+            </a>
+            <i
+              className="pi pi-angle-right"
+              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
+            ></i>
+            <a className="breadcrumb-link" onClick={goBack} tabIndex={0}>
+              {instance?.name}
+            </a>
+            <i
+              className="pi pi-angle-right"
+              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
+            ></i>
+            <span className="breadcrumb-current">Edit</span>
+          </nav>
+
+          {instance && (
+            <div className="header-row">
+              <div className="header-badge">
+                <i className="pi pi-pencil"></i>
+              </div>
+              <div className="header-text">
+                <div className="header-title-row">
+                  <h2>
+                    Edit{' '}
+                    <span className="mono" style={{ fontWeight: 600 }}>
+                      {instance.name}
+                    </span>
+                  </h2>
+                  <span className={`okdp-tag ${tagClass(instance.status)}`}>
+                    {(instance.status === 'Installing' || instance.status === 'Updating') && (
+                      <span className="okdp-tag-dot"></span>
+                    )}
+                    {instance.status}
+                  </span>
+                </div>
+                <p className="page-desc">
+                  Change version, parameters or profiles. Saving will trigger a rolling restart.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="empty-state-panel">
+            <div className="empty-icon-wrapper">
+              <i className="pi pi-spin pi-spinner"></i>
+            </div>
+            <h3>Loading instance configuration…</h3>
+          </div>
+        ) : instance ? (
+          <>
+            {hasPendingChanges && instance.status === 'Ready' && (
+              <div className="edit-banner">
+                <i className="pi pi-info-circle"></i>
+                <div>
+                  <strong>A restart will be required.</strong>
+                  <span className="muted-text">
+                    Running kernels will be interrupted. Unsaved notebook changes are preserved on
+                    the persistent volume.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="form-card">
+              <div className="form-section">
+                <div className="form-field">
+                  <label>Instance name</label>
+                  <input className="text-input mono" value={instance.name} disabled />
+                  <small className="field-hint">Name cannot be changed after creation.</small>
+                </div>
+
+                <div className="form-field">
+                  <div className="field-head">
+                    <label style={{ margin: 0 }}>Version</label>
+                    <span className="muted-text small mono">{instance.service}</span>
+                  </div>
+                  <small className="field-hint" style={{ marginTop: 0, marginBottom: '10px' }}>
+                    Currently <span className="mono">{instance.serviceTag}</span>. Changing the tag
+                    reloads the parameter schema.
+                  </small>
+                  {versionOptions.length > 0 ? (
+                    <Dropdown
+                      value={selectedTag}
+                      options={versionOptions}
+                      optionLabel="label"
+                      optionValue="value"
+                      appendTo={document.body}
+                      className="w-full"
+                      onChange={(e) => onVersionChange(e.value)}
+                    />
+                  ) : (
+                    <span className="version-badge mono">{instance.serviceTag}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="form-card" style={{ marginTop: '14px' }}>
+              {schemaLoading ? (
+                <div className="form-section">
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0' }}
+                  >
+                    <i
+                      className="pi pi-spin pi-spinner"
+                      style={{ color: 'var(--db-primary)', fontSize: '18px' }}
+                    ></i>
+                    <div>
+                      <strong>Loading configuration schema…</strong>
+                      <div className="muted-text small">
+                        Fetching {instance.service}:{selectedTag}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : filteredSchema ? (
+                <div className="form-section">
+                  <DynamicSchemaForm
+                    schema={filteredSchema}
+                    initialValues={parameterValues}
+                    onParametersChange={(params) => {
+                      parametersRef.current = params;
+                    }}
+                    onValidityChange={setParamsValid}
+                  />
+                </div>
+              ) : null}
+
+              {(existingProfiles.length > 0 || hasProfileEditorWidget(rawSchema)) && (
+                <div className="form-section" style={{ marginTop: '20px' }}>
+                  <div className="field-head">
+                    <label style={{ margin: 0 }}>Profiles</label>
+                    <span className="muted-text small">
+                      Notebook environments users can launch.
+                    </span>
+                  </div>
+                  <ProfileListEditor
+                    profileImages={profileImages}
+                    initialProfiles={existingProfiles}
+                    onProfilesChange={(profiles) => {
+                      profilesRef.current = profiles;
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="wizard-actions">
+              <button className="btn-secondary" onClick={goBack} disabled={saving}>
+                Cancel
+              </button>
+              <div className="wa-right">
+                <button className="create-btn" onClick={save} disabled={saving || !paramsValid}>
+                  {saving ? (
+                    <>
+                      <i className="pi pi-spin pi-spinner"></i>
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <i className="pi pi-check"></i>
+                      Save changes
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty-state-panel">
+            <div className="empty-icon-wrapper">
+              <i className="pi pi-exclamation-triangle"></i>
+            </div>
+            <h3>Instance not found</h3>
+            <p>The service instance could not be loaded.</p>
+            <button className="btn-secondary" onClick={goBack}>
+              <i className="pi pi-arrow-left"></i>
+              Back to instances
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

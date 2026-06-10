@@ -1,0 +1,8 @@
+/* Layout only — shared styles (welcome-banner, action-card, card-icon, etc.)
+   are defined globally in base.css */
+.admin-home {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  animation: fadeInUp 0.4s ease-out;
+}

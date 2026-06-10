@@ -1,0 +1,52 @@
+.spark-list {
+  display: block;
+}
+.spark-list .app-name {
+  font-weight: 500;
+}
+.spark-list .app-link {
+  color: var(--db-primary);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--db-transition-base);
+}
+.spark-list .app-link:hover {
+  color: var(--db-primary-700);
+  text-decoration: underline;
+}
+.spark-list .type-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--db-bg-secondary);
+  color: var(--db-text-secondary);
+  font-size: 12px;
+  padding: 3px var(--db-space-sm);
+  border-radius: var(--db-radius-sm);
+  border: 1px solid var(--db-border-light);
+  font-weight: 500;
+}
+.spark-list .image-text {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--db-text-secondary);
+}
+.spark-list .created-date {
+  font-size: 13px;
+  color: var(--db-text-secondary);
+}
+.spark-list .empty-state-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--db-space-sm);
+  padding: var(--db-space-xl);
+  color: var(--db-text-secondary);
+  font-size: 14px;
+}
+.spark-list .empty-state-inline i {
+  font-size: 1.2rem;
+  opacity: 0.5;
+}
+.spark-list .filter-bar {
+  margin-bottom: var(--db-space-md);
+}

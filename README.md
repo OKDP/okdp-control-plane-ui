@@ -22,30 +22,19 @@ npm run build
 
 The build artifacts will be stored in the `dist/` directory.
 
+## Tests
+
+To run the unit tests:
+
+```bash
+npm test
+```
+
 ## Architecture
 
-- **Framework**: Angular 20
-- **UI Library**: PrimeNG
-- **Styling**: SCSS with CSS Variables for theming
-
-## Key Features
-
-- **Project Management**: Create, list, and delete projects.
-- **Secrets**: Per-project **Secret Stores** (e.g. HashiCorp Vault) and **External Secrets** that sync into Kubernetes Secrets.
-- **Responsive Design**: Collapsible sidebar, adaptive layouts.
-- **Modern UI**: Clean aesthetic with consistent theming.
-
-## Example: Secret Store (Vault)
-
-1. Open your project → **Secrets** → **Secret Stores** → **Add secret store**.
-2. Fill the form with simple values like below. The Vault URL must work **from inside the cluster** (where ESO runs).
-
-| Field | Simple example |
-|-------|----------------|
-| Store name | `my-store` |
-| Server URL | `http://vault-main.vault-system.svc.cluster.local:8200` |
-| Secret path | `secret` |
-| KV version | `v2` |
-| Token | `root` *(sandbox / dev only; never in production)* |
-| Default store | optional checkbox |
-
+- **Framework**: React 19 (built with Vite)
+- **UI Library**: PrimeReact
+- **Routing**: react-router
+- **Authentication**: OIDC via oidc-client-ts
+- **Styling**: CSS with CSS Variables for theming
+- **Tests**: Vitest + Testing Library

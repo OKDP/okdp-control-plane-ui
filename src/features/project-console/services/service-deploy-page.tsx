@@ -1,0 +1,542 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Dropdown } from 'primereact/dropdown';
+import { Toast } from 'primereact/toast';
+import { serviceApi } from '../../../core/api/service-api';
+import type { PlatformService } from '../../../core/models/service.model';
+import { DynamicSchemaForm } from '../../../shared/components/dynamic-schema-form';
+import { ProfileListEditor, type Profile } from '../../../shared/components/profile-list-editor';
+import {
+  apiErrorMessage,
+  areaBasePath,
+  hasProfileEditorWidget,
+  parentLabel,
+  stripProfileEditorFields,
+} from './service-utils';
+
+type StepKey = 'basics' | 'params' | 'profiles' | 'review';
+
+interface WizardStep {
+  key: StepKey;
+  label: string;
+}
+
+const PROGRESS_STAGES = [
+  { label: 'Validating parameters' },
+  { label: 'Creating release' },
+  { label: 'Scheduling pod' },
+  { label: 'Waiting for readiness' },
+];
+
+const NAME_REGEX = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+
+export default function ServiceDeployPage() {
+  const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
+  const toast = useRef<Toast>(null);
+  const progressTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [service, setService] = useState<PlatformService | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deploying, setDeploying] = useState(false);
+  // Track the dynamic schema form validity so Next on the Parameters step
+  // is blocked when a CPU/memory quantity field is malformed.
+  const [paramsValid, setParamsValid] = useState(true);
+  const [deployProgress, setDeployProgress] = useState(0);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [serviceSchema, setServiceSchema] = useState<any>(null);
+  const [profileImages, setProfileImages] = useState<
+    Record<string, { label: string; image: string }[]>
+  >({});
+  const [versionOptions, setVersionOptions] = useState<{ label: string; value: string }[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const [selectedTag, setSelectedTag] = useState('');
+  const [instanceName, setInstanceName] = useState('');
+  const [parameters, setParameters] = useState<Record<string, any>>({});
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+
+  const filteredSchema = useMemo(
+    () => (serviceSchema ? stripProfileEditorFields(serviceSchema) : null),
+    [serviceSchema],
+  );
+  const profileEditor = hasProfileEditorWidget(serviceSchema);
+
+  // Steps are computed from the loaded schema: the "Profiles" step is
+  // only meaningful for services that declare a profile-editor widget
+  // (currently just JupyterHub). Hiding it entirely for Spark History
+  // Server / Trino / etc. gives a shorter, less confusing wizard.
+  const steps = useMemo<WizardStep[]>(() => {
+    const base: WizardStep[] = [
+      { key: 'basics', label: 'Basics' },
+      { key: 'params', label: 'Parameters' },
+    ];
+    if (profileEditor) {
+      base.push({ key: 'profiles', label: 'Profiles' });
+    }
+    base.push({ key: 'review', label: 'Review' });
+    return base;
+  }, [profileEditor]);
+
+  const currentStepKey: StepKey = steps[currentStep]?.key ?? 'basics';
+
+  const nameError = useMemo(() => {
+    if (!instanceName) return '';
+    if (!NAME_REGEX.test(instanceName.trim())) {
+      return "Must be lowercase alphanumeric or '-', starting and ending with alphanumeric.";
+    }
+    return '';
+  }, [instanceName]);
+
+  const isFormValid = useMemo(() => {
+    const baseValid = !!selectedTag && !nameError && !!instanceName;
+    if (profileEditor) {
+      return baseValid && profiles.length > 0;
+    }
+    return baseValid;
+  }, [selectedTag, nameError, instanceName, profileEditor, profiles]);
+
+  const canAdvance = (): boolean => {
+    switch (currentStepKey) {
+      case 'basics':
+        return !!instanceName && !nameError && !!selectedTag;
+      case 'params':
+        return !schemaLoading && paramsValid;
+      case 'profiles':
+        // Only rendered when the schema declares a profile editor — require
+        // at least one profile defined before moving on.
+        return profiles.length > 0;
+      default:
+        return true;
+    }
+  };
+
+  const reviewParams = useMemo(() => {
+    const out: { key: string; value: string }[] = [];
+    for (const [k, v] of Object.entries(parameters)) {
+      if (k === 'profiles') continue;
+      out.push({ key: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—') });
+    }
+    return out;
+  }, [parameters]);
+
+  const loadSchema = useCallback((serviceName: string, tag: string) => {
+    setSchemaLoading(true);
+    serviceApi
+      .getServiceSchema(serviceName, tag)
+      .then((schema) => {
+        setServiceSchema(schema);
+        setSchemaLoading(false);
+      })
+      .catch(() => {
+        toast.current?.show({
+          severity: 'warn',
+          summary: 'Schema unavailable',
+          detail:
+            'Could not load configuration schema. You can still deploy with default parameters.',
+        });
+        setSchemaLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    serviceApi
+      .getProfileImages()
+      .then(setProfileImages)
+      .catch(() => undefined);
+
+    let cancelled = false;
+    serviceApi
+      .getPlatformServices()
+      .then((services) => {
+        if (cancelled) return;
+        const requestedService = searchParams.get('service');
+        const svc =
+          services.length === 1
+            ? services[0]
+            : (requestedService && services.find((s) => s.name === requestedService)) ||
+              services[0];
+        if (svc) {
+          setService(svc);
+          setInstanceName(svc.name);
+          setVersionOptions(
+            svc.versions.map((v) => ({
+              label: v === svc.defaultVersion ? `${v} (recommended)` : v,
+              value: v,
+            })),
+          );
+          setSelectedTag(svc.defaultVersion);
+          loadSchema(svc.name, svc.defaultVersion);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load service info',
+        });
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const clearProgressTick = useCallback(() => {
+    if (progressTickRef.current !== null) {
+      clearInterval(progressTickRef.current);
+      progressTickRef.current = null;
+    }
+  }, []);
+
+  // Route change during an in-flight deploy must not leak the interval.
+  useEffect(() => clearProgressTick, [clearProgressTick]);
+
+  const onVersionChange = (tag: string) => {
+    if (!service || !tag) return;
+    setSelectedTag(tag);
+    setServiceSchema(null);
+    setParameters({});
+    loadSchema(service.name, tag);
+  };
+
+  const goBack = () => {
+    if (!projectId) return;
+
+    const returnTo = searchParams.get('returnTo');
+    if (returnTo) {
+      navigate(returnTo);
+    } else {
+      navigate(`/project/${projectId}/${areaBasePath(service?.name).join('/')}`);
+    }
+  };
+
+  const deploy = () => {
+    if (!projectId || !service) return;
+
+    setDeploying(true);
+    setDeployProgress(0);
+
+    const mergedParams = profileEditor ? { ...parameters, profiles } : { ...parameters };
+
+    // Animate progress stages while the request is in flight.
+    progressTickRef.current = setInterval(() => {
+      setDeployProgress((current) =>
+        current < PROGRESS_STAGES.length - 1 ? current + 1 : current,
+      );
+    }, 700);
+
+    serviceApi
+      .deployService(projectId, {
+        service: service.name,
+        tag: selectedTag,
+        instanceName,
+        parameters: mergedParams,
+      })
+      .then(() => {
+        clearProgressTick();
+        setDeployProgress(PROGRESS_STAGES.length);
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Deploying instance',
+          detail: `${instanceName} is being provisioned.`,
+        });
+        setTimeout(() => {
+          setDeploying(false);
+          const returnTo = searchParams.get('returnTo');
+          if (returnTo) {
+            navigate(returnTo);
+          } else {
+            navigate(`/project/${projectId}/${areaBasePath(service.name).join('/')}`);
+          }
+        }, 400);
+      })
+      .catch((err) => {
+        clearProgressTick();
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Error',
+          detail: apiErrorMessage(err, 'Deployment failed'),
+        });
+        setDeploying(false);
+      });
+  };
+
+  return (
+    <>
+      <Toast ref={toast} />
+
+      <div className="deploy-page animate-in">
+        <div className="page-header">
+          <nav className="breadcrumb">
+            <a
+              className="breadcrumb-link"
+              onClick={goBack}
+              onKeyDown={(e) => e.key === 'Enter' && goBack()}
+              tabIndex={0}
+            >
+              <i className="pi pi-arrow-left" style={{ fontSize: '11px' }}></i>
+              {parentLabel(service?.name)}
+            </a>
+            <i
+              className="pi pi-angle-right"
+              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
+            ></i>
+            <span className="breadcrumb-current">New instance</span>
+          </nav>
+          <div className="header-row">
+            <div className="header-badge">
+              <i className="pi pi-play"></i>
+            </div>
+            <div className="header-text">
+              <h2>Deploy new instance</h2>
+              <p className="page-desc">
+                Configure and launch a new {service?.name || 'service'} instance in this project.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="empty-state-panel">
+            <div className="empty-icon-wrapper">
+              <i className="pi pi-spin pi-spinner"></i>
+            </div>
+            <h3>Loading service configuration…</h3>
+          </div>
+        ) : deploying ? (
+          <div className="form-card deploy-progress">
+            {PROGRESS_STAGES.map((stage, i) => (
+              <div
+                key={stage.label}
+                className={[
+                  'progress-stage',
+                  deployProgress > i ? 'done' : '',
+                  deployProgress === i ? 'active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <span className="ps-dot">
+                  {deployProgress > i ? (
+                    <i className="pi pi-check"></i>
+                  ) : deployProgress === i ? (
+                    <i className="pi pi-spin pi-spinner"></i>
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span className="ps-label">{stage.label}</span>
+                {deployProgress === i ? (
+                  <span className="ps-status muted-text">in progress</span>
+                ) : deployProgress > i ? (
+                  <span className="ps-status ok">done</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : service ? (
+          <>
+            <div className="wizard-stepper">
+              {steps.map((s, i) => (
+                <div
+                  key={s.key}
+                  className={[
+                    'wstep',
+                    currentStep === i ? 'active' : '',
+                    currentStep > i ? 'done' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <span className="wstep-num">
+                    {currentStep > i ? <i className="pi pi-check"></i> : i + 1}
+                  </span>
+                  <span className="wstep-label">{s.label}</span>
+                  {i < steps.length - 1 && <span className="wstep-line"></span>}
+                </div>
+              ))}
+            </div>
+
+            <div className="form-card">
+              {currentStepKey === 'basics' && (
+                <div className="form-section">
+                  <div className="form-field">
+                    <label>Instance name</label>
+                    <input
+                      className="text-input mono"
+                      placeholder="e.g. my-notebook"
+                      value={instanceName}
+                      onChange={(e) => setInstanceName(e.target.value)}
+                    />
+                    {nameError ? (
+                      <small className="field-hint err">{nameError}</small>
+                    ) : (
+                      <small className="field-hint">
+                        Lowercase letters, digits and dashes. Must start and end with an
+                        alphanumeric character.
+                      </small>
+                    )}
+                  </div>
+
+                  <div className="form-field">
+                    <div className="field-head">
+                      <label style={{ margin: 0 }}>Version</label>
+                      <span className="muted-text small mono">{service.name}</span>
+                    </div>
+                    <small className="field-hint" style={{ marginTop: 0, marginBottom: '10px' }}>
+                      Pick a version. Each version ships its own schema; the parameters step adapts.
+                    </small>
+                    <Dropdown
+                      value={selectedTag}
+                      options={versionOptions}
+                      optionLabel="label"
+                      optionValue="value"
+                      placeholder="Select a version"
+                      appendTo={document.body}
+                      className="w-full"
+                      onChange={(e) => onVersionChange(e.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentStepKey === 'params' &&
+                (schemaLoading ? (
+                  <div className="form-section">
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '8px 0 20px',
+                      }}
+                    >
+                      <i
+                        className="pi pi-spin pi-spinner"
+                        style={{ color: 'var(--db-primary)', fontSize: '18px' }}
+                      ></i>
+                      <div>
+                        <strong>Loading parameter schema…</strong>
+                        <div className="muted-text small">
+                          Fetching {service.name}:{selectedTag} configuration.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : filteredSchema ? (
+                  <div className="form-section">
+                    <DynamicSchemaForm
+                      schema={filteredSchema}
+                      onParametersChange={setParameters}
+                      onValidityChange={setParamsValid}
+                    />
+                  </div>
+                ) : (
+                  <div className="form-section">
+                    <p className="muted-text">No configurable parameters for this version.</p>
+                  </div>
+                ))}
+
+              {currentStepKey === 'profiles' && (
+                <div className="form-section">
+                  <div className="field-head">
+                    <label style={{ margin: 0 }}>Profiles</label>
+                    <span className="muted-text small">
+                      Define notebook environments users can launch.
+                    </span>
+                  </div>
+                  <ProfileListEditor profileImages={profileImages} onProfilesChange={setProfiles} />
+                  {profiles.length === 0 && (
+                    <small className="field-hint err">
+                      At least one profile is required to deploy.
+                    </small>
+                  )}
+                </div>
+              )}
+
+              {currentStepKey === 'review' && (
+                <div className="form-section">
+                  <div className="review-grid">
+                    <div className="review-row">
+                      <span className="review-label">Instance name</span>
+                      <span className="review-value mono">{instanceName || '—'}</span>
+                    </div>
+                    <div className="review-row">
+                      <span className="review-label">Service</span>
+                      <span className="review-value mono">{service.name}</span>
+                    </div>
+                    <div className="review-row">
+                      <span className="review-label">Version</span>
+                      <span className="review-value mono">{selectedTag}</span>
+                    </div>
+                    {profileEditor && (
+                      <div className="review-row">
+                        <span className="review-label">Profiles</span>
+                        <span className="review-value">{profiles.length} configured</span>
+                      </div>
+                    )}
+                    {reviewParams.map((entry) => (
+                      <div key={entry.key} className="review-row">
+                        <span className="review-label">{entry.key}</span>
+                        <span className="review-value mono">{entry.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="wizard-actions">
+              <button className="btn-secondary" onClick={goBack}>
+                Cancel
+              </button>
+              <div className="wa-right">
+                {currentStep > 0 && (
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setCurrentStep((s) => Math.max(s - 1, 0))}
+                  >
+                    Back
+                  </button>
+                )}
+                {currentStep < steps.length - 1 ? (
+                  <button
+                    className="create-btn"
+                    disabled={!canAdvance()}
+                    onClick={() => setCurrentStep((s) => Math.min(s + 1, steps.length - 1))}
+                  >
+                    Next
+                    <i className="pi pi-angle-right"></i>
+                  </button>
+                ) : (
+                  <button className="create-btn" disabled={!isFormValid} onClick={deploy}>
+                    <i className="pi pi-play"></i>
+                    Deploy instance
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty-state-panel">
+            <div className="empty-icon-wrapper">
+              <i className="pi pi-exclamation-triangle"></i>
+            </div>
+            <h3>Service unavailable</h3>
+            <p>No deployable service configuration was found.</p>
+            <button className="btn-secondary" onClick={goBack}>
+              <i className="pi pi-arrow-left"></i>
+              Back to instances
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

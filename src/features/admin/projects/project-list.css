@@ -1,0 +1,5 @@
+/* Search handled by global layout.css — only component-specific overrides here */
+.project-name {
+  font-weight: 500;
+  color: var(--db-text-primary);
+}

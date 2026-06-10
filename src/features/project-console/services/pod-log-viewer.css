@@ -1,0 +1,130 @@
+.log-viewer {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-lg);
+  overflow: hidden;
+  background: var(--db-bg-primary);
+}
+.log-viewer .log-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--db-bg-secondary);
+  border-bottom: 1px solid var(--db-border-light);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.log-viewer .toolbar-left,
+.log-viewer .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.log-viewer .toolbar-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--db-text-primary);
+}
+.log-viewer .icon-file {
+  color: var(--db-primary);
+  font-size: 16px;
+}
+.log-viewer .follow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.log-viewer .follow-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--db-text-secondary);
+}
+.log-viewer .pod-select,
+.log-viewer .container-select {
+  min-width: 180px;
+}
+.log-viewer .log-content {
+  background: #111827;
+  color: #e5e7eb;
+  min-height: 320px;
+  max-height: 520px;
+  overflow: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.log-viewer .log-lines {
+  padding: 12px 0;
+}
+.log-viewer .log-line {
+  display: flex;
+  gap: 16px;
+  padding: 0 16px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-viewer .log-line:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.log-viewer .line-no {
+  color: #6b7280;
+  user-select: none;
+  min-width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.log-viewer .line-text {
+  flex: 1;
+  color: #e5e7eb;
+}
+.log-viewer .streaming-row {
+  display: flex;
+  gap: 16px;
+  padding: 6px 16px 2px;
+}
+.log-viewer .streaming-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #10b981;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.log-viewer .streaming-indicator .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  animation: log-pulse 1.4s ease-in-out infinite;
+}
+@keyframes log-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+.log-viewer .log-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 56px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+.log-viewer .log-state.muted {
+  color: #6b7280;
+}
+.log-viewer .log-state i {
+  font-size: 16px;
+}
