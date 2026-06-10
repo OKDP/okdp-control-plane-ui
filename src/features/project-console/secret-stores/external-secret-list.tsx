@@ -22,8 +22,11 @@ import {
 } from '../../../core/api/external-secret-api';
 import { secretStoreApi, type SecretStore } from '../../../core/api/secret-store-api';
 import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils';
-import { getConditionClass, getConditionIcon, statusSeverity } from './secret-status';
-import './external-secret-list.css';
+import { statusSeverity } from './secret-status';
+import { StatusDetailContent } from './status-detail';
+
+const SECTION_TITLE_CLASS = 'm-0 mb-3 text-[14px] font-semibold text-fg';
+const DIVIDER_CLASS = 'my-4 border-0 border-t border-t-border';
 
 const NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 const POLL_INTERVAL_MS = 10_000;
@@ -439,8 +442,8 @@ export function ExternalSecretList() {
           dataKey="name"
           rowClassName={() => 'cluster-row'}
           emptyMessage={
-            <div className="empty-state-inline">
-              <i className="pi pi-key"></i>
+            <div className="flex items-center justify-center gap-2 p-8 text-[14px] text-fg-secondary">
+              <i className="pi pi-key text-[1.2rem] opacity-50"></i>
               <span>
                 No external secrets configured. Click <strong>Add external secret</strong> to create
                 one.
@@ -452,15 +455,15 @@ export function ExternalSecretList() {
             header="Name"
             field="name"
             style={{ width: '20%' }}
-            body={(es: ExternalSecret) => <span className="es-name">{es.name}</span>}
+            body={(es: ExternalSecret) => <span className="font-medium">{es.name}</span>}
           />
           <Column
             header="Secret Store"
             field="secretStoreRef"
             style={{ width: '16%' }}
             body={(es: ExternalSecret) => (
-              <span className="store-ref-badge">
-                <i className="pi pi-database"></i>
+              <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary">
+                <i className="pi pi-database text-[11px]"></i>
                 {es.secretStoreRef}
               </span>
             )}
@@ -469,7 +472,9 @@ export function ExternalSecretList() {
             header="Target Secret"
             style={{ width: '20%' }}
             body={(es: ExternalSecret) => (
-              <span className="target-name">{es.target?.name || '-'}</span>
+              <span className="text-[13px] text-fg-secondary [font-family:monospace]">
+                {es.target?.name || '-'}
+              </span>
             )}
           />
           <Column
@@ -485,7 +490,7 @@ export function ExternalSecretList() {
           <Column
             header="Last Synced"
             style={{ width: '22%' }}
-            className="date-cell"
+            className="text-[13px] whitespace-nowrap text-fg-secondary"
             body={(es: ExternalSecret) =>
               es.lastSyncedAt ? formatMediumDateTime(es.lastSyncedAt) : '-'
             }
@@ -540,22 +545,24 @@ export function ExternalSecretList() {
               id="esName"
               value={secretName}
               onChange={(e) => setSecretName(e.target.value)}
-              className={`w-full dialog-input${nameError ? ' input-error' : ''}`}
+              className={`w-full dialog-input${nameError ? ' border-[#d32f2f]!' : ''}`}
               placeholder="e.g., db-credentials"
               disabled={editMode}
             />
-            {nameError && <small className="field-error">{nameError}</small>}
+            {nameError && (
+              <small className="mt-1 block text-[12px] text-[#d32f2f]">{nameError}</small>
+            )}
           </div>
 
-          <hr className="divider" />
-          <h4 className="section-title">Source</h4>
+          <hr className={DIVIDER_CLASS} />
+          <h4 className={SECTION_TITLE_CLASS}>Source</h4>
 
           {/* Secret Store */}
           <div className="field">
             <label htmlFor="storeRef">Secret Store</label>
             {readyStores.length === 0 ? (
-              <div className="no-stores-hint">
-                <i className="pi pi-info-circle"></i>
+              <div className="flex items-center gap-2 rounded-[6px] border border-[#ffe0b2] bg-[#fff3e0] px-3 py-2.5 text-[13px] text-[#e65100]">
+                <i className="pi pi-info-circle shrink-0 text-[14px]"></i>
                 <span>
                   No ready secret stores available. Create and connect a secret store first.
                 </span>
@@ -572,9 +579,11 @@ export function ExternalSecretList() {
                 className="w-full"
                 appendTo={document.body}
                 itemTemplate={(store: SecretStore) => (
-                  <div className="store-option">
-                    <span className="store-option-name">{store.name}</span>
-                    <span className="store-option-provider">{store.provider}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{store.name}</span>
+                    <span className="text-[12px] text-fg-secondary capitalize">
+                      {store.provider}
+                    </span>
                   </div>
                 )}
               />
@@ -596,27 +605,34 @@ export function ExternalSecretList() {
             />
           </div>
 
-          <hr className="divider" />
-          <h4 className="section-title">Data Mappings</h4>
-          <p className="mapping-help">
+          <hr className={DIVIDER_CLASS} />
+          <h4 className={SECTION_TITLE_CLASS}>Data Mappings</h4>
+          <p className="m-0 mb-3 text-[13px] text-fg-secondary">
             Map keys from the remote secret store to keys in the Kubernetes Secret.
           </p>
 
-          <div className="mappings-list">
+          <div className="flex flex-col gap-2">
             {dataMappings.map((mapping, index) => (
-              <div key={index} className="mapping-row">
-                <div className="mapping-fields">
-                  <div className="mapping-field">
-                    <label>Secret Key</label>
+              <div
+                key={index}
+                className="rounded-[6px] border border-border-light bg-surface-secondary px-3 py-2.5"
+              >
+                <div className="flex items-end gap-2">
+                  <div className="flex flex-1 flex-col gap-1">
+                    <label className="text-[11px] font-semibold tracking-[0.5px] text-fg-secondary uppercase">
+                      Secret Key
+                    </label>
                     <InputText
                       value={mapping.secretKey}
                       onChange={(e) => patchMapping(index, { secretKey: e.target.value })}
-                      className="dialog-input"
+                      className="dialog-input text-[13px]!"
                       placeholder="e.g., DB_PASSWORD"
                     />
                   </div>
-                  <div className="mapping-field">
-                    <label>Remote Key</label>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <label className="text-[11px] font-semibold tracking-[0.5px] text-fg-secondary uppercase">
+                      Remote Key
+                    </label>
                     <InputText
                       value={mapping.remoteRef.key}
                       onChange={(e) =>
@@ -624,12 +640,12 @@ export function ExternalSecretList() {
                           remoteRef: { ...mapping.remoteRef, key: e.target.value },
                         })
                       }
-                      className="dialog-input"
+                      className="dialog-input text-[13px]!"
                       placeholder="e.g., myapp/db"
                     />
                   </div>
-                  <div className="mapping-field mapping-field-sm">
-                    <label>
+                  <div className="flex flex-[0.8] flex-col gap-1">
+                    <label className="text-[11px] font-semibold tracking-[0.5px] text-fg-secondary uppercase">
                       Property <span className="optional">(opt.)</span>
                     </label>
                     <InputText
@@ -639,7 +655,7 @@ export function ExternalSecretList() {
                           remoteRef: { ...mapping.remoteRef, property: e.target.value },
                         })
                       }
-                      className="dialog-input"
+                      className="dialog-input text-[13px]!"
                       placeholder="e.g., password"
                     />
                   </div>
@@ -658,21 +674,25 @@ export function ExternalSecretList() {
           <Button icon="pi pi-plus" text label="Add mapping" onClick={addMapping} />
 
           {/* Advanced */}
-          <hr className="divider" />
+          <hr className={DIVIDER_CLASS} />
           <button
-            className="advanced-toggle"
+            className="inline-flex cursor-pointer items-center gap-1.5 border-none bg-transparent px-0 py-1 text-[13px] font-semibold text-fg-secondary transition-colors duration-150 hover:text-fg"
             onClick={() => setShowAdvanced((v) => !v)}
             type="button"
           >
-            <i className={showAdvanced ? 'pi pi-chevron-down' : 'pi pi-chevron-right'}></i>
+            <i
+              className={`${showAdvanced ? 'pi pi-chevron-down' : 'pi pi-chevron-right'} text-[12px] transition-transform duration-150`}
+            ></i>
             <span>Advanced</span>
             {!showAdvanced && targetName && targetName !== secretName && (
-              <span className="advanced-hint">Target: {targetName}</span>
+              <span className="ml-2 text-[12px] font-normal text-fg-secondary opacity-70">
+                Target: {targetName}
+              </span>
             )}
           </button>
 
           {showAdvanced && (
-            <div className="advanced-section">
+            <div className="pt-3">
               <div className="field">
                 <label htmlFor="targetName">Kubernetes Secret name</label>
                 <InputText
@@ -682,7 +702,7 @@ export function ExternalSecretList() {
                   className="w-full dialog-input"
                   placeholder={secretName || 'Same as name'}
                 />
-                <small className="field-hint">
+                <small className="mt-1 block text-[12px] text-fg-secondary">
                   Defaults to the external secret name. Override to use a different name for the
                   Kubernetes Secret.
                 </small>
@@ -705,76 +725,13 @@ export function ExternalSecretList() {
         onHide={() => setStatusDialogVisible(false)}
         footer={statusDialogFooter}
       >
-        <div className="status-content">
-          {statusLoading ? (
-            <div className="status-loading">
-              <i className="pi pi-spin pi-spinner"></i>
-              <span>Loading status...</span>
-            </div>
-          ) : (
-            statusDetail && (
-              <>
-                <div className="status-summary">
-                  <div className="status-row">
-                    <span className="status-label">Status</span>
-                    <Tag
-                      value={statusDetail.status}
-                      severity={getStatusSeverity(statusDetail.status)}
-                    />
-                  </div>
-                  {statusDetail.lastSyncedAt && (
-                    <div className="status-row">
-                      <span className="status-label">Last synced</span>
-                      <span className="status-value">
-                        {formatMediumDateTime(statusDetail.lastSyncedAt)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {statusDetail.lastError && (
-                  <div className="error-block">
-                    <div className="error-block-header">
-                      <i className="pi pi-exclamation-triangle"></i>
-                      <span>Error details</span>
-                    </div>
-                    <pre className="error-block-body">{statusDetail.lastError}</pre>
-                  </div>
-                )}
-
-                {statusDetail.conditions.length > 0 && (
-                  <>
-                    <h4 className="section-title conditions-title">Conditions</h4>
-                    <div className="conditions-list">
-                      {statusDetail.conditions.map((cond) => (
-                        <div
-                          key={cond.type}
-                          className={`condition-item ${getConditionClass(cond)}`}
-                        >
-                          <div className="condition-header">
-                            <i className={getConditionIcon(cond)}></i>
-                            <span className="condition-type">
-                              {cond.type}: {cond.status === 'True' ? 'True' : 'False'}
-                            </span>
-                            {cond.reason && (
-                              <span className="condition-reason-badge">{cond.reason}</span>
-                            )}
-                          </div>
-                          {cond.message && <pre className="condition-message">{cond.message}</pre>}
-                          {cond.lastTransitionTime && (
-                            <span className="condition-time">
-                              {formatMediumDateTime(cond.lastTransitionTime)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )
-          )}
-        </div>
+        <StatusDetailContent
+          loading={statusLoading}
+          detail={statusDetail}
+          severity={statusDetail ? getStatusSeverity(statusDetail.status) : 'info'}
+          checkedLabel="Last synced"
+          checkedAt={statusDetail?.lastSyncedAt}
+        />
       </Dialog>
 
       <ConfirmDialog

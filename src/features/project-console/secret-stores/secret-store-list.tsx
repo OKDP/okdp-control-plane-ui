@@ -22,8 +22,20 @@ import {
   type VaultAuthType,
 } from '../../../core/api/secret-store-api';
 import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils';
-import { getConditionClass, getConditionIcon, statusSeverity } from './secret-status';
-import './secret-store-list.css';
+import { statusSeverity } from './secret-status';
+import { StatusDetailContent } from './status-detail';
+
+const SECTION_TITLE_CLASS = 'm-0 mb-3 text-[14px] font-semibold text-fg';
+const DIVIDER_CLASS = 'my-4 border-0 border-t border-t-border';
+const MODE_SWITCH_CLASS =
+  'mb-4 flex rounded-[6px] border border-border-light bg-surface-secondary p-1';
+const MODE_BTN_CLASS =
+  'flex-1 cursor-pointer rounded-[4px] border-none p-2 transition-all duration-200';
+const MODE_BTN_ACTIVE_CLASS = 'bg-surface font-semibold text-fg shadow-[0_1px_3px_rgba(0,0,0,0.1)]';
+const MODE_BTN_IDLE_CLASS = 'bg-transparent font-medium text-fg-secondary';
+
+const modeBtnClass = (active: boolean) =>
+  `${MODE_BTN_CLASS} ${active ? MODE_BTN_ACTIVE_CLASS : MODE_BTN_IDLE_CLASS}`;
 
 const NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 const POLL_INTERVAL_MS = 10_000;
@@ -441,8 +453,8 @@ export function SecretStoreList() {
           dataKey="name"
           rowClassName={() => 'cluster-row'}
           emptyMessage={
-            <div className="empty-state-inline">
-              <i className="pi pi-lock"></i>
+            <div className="flex items-center justify-center gap-2 p-8 text-[14px] text-fg-secondary">
+              <i className="pi pi-lock text-[1.2rem] opacity-50"></i>
               <span>
                 No secret stores configured. Click <strong>Add secret store</strong> to connect one.
               </span>
@@ -455,8 +467,12 @@ export function SecretStoreList() {
             style={{ width: '20%' }}
             body={(store: SecretStore) => (
               <>
-                <span className="store-name">{store.name}</span>
-                {store.isDefault && <span className="default-badge">default</span>}
+                <span className="font-medium">{store.name}</span>
+                {store.isDefault && (
+                  <span className="ml-2 rounded-[4px] bg-[#e6f4ea] px-2 py-[3px] text-[11px] font-medium text-[#1e8e3e] os-dark:bg-[rgba(21,101,192,0.3)] os-dark:text-[#90caf9]">
+                    default
+                  </span>
+                )}
               </>
             )}
           />
@@ -465,8 +481,8 @@ export function SecretStoreList() {
             field="provider"
             style={{ width: '12%' }}
             body={(store: SecretStore) => (
-              <span className="provider-badge">
-                <i className="pi pi-shield"></i>
+              <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary capitalize">
+                <i className="pi pi-shield text-[11px]"></i>
                 {store.provider}
               </span>
             )}
@@ -474,7 +490,7 @@ export function SecretStoreList() {
           <Column
             header="Server"
             style={{ width: '28%' }}
-            className="endpoint-cell"
+            className="max-w-0 overflow-hidden text-[13px] text-ellipsis whitespace-nowrap text-fg-secondary [font-family:monospace]"
             body={(store: SecretStore) => (
               <span title={store.vault?.server || ''}>{store.vault?.server || '-'}</span>
             )}
@@ -492,7 +508,7 @@ export function SecretStoreList() {
           <Column
             header="Last Checked"
             style={{ width: '18%' }}
-            className="date-cell"
+            className="text-[13px] whitespace-nowrap text-fg-secondary"
             body={(store: SecretStore) =>
               store.lastCheckedAt ? formatMediumDateTime(store.lastCheckedAt) : '-'
             }
@@ -547,15 +563,17 @@ export function SecretStoreList() {
               id="storeName"
               value={form.storeName}
               onChange={(e) => patchForm({ storeName: e.target.value })}
-              className={`w-full dialog-input${nameError ? ' input-error' : ''}`}
+              className={`w-full dialog-input${nameError ? ' border-[#d32f2f]!' : ''}`}
               placeholder="e.g., vault-main"
               disabled={editMode}
             />
-            {nameError && <small className="field-error">{nameError}</small>}
+            {nameError && (
+              <small className="mt-1 block text-[12px] text-[#d32f2f]">{nameError}</small>
+            )}
           </div>
 
-          <hr className="divider" />
-          <h4 className="section-title">Vault Connection</h4>
+          <hr className={DIVIDER_CLASS} />
+          <h4 className={SECTION_TITLE_CLASS}>Vault Connection</h4>
 
           {/* Server */}
           <div className="field">
@@ -584,9 +602,9 @@ export function SecretStoreList() {
           {/* Version */}
           <div className="field">
             <label htmlFor="vaultVersion">KV version</label>
-            <div className="mode-switch" role="radiogroup" aria-label="KV version">
+            <div className={MODE_SWITCH_CLASS} role="radiogroup" aria-label="KV version">
               <button
-                className={`mode-btn${form.vaultVersion === 'v2' ? ' active' : ''}`}
+                className={modeBtnClass(form.vaultVersion === 'v2')}
                 onClick={() => patchForm({ vaultVersion: 'v2' })}
                 role="radio"
                 aria-checked={form.vaultVersion === 'v2'}
@@ -594,7 +612,7 @@ export function SecretStoreList() {
                 v2
               </button>
               <button
-                className={`mode-btn${form.vaultVersion === 'v1' ? ' active' : ''}`}
+                className={modeBtnClass(form.vaultVersion === 'v1')}
                 onClick={() => patchForm({ vaultVersion: 'v1' })}
                 role="radio"
                 aria-checked={form.vaultVersion === 'v1'}
@@ -613,24 +631,24 @@ export function SecretStoreList() {
               id="caBundle"
               value={form.caBundle}
               onChange={(e) => patchForm({ caBundle: e.target.value })}
-              className="w-full dialog-input credential-input"
+              className="w-full dialog-input resize-y text-[12px]! [font-family:monospace]"
               placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
               rows={3}
             />
           </div>
 
-          <hr className="divider" />
-          <h4 className="section-title">
+          <hr className={DIVIDER_CLASS} />
+          <h4 className={SECTION_TITLE_CLASS}>
             Authentication{' '}
             {editMode && <span className="optional">(leave empty to keep existing)</span>}
           </h4>
 
           {/* Auth Type Switch */}
-          <div className="mode-switch" role="radiogroup" aria-label="Authentication type">
+          <div className={MODE_SWITCH_CLASS} role="radiogroup" aria-label="Authentication type">
             {AUTH_TYPE_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
-                className={`mode-btn${form.authType === opt.value ? ' active' : ''}`}
+                className={modeBtnClass(form.authType === opt.value)}
                 onClick={() => patchForm({ authType: opt.value })}
                 role="radio"
                 aria-checked={form.authType === opt.value}
@@ -686,14 +704,14 @@ export function SecretStoreList() {
           )}
 
           {/* Options */}
-          <hr className="divider" />
-          <div className="field checkbox-field">
+          <hr className={DIVIDER_CLASS} />
+          <div className="mb-5 flex items-center gap-2">
             <Checkbox
               checked={form.isDefault}
               onChange={(e) => patchForm({ isDefault: !!e.checked })}
               inputId="isDefault"
             />
-            <label htmlFor="isDefault" className="checkbox-label">
+            <label htmlFor="isDefault" className="m-0 cursor-pointer text-[14px] text-fg">
               Set as default store for this project
             </label>
           </div>
@@ -713,76 +731,13 @@ export function SecretStoreList() {
         onHide={() => setStatusDialogVisible(false)}
         footer={statusDialogFooter}
       >
-        <div className="status-content">
-          {statusLoading ? (
-            <div className="status-loading">
-              <i className="pi pi-spin pi-spinner"></i>
-              <span>Loading status...</span>
-            </div>
-          ) : (
-            statusDetail && (
-              <>
-                <div className="status-summary">
-                  <div className="status-row">
-                    <span className="status-label">Status</span>
-                    <Tag
-                      value={statusDetail.status}
-                      severity={getStatusSeverity(statusDetail.status)}
-                    />
-                  </div>
-                  {statusDetail.lastCheckedAt && (
-                    <div className="status-row">
-                      <span className="status-label">Last checked</span>
-                      <span className="status-value">
-                        {formatMediumDateTime(statusDetail.lastCheckedAt)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {statusDetail.lastError && (
-                  <div className="error-block">
-                    <div className="error-block-header">
-                      <i className="pi pi-exclamation-triangle"></i>
-                      <span>Error details</span>
-                    </div>
-                    <pre className="error-block-body">{statusDetail.lastError}</pre>
-                  </div>
-                )}
-
-                {statusDetail.conditions.length > 0 && (
-                  <>
-                    <h4 className="section-title conditions-title">Conditions</h4>
-                    <div className="conditions-list">
-                      {statusDetail.conditions.map((cond) => (
-                        <div
-                          key={cond.type}
-                          className={`condition-item ${getConditionClass(cond)}`}
-                        >
-                          <div className="condition-header">
-                            <i className={getConditionIcon(cond)}></i>
-                            <span className="condition-type">
-                              {cond.type}: {cond.status === 'True' ? 'True' : 'False'}
-                            </span>
-                            {cond.reason && (
-                              <span className="condition-reason-badge">{cond.reason}</span>
-                            )}
-                          </div>
-                          {cond.message && <pre className="condition-message">{cond.message}</pre>}
-                          {cond.lastTransitionTime && (
-                            <span className="condition-time">
-                              {formatMediumDateTime(cond.lastTransitionTime)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )
-          )}
-        </div>
+        <StatusDetailContent
+          loading={statusLoading}
+          detail={statusDetail}
+          severity={statusDetail ? getStatusSeverity(statusDetail.status) : 'info'}
+          checkedLabel="Last checked"
+          checkedAt={statusDetail?.lastCheckedAt}
+        />
       </Dialog>
 
       <ConfirmDialog

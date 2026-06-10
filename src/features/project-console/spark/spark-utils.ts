@@ -70,6 +70,20 @@ export interface SchemaSection {
   properties: SchemaProperty[];
 }
 
+/**
+ * Tailwind tone classes for the section icon badges, keyed by
+ * {@link SchemaSection.iconClass}: badge background + icon colour.
+ */
+export const SECTION_BADGE_TONES: Record<string, { badge: string; icon: string }> = {
+  basics: { badge: 'bg-primary-50', icon: 'text-[1rem] text-primary' },
+  core: { badge: 'bg-[#fef3c7]', icon: 'text-[1rem] text-[#d97706]' },
+  resources: { badge: 'bg-accent-purple-light', icon: 'text-[1rem] text-accent-purple' },
+  config: { badge: 'bg-accent-blue-light', icon: 'text-[1rem] text-accent-blue' },
+  advanced: { badge: 'bg-[#f1f5f9]', icon: 'text-[1rem] text-[#64748b]' },
+  executors: { badge: 'bg-accent-purple-light', icon: 'text-[1rem] text-accent-purple' },
+  logs: { badge: 'bg-primary-50', icon: 'text-[1rem] text-primary' },
+};
+
 export function toSchemaProperty(key: string, spec: any): SchemaProperty {
   const type = spec.type || 'string';
   const isObject = type === 'object';

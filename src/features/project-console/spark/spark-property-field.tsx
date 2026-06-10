@@ -75,7 +75,7 @@ export function SparkPropertyField({
       <InputTextarea
         value={value ?? ''}
         rows={3}
-        className="w-full mono-textarea"
+        className="w-full text-[13px]! [font-family:monospace]!"
         placeholder="key=value (one per line)"
         onChange={(e) => onChange(e.target.value)}
       />

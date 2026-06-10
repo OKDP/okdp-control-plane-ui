@@ -16,7 +16,6 @@ import { InputIcon } from 'primereact/inputicon';
 import type { MenuItem } from 'primereact/menuitem';
 import { identityApi, type User } from '../../../../core/api/identity-api';
 import { useIdentityGroups, useIdentityUsers } from '../use-identity';
-import './user-list.css';
 
 export function UserList() {
   const toast = useRef<Toast>(null);

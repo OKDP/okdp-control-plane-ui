@@ -4,7 +4,6 @@ import { Dropdown } from 'primereact/dropdown';
 import { Checkbox } from 'primereact/checkbox';
 import { serviceApi } from '../../../core/api/service-api';
 import type { Pod } from '../../../core/models/service.model';
-import './pod-log-viewer.css';
 
 const MAX_LOG_LINES = 10000;
 const AUTOSCROLL_THRESHOLD_PX = 40;
@@ -148,13 +147,13 @@ export function PodLogViewer({
   };
 
   return (
-    <div className="log-viewer">
-      <div className="log-toolbar">
-        <div className="toolbar-left">
-          <i className="pi pi-file icon-file"></i>
-          <span className="toolbar-title">Logs</span>
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light bg-surface-secondary px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <i className="pi pi-file text-[16px] text-primary"></i>
+          <span className="text-[14px] font-semibold text-fg">Logs</span>
         </div>
-        <div className="toolbar-right">
+        <div className="flex items-center gap-2.5">
           {podOptions.length > 0 && (
             <Dropdown
               value={selectedPodName}
@@ -163,7 +162,7 @@ export function PodLogViewer({
               optionValue="value"
               placeholder="Select pod"
               appendTo={document.body}
-              className="pod-select"
+              className="min-w-[180px]"
               onChange={(e) => setSelectedPodName(e.value)}
             />
           )}
@@ -176,12 +175,12 @@ export function PodLogViewer({
               optionValue="value"
               placeholder="Container"
               appendTo={document.body}
-              className="container-select"
+              className="min-w-[180px]"
               onChange={(e) => setSelectedContainer(e.value)}
             />
           )}
 
-          <label className="follow-toggle">
+          <label className="flex cursor-pointer items-center gap-1.5 select-none">
             <Checkbox
               checked={followMode}
               onChange={(e) => {
@@ -189,7 +188,7 @@ export function PodLogViewer({
                 setFollowMode(!!e.checked);
               }}
             />
-            <span className="follow-label">Follow</span>
+            <span className="text-[13px] font-medium text-fg-secondary">Follow</span>
           </label>
 
           <Button icon="pi pi-download" text rounded onClick={downloadLogs} title="Download logs" />
@@ -199,27 +198,35 @@ export function PodLogViewer({
         </div>
       </div>
 
-      <div className="log-content" ref={logContainerRef} onScroll={onScroll}>
+      <div
+        className="max-h-[520px] min-h-[320px] overflow-auto bg-[#111827] text-[12.5px] leading-[1.7] text-[#e5e7eb] [font-family:'JetBrains_Mono','Fira_Code',Consolas,monospace]"
+        ref={logContainerRef}
+        onScroll={onScroll}
+      >
         {loading ? (
-          <div className="log-state">
-            <i className="pi pi-spin pi-spinner"></i>
+          <div className="flex items-center justify-center gap-2 p-14 text-[13px] text-[#9ca3af]">
+            <i className="pi pi-spin pi-spinner text-[16px]"></i>
             Loading logs...
           </div>
         ) : lines.length === 0 ? (
-          <div className="log-state muted">No logs available.</div>
+          <div className="flex items-center justify-center gap-2 p-14 text-[13px] text-[#6b7280]">
+            No logs available.
+          </div>
         ) : (
-          <div className="log-lines">
+          <div className="py-3">
             {lines.map((line, i) => (
-              <div key={i} className="log-line">
-                <span className="line-no">{formatLineNo(i + 1)}</span>
-                <span className="line-text">{line}</span>
+              <div key={i} className="flex gap-4 px-4 break-all whitespace-pre-wrap hover:bg-white/3">
+                <span className="min-w-8 shrink-0 text-right text-[#6b7280] select-none">
+                  {formatLineNo(i + 1)}
+                </span>
+                <span className="flex-1 text-[#e5e7eb]">{line}</span>
               </div>
             ))}
             {followMode && (
-              <div className="streaming-row">
-                <span className="line-no"></span>
-                <span className="streaming-indicator">
-                  <span className="dot"></span>
+              <div className="flex gap-4 px-4 pt-1.5 pb-0.5">
+                <span className="min-w-8 shrink-0 text-right select-none"></span>
+                <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[#10b981]">
+                  <span className="h-2 w-2 animate-log-pulse rounded-full bg-[#10b981] shadow-[0_0_0_0_rgba(16,185,129,0.5)]"></span>
                   streaming
                 </span>
               </div>

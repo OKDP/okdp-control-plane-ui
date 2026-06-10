@@ -6,9 +6,14 @@ import { Toast } from 'primereact/toast';
 import { sparkApi } from '../../../core/api/spark-api';
 import type { SparkAppInstance, SparkAppUpdateRequest } from '../../../core/models/spark.model';
 import { apiErrorMessage } from '../services/service-utils';
-import { buildSections, CORE_KEYS_EDIT, parseKeyValue, type SchemaSection } from './spark-utils';
+import {
+  buildSections,
+  CORE_KEYS_EDIT,
+  parseKeyValue,
+  SECTION_BADGE_TONES,
+  type SchemaSection,
+} from './spark-utils';
 import { SparkPropertyField } from './spark-property-field';
-import './spark-pages.css';
 
 const FALLBACK_SECTIONS: SchemaSection[] = [
   {
@@ -215,78 +220,106 @@ export default function SparkEditPage() {
     <>
       <Toast ref={toast} />
 
-      <div className="spark-page edit-page">
-        <div className="page-header animate-in">
-          <nav className="breadcrumb">
+      <div className="mx-auto max-w-[860px] pt-3">
+        <div className="mb-7 animate-in">
+          <nav className="mb-5 flex items-center gap-2 text-[13px]">
             <a
-              className="breadcrumb-link"
+              className="flex cursor-pointer items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 font-medium text-fg-secondary no-underline transition-all duration-250 ease-smooth hover:bg-surface-tertiary hover:text-fg"
               onClick={goBack}
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
-              <i className="pi pi-arrow-left breadcrumb-back-icon"></i>
+              <i className="pi pi-arrow-left text-[11px]"></i>
               Spark Applications
             </a>
-            <i className="pi pi-angle-right breadcrumb-sep"></i>
-            <span className="breadcrumb-current">Edit {app?.name}</span>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
+            <span className="text-[13px] font-medium text-fg-muted">Edit {app?.name}</span>
           </nav>
-          <div className="header-row">
-            <div className="header-badge">
-              <i className="pi pi-pencil"></i>
+          <div className="flex flex-wrap items-center gap-3.5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-[0_6px_16px_rgba(245,158,11,0.25)] [background:linear-gradient(135deg,#f59e0b,#d97706)]">
+              <i className="pi pi-pencil text-[1.4rem] text-white"></i>
             </div>
-            <div className="header-text">
-              <h2>Edit Spark Job</h2>
-              <p className="page-desc">Modify configuration for {app?.name}</p>
+            <div className="min-w-0 flex-1">
+              <h2 className="m-0 text-[28px] leading-[1.2] font-extrabold tracking-[-0.03em] text-fg">
+                Edit Spark Job
+              </h2>
+              <p className="mt-1.5 mb-0 text-[15px] text-fg-secondary">
+                Modify configuration for {app?.name}
+              </p>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="loading-state animate-in">
-            <div className="loading-spinner-ring">
-              <i className="pi pi-spin pi-spinner"></i>
+          <div className="flex animate-in flex-col items-center justify-center gap-3 p-16 text-fg-muted">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
+              <i className="pi pi-spin pi-spinner text-[1.3rem] text-primary"></i>
             </div>
             <p>Loading job configuration...</p>
           </div>
         ) : app ? (
-          <div className="edit-form-container animate-in">
-            <div className="form-card">
-              <div className="card-section">
-                <div className="section-header">
-                  <div className="section-icon-badge basics">
-                    <i className="pi pi-bookmark"></i>
+          <div className="animate-[fadeInUp_0.45s_cubic-bezier(0.22,1,0.36,1)_0.08s_backwards]">
+            <div className="flex flex-col rounded-xl border border-border-light bg-surface p-7 shadow-[0_4px_12px_rgba(0,0,0,0.03)] max-md:p-5">
+              <div className="py-7 first:pt-0 not-last:border-b not-last:border-b-border-light">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-50">
+                    <i className="pi pi-bookmark text-[1rem] text-primary"></i>
                   </div>
-                  <h3 className="section-title">Application</h3>
+                  <h3 className="m-0 text-[17px] font-bold tracking-[-0.02em] text-fg">
+                    Application
+                  </h3>
                 </div>
-                <div className="form-grid">
-                  <div className="form-field">
-                    <label>Name</label>
-                    <div className="readonly-value">{app.name}</div>
+                <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary">
+                      Name
+                    </label>
+                    <div className="rounded-md border border-border-light bg-surface-secondary px-3 py-2.5 text-[14px] font-medium text-fg">
+                      {app.name}
+                    </div>
                   </div>
-                  <div className="form-field">
-                    <label>Type</label>
-                    <div className="readonly-value">{app.type}</div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary">
+                      Type
+                    </label>
+                    <div className="rounded-md border border-border-light bg-surface-secondary px-3 py-2.5 text-[14px] font-medium text-fg">
+                      {app.type}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {schemaSections.map((section) => (
-                <div key={section.title} className="card-section">
-                  <div className="section-header">
-                    <div className={`section-icon-badge ${section.iconClass}`}>
-                      <i className={'pi ' + section.icon}></i>
+                <div
+                  key={section.title}
+                  className="py-7 first:pt-0 not-last:border-b not-last:border-b-border-light"
+                >
+                  <div className="mb-5 flex items-center gap-3">
+                    <div
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${SECTION_BADGE_TONES[section.iconClass]?.badge ?? ''}`}
+                    >
+                      <i
+                        className={`pi ${section.icon} ${SECTION_BADGE_TONES[section.iconClass]?.icon ?? 'text-[1rem]'}`}
+                      ></i>
                     </div>
-                    <h3 className="section-title">{section.title}</h3>
+                    <h3 className="m-0 text-[17px] font-bold tracking-[-0.02em] text-fg">
+                      {section.title}
+                    </h3>
                   </div>
-                  <div className="form-grid">
+                  <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
                     {section.properties.map((prop) => (
                       <div
                         key={prop.key}
-                        className={`form-field${prop.isObject || prop.isArray ? ' full-width' : ''}`}
+                        className={`flex flex-col gap-1.5${prop.isObject || prop.isArray ? ' col-span-full' : ''}`}
                       >
-                        <label title={prop.description}>
+                        <label
+                          className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary"
+                          title={prop.description}
+                        >
                           {prop.key}
-                          {prop.description && <i className="pi pi-info-circle info-icon"></i>}
+                          {prop.description && (
+                            <i className="pi pi-info-circle cursor-help text-[11px] opacity-50"></i>
+                          )}
                         </label>
                         <SparkPropertyField
                           prop={prop}
@@ -301,18 +334,20 @@ export default function SparkEditPage() {
               ))}
             </div>
 
-            <div className="form-actions">
+            <div className="mt-2 flex items-center justify-end gap-3 pt-5">
               <Button severity="secondary" outlined label="Cancel" onClick={goBack} />
               <Button label="Save changes" icon="pi pi-check" loading={saving} onClick={save} />
             </div>
           </div>
         ) : (
-          <div className="empty-state animate-in">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-exclamation-triangle empty-icon"></i>
+          <div className="flex animate-in flex-col items-center justify-center gap-3 rounded-xl border border-border-light bg-surface p-16 text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-surface-tertiary">
+              <i className="pi pi-exclamation-triangle text-[1.5rem] text-fg-muted"></i>
             </div>
-            <h3>Job not found</h3>
-            <p>The Spark application could not be loaded.</p>
+            <h3 className="m-0 text-[16px] font-semibold">Job not found</h3>
+            <p className="m-0 max-w-[340px] text-[14px] text-fg-secondary">
+              The Spark application could not be loaded.
+            </p>
             <Button
               icon="pi pi-arrow-left"
               severity="secondary"

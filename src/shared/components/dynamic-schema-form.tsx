@@ -6,7 +6,11 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { Dropdown } from 'primereact/dropdown';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Password } from 'primereact/password';
-import './dynamic-schema-form.css';
+
+/* The dsf-root class scopes the .field-invalid PrimeReact-input override in
+   styles/components/primereact-overrides.css. */
+const FIELD_CLASS = 'mb-5 flex flex-col gap-1.5';
+const FIELD_LABEL_CLASS = 'block text-[13px] font-medium tracking-[-0.005em] text-fg-secondary';
 
 export interface SchemaField {
   name: string;
@@ -367,8 +371,8 @@ export function DynamicSchemaForm({
               onChange={(e) => setValue(field.name, e.target.value)}
             />
             {fieldErrors[field.name] && (
-              <small className="field-error-msg">
-                <i className="pi pi-exclamation-triangle"></i>
+              <small className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-danger">
+                <i className="pi pi-exclamation-triangle text-[13px]"></i>
                 {fieldErrors[field.name]}
               </small>
             )}
@@ -379,7 +383,7 @@ export function DynamicSchemaForm({
 
   const renderFieldGrid = (group: FieldGroup, groupFields: SchemaField[]) => (
     <div
-      className="field-grid"
+      className="grid gap-x-5 gap-y-5"
       style={{ gridTemplateColumns: group.columns === 2 ? '1fr 1fr' : '1fr' }}
     >
       {groupFields.map(
@@ -387,7 +391,7 @@ export function DynamicSchemaForm({
           isFieldVisible(field) && (
             <div
               key={field.name}
-              className="field"
+              className={FIELD_CLASS}
               style={{
                 gridColumn:
                   (field['x-ui-col-span'] || 1) > 1
@@ -395,7 +399,9 @@ export function DynamicSchemaForm({
                     : undefined,
               }}
             >
-              <label htmlFor={field.name}>{field.title || formatLabel(field.name)}</label>
+              <label htmlFor={field.name} className={FIELD_LABEL_CLASS}>
+                {field.title || formatLabel(field.name)}
+              </label>
               {renderWidget(field)}
               {field.description && <small className="field-help">{field.description}</small>}
             </div>
@@ -407,9 +413,9 @@ export function DynamicSchemaForm({
   if (groups.length === 0) {
     return (
       <div className="dsf-root">
-        <div className="no-params">
-          <div className="no-params-icon">
-            <i className="pi pi-info-circle"></i>
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-border-light bg-surface-secondary p-5 text-[14px] text-fg-secondary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-blue-light">
+            <i className="pi pi-info-circle text-[1rem] text-accent-blue"></i>
           </div>
           <span>This service has no configurable parameters.</span>
         </div>
@@ -419,45 +425,47 @@ export function DynamicSchemaForm({
 
   return (
     <div className="dsf-root">
-      <div className="dynamic-form">
+      <div className="flex flex-col gap-0">
         {groups.map((group, i) => (
           <div
             key={group.name}
-            className="form-section-card"
+            className="animate-[fadeInUp_0.4s_cubic-bezier(0.22,1,0.36,1)_backwards] pb-7 not-last:mb-7 not-last:border-b not-last:border-b-border-light"
             style={{ animationDelay: `${i * 0.06}s` }}
           >
             {(groups.length > 1 || group.name !== 'General') && (
-              <div className="section-card-header">
-                <div className="section-icon-badge">
-                  <i className={'pi ' + getGroupIcon(group.name)}></i>
+              <div className="mb-5 flex items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-50">
+                  <i className={`pi ${getGroupIcon(group.name)} text-[0.85rem] text-primary`}></i>
                 </div>
-                <h4 className="section-card-title">{group.name}</h4>
+                <h4 className="m-0 text-[15px] font-semibold tracking-[-0.01em] text-fg">
+                  {group.name}
+                </h4>
               </div>
             )}
 
-            <div className="section-card-body">
+            <div className="flex flex-col gap-3">
               {renderFieldGrid(group, group.fields)}
 
               {group.advancedFields.length > 0 && (
                 <>
                   <button
                     type="button"
-                    className="advanced-toggle"
+                    className="group mt-5 mb-2 flex w-full cursor-pointer items-center gap-3 border-none bg-transparent p-0"
                     onClick={() => toggleAdvanced(group.name)}
                   >
-                    <span className="advanced-toggle-line"></span>
-                    <span className="advanced-toggle-label">
+                    <span className="h-px flex-1 bg-border-light"></span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 text-[12px] font-medium whitespace-nowrap text-primary transition-colors duration-250 ease-smooth group-hover:bg-primary-100">
                       <i
-                        className={
-                          'pi ' + (advancedOpen[group.name] ? 'pi-chevron-up' : 'pi-chevron-down')
-                        }
+                        className={`pi ${
+                          advancedOpen[group.name] ? 'pi-chevron-up' : 'pi-chevron-down'
+                        } text-[10px]`}
                       ></i>
                       {advancedOpen[group.name] ? 'Hide' : 'Show'} advanced options
                     </span>
-                    <span className="advanced-toggle-line"></span>
+                    <span className="h-px flex-1 bg-border-light"></span>
                   </button>
                   {advancedOpen[group.name] && (
-                    <div className="advanced-fields-container">
+                    <div className="animate-[fadeInUp_0.3s_cubic-bezier(0.22,1,0.36,1)] pt-2">
                       {renderFieldGrid(group, group.advancedFields)}
                     </div>
                   )}

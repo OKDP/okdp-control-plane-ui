@@ -1,0 +1,161 @@
+/* =========================================
+   Tailwind theme mapping
+   =========================================
+   Exposes the --db-* design tokens (variables.css) as Tailwind utilities.
+   `inline` makes utilities reference the --db-* variables directly, so the
+   body.dark-mode variable flip keeps working with zero token duplication. */
+
+@theme inline {
+  /* ===== Brand palette ===== */
+  --color-primary: var(--db-primary);
+  --color-primary-hover: var(--db-primary-hover);
+  --color-primary-light: var(--db-primary-light);
+  --color-primary-50: var(--db-primary-50);
+  --color-primary-100: var(--db-primary-100);
+  --color-primary-200: var(--db-primary-200);
+  --color-primary-300: var(--db-primary-300);
+  --color-primary-400: var(--db-primary-400);
+  --color-primary-500: var(--db-primary-500);
+  --color-primary-600: var(--db-primary-600);
+  --color-primary-700: var(--db-primary-700);
+  --color-primary-800: var(--db-primary-800);
+  --color-primary-900: var(--db-primary-900);
+
+  /* ===== Semantic surfaces ===== */
+  --color-surface: var(--db-bg-primary);
+  --color-surface-secondary: var(--db-bg-secondary);
+  --color-surface-tertiary: var(--db-bg-tertiary);
+  --color-elevated: var(--db-bg-elevated);
+
+  /* ===== Text ===== */
+  --color-fg: var(--db-text-primary);
+  --color-fg-secondary: var(--db-text-secondary);
+  --color-fg-muted: var(--db-text-muted);
+
+  /* ===== Borders ===== */
+  --color-border: var(--db-border-color);
+  --color-border-light: var(--db-border-light);
+  --color-border-subtle: var(--db-border-subtle);
+
+  /* ===== Accents ===== */
+  --color-accent-blue: var(--db-accent-blue);
+  --color-accent-blue-light: var(--db-accent-blue-light);
+  --color-accent-purple: var(--db-accent-purple);
+  --color-accent-purple-light: var(--db-accent-purple-light);
+  --color-accent-red: var(--db-accent-red);
+  --color-accent-red-light: var(--db-accent-red-light);
+  --color-accent-amber: var(--db-accent-amber);
+  --color-accent-amber-light: var(--db-accent-amber-light);
+
+  /* ===== Status ===== */
+  --color-success: var(--db-success);
+  --color-warning: var(--db-warning);
+  --color-danger: var(--db-danger);
+
+  /* ===== Radii ===== */
+  --radius-sm: var(--db-radius-sm);
+  --radius-md: var(--db-radius-md);
+  --radius-lg: var(--db-radius-lg);
+  --radius-xl: var(--db-radius-xl);
+  --radius-2xl: var(--db-radius-2xl);
+
+  /* ===== Shadows ===== */
+  --shadow-xs: var(--db-shadow-xs);
+  --shadow-sm: var(--db-shadow-sm);
+  --shadow-md: var(--db-shadow-md);
+  --shadow-lg: var(--db-shadow-lg);
+  --shadow-xl: var(--db-shadow-xl);
+  --shadow-card: var(--db-shadow-card);
+  --shadow-focus: var(--db-shadow-focus);
+
+  /* ===== Typography ===== */
+  --font-sans: 'DM Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* Font-size utilities set only the size (no paired line-height) so text
+     keeps inheriting the body line-height, exactly like the legacy CSS. */
+  --text-*: initial;
+  --text-xs: var(--db-font-size-xs);
+  --text-sm: var(--db-font-size-sm);
+  --text-base: var(--db-font-size-base);
+  --text-md: var(--db-font-size-md);
+  --text-lg: var(--db-font-size-lg);
+  --text-xl: var(--db-font-size-xl);
+  --text-2xl: var(--db-font-size-2xl);
+
+  --leading-tight: var(--db-line-height-tight);
+  --leading-base: var(--db-line-height-base);
+
+  /* ===== Motion ===== */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-fade-in-up: fade-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-in: fade-in 0.25s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-scale-in: scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-shimmer: shimmer 1.5s linear infinite;
+  --animate-log-pulse: log-pulse 1.4s ease-in-out infinite;
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes log-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+    }
+    70% {
+      box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+  }
+}

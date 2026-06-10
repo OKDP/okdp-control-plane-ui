@@ -1,7 +1,9 @@
 /* Unified Table Styles
-   PrimeNG table theming is handled via CSS vars in variables.css:
-   --p-datatable-header-cell-background, --p-datatable-row-background, etc.
-   This file only adds custom styling beyond what PrimeNG vars cover. */
+   These rules style PrimeReact DataTable internals through the
+   .minimal-table wrapper class. They must stay plain (unlayered) CSS:
+   the PrimeReact theme stylesheet is unlayered, so utility-layer rules
+   could not override it, and PrimeReact 10 has no --p-* design tokens
+   to move them to. */
 
 .p-datatable.minimal-table {
   background: rgba(255, 255, 255, 0.4);
@@ -50,19 +52,4 @@
 
 .p-datatable.minimal-table .p-datatable-tbody > tr:hover {
   background-color: rgba(255, 255, 255, 0.85) !important;
-}
-
-/* Compact monospace data cells */
-.p-datatable .mono-cell {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: var(--db-font-size-sm);
-  color: var(--db-text-secondary);
-}
-
-.empty-message {
-  text-align: center;
-  padding: 32px;
-  color: var(--db-text-muted);
-  font-size: var(--db-font-size-base);
-  background: transparent;
 }

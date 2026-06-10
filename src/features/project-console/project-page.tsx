@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Avatar } from 'primereact/avatar';
+import { useEffect, useState } from 'react';
+import { Link, Outlet } from 'react-router-dom';
 import { Dropdown } from 'primereact/dropdown';
-import { Menu } from 'primereact/menu';
-import type { MenuItem } from 'primereact/menuitem';
 import { useAuth } from '../../core/auth/auth-context';
 import { useProjectContext } from '../../core/context/project-context';
 import { rememberSpace } from '../../core/context/space';
-import { environment } from '../../config/environment';
 import { SIDEBAR_COLLAPSED_KEY } from '../../core/storage-keys';
 import type { Project } from '../../core/api/project-api';
-import './project-page.css';
+import { ConsoleShell, SideNavLink } from '../../shared/components/console-shell';
+import {
+  sideNavIconClass,
+  sideNavLabelClass,
+  sideNavLinkClass,
+} from '../../shared/components/console-nav-classes';
 
 interface NavSectionProps {
   icon: string;
@@ -23,26 +24,65 @@ interface NavSectionProps {
 
 function NavSection({ icon, label, expanded, collapsed, onToggle, children }: NavSectionProps) {
   return (
-    <div className="nav-section">
+    <div className="mt-1">
       <button
-        className="nav-section-header"
+        className={`group flex w-full cursor-pointer items-center border-0 bg-transparent text-base font-medium text-fg-secondary transition-[color,background-color] duration-150 ease-smooth hover:bg-surface-secondary hover:text-fg ${
+          collapsed
+            ? 'justify-center border-l-0 p-2'
+            : 'rounded-r-md border-l-2 border-l-transparent px-2.5 py-1.5'
+        }`}
         onClick={onToggle}
         title={collapsed ? label : ''}
         type="button"
       >
-        <i className={`pi ${icon}`}></i>
-        <span>{label}</span>
-        <i className={`chevron pi ${expanded ? 'pi-chevron-down' : 'pi-chevron-right'}`}></i>
+        <i
+          className={`pi ${icon} w-[18px] text-center text-[1rem] text-fg-muted transition-colors duration-150 ease-smooth group-hover:text-fg-secondary`}
+        ></i>
+        <span className={sideNavLabelClass(collapsed)}>{label}</span>
+        <i
+          className={`pi ${expanded ? 'pi-chevron-down' : 'pi-chevron-right'} ml-auto text-[0.6rem] text-fg-muted transition-transform duration-250 ease-smooth ${
+            collapsed ? 'hidden' : ''
+          }`}
+        ></i>
       </button>
-      <div className={`nav-section-items${expanded ? ' expanded' : ''}`}>{children}</div>
+      {/* Bumped from 200px — Data Engineering holds 4 sub-items and Machine
+          Learning 3, all of which need to fit when expanded. */}
+      <div
+        className={`overflow-hidden [transition:max-height_0.25s_ease] ${
+          expanded ? 'max-h-[320px]' : 'max-h-0'
+        }`}
+      >
+        {children}
+      </div>
     </div>
+  );
+}
+
+interface DisabledNavLinkProps {
+  icon: string;
+  label: string;
+  collapsed: boolean;
+  title: string;
+  collapsedTitle: string;
+}
+
+/** "Exploration" placeholder rendered as <span> instead of <a>: visible in
+ *  the menu but inert. Tooltip carries the rationale. */
+function DisabledNavLink({ icon, label, collapsed, title, collapsedTitle }: DisabledNavLinkProps) {
+  return (
+    <span
+      className={sideNavLinkClass({ collapsed, sub: true, disabled: true })}
+      title={collapsed ? collapsedTitle : title}
+    >
+      <i className={`${icon} ${sideNavIconClass(false)}`}></i>
+      <span className={sideNavLabelClass(collapsed)}>{label}</span>
+    </span>
   );
 }
 
 export default function ProjectPage() {
   const auth = useAuth();
   const context = useProjectContext();
-  const menuRef = useRef<Menu>(null);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
@@ -57,19 +97,6 @@ export default function ProjectPage() {
     rememberSpace('project');
   }, []);
 
-  const displayName = auth.profile?.firstName ?? auth.profile?.username ?? 'User';
-  const first = (auth.profile?.firstName ?? auth.profile?.username ?? '?').charAt(0).toUpperCase();
-  const last = (auth.profile?.lastName ?? '').charAt(0).toUpperCase();
-  const initials = `${first}${last || ''}`;
-
-  const profileMenu: MenuItem[] = [
-    {
-      label: 'Sign out',
-      icon: 'pi pi-sign-out',
-      command: () => auth.logout(),
-    },
-  ];
-
   const toggleSidebar = () => {
     setSidebarCollapsed((collapsed) => {
       const newState = !collapsed;
@@ -79,115 +106,67 @@ export default function ProjectPage() {
   };
 
   const projectName = context.currentProject?.name;
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `nav-link${isActive ? ' active' : ''}`;
-  const subLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `nav-link sub-link${isActive ? ' active' : ''}`;
-  const title = (label: string) => (sidebarCollapsed ? label : '');
+  const futureTitle = 'Direction future, non engagé';
+
+  const headerExtras = (
+    <>
+      {context.availableProjects.length > 0 && (
+        /* project-switcher scopes the Dropdown overrides in primereact-overrides.css */
+        <div className="project-switcher flex items-center">
+          <Dropdown
+            value={context.currentProject}
+            options={context.availableProjects}
+            optionLabel="name"
+            dataKey="name"
+            placeholder="Select Project"
+            className="project-dropdown"
+            panelClassName="project-dropdown-panel"
+            appendTo={document.body}
+            onChange={(e) => context.selectProject((e.value as Project).name)}
+            valueTemplate={(project: Project | null) => (
+              <span className="flex items-center gap-2 font-semibold">
+                {project ? project.name : 'Select Project'}
+              </span>
+            )}
+            itemTemplate={(project: Project) => (
+              <div className="flex flex-col gap-px">
+                <span className="font-medium">{project.name}</span>
+                {project.description && (
+                  <small className="text-xs text-fg-muted">{project.description}</small>
+                )}
+              </div>
+            )}
+          />
+        </div>
+      )}
+      {auth.hasRole('admins') && (
+        <Link
+          to="/admin"
+          className="flex cursor-pointer items-center gap-1.5 rounded-md border-none bg-primary px-3 py-[5px] text-sm font-medium text-white no-underline transition-colors duration-250 ease-smooth hover:bg-primary-hover"
+          aria-label="Go to Administration"
+        >
+          <span>Administration</span>
+          <i className="pi pi-arrow-right text-sm"></i>
+        </Link>
+      )}
+    </>
+  );
 
   return (
-    <div className="admin-shell">
-      {/* Unified header */}
-      <header className="main-header">
-        <div className="header-left">
-          <button
-            className="toggle-btn"
-            onClick={toggleSidebar}
-            title={sidebarCollapsed ? 'Expand' : 'Collapse'}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <i className={sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'}></i>
-          </button>
-          <div className="logo-container">
-            <img src="/images/okdp-notext.svg" alt="okdp" className="logo" />
-            <div className="logo-text">
-              <span className="logo-title">okdp</span>
-              <span className="logo-subtitle">console</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="header-center">{/* Reserved */}</div>
-
-        <div className="header-right">
-          {context.availableProjects.length > 0 && (
-            <div className="project-switcher">
-              <Dropdown
-                value={context.currentProject}
-                options={context.availableProjects}
-                optionLabel="name"
-                dataKey="name"
-                placeholder="Select Project"
-                className="project-dropdown"
-                panelClassName="project-dropdown-panel"
-                appendTo={document.body}
-                onChange={(e) => context.selectProject((e.value as Project).name)}
-                valueTemplate={(project: Project | null) => (
-                  <span className="selected-project">
-                    {project ? project.name : 'Select Project'}
-                  </span>
-                )}
-                itemTemplate={(project: Project) => (
-                  <div className="project-item">
-                    <span className="project-name">{project.name}</span>
-                    {project.description && (
-                      <small className="project-desc">{project.description}</small>
-                    )}
-                  </div>
-                )}
-              />
-            </div>
-          )}
-          {auth.hasRole('admins') && (
-            <Link to="/admin" className="space-switcher-btn" aria-label="Go to Administration">
-              <span>Administration</span>
-              <i className="pi pi-arrow-right"></i>
-            </Link>
-          )}
-          <a
-            href={environment.githubUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="topbar-btn"
-            title="GitHub"
-          >
-            <i className="pi pi-github"></i>
-          </a>
-
-          <div
-            className="user-card"
-            onClick={(e) => menuRef.current?.toggle(e)}
-            tabIndex={0}
-            aria-label="User menu"
-            role="button"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                menuRef.current?.toggle(e);
-              }
-            }}
-          >
-            <Avatar label={initials} shape="circle" size="normal" />
-            <div className="user-info">
-              <span className="user-name">{displayName}</span>
-            </div>
-            <i className="pi pi-angle-down"></i>
-          </div>
-          <Menu ref={menuRef} model={profileMenu} popup />
-        </div>
-      </header>
-
-      {/* Sidebar */}
-      <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
-        <nav className="nav">
-          <NavLink
+    <ConsoleShell
+      collapsed={sidebarCollapsed}
+      onToggleCollapsed={toggleSidebar}
+      headerExtras={headerExtras}
+      navBottomAriaLabel="Project tools"
+      nav={
+        <>
+          <SideNavLink
             to={`/project/${projectName}`}
             end
-            className={navLinkClass}
-            title={title('Home')}
-          >
-            <i className="pi pi-home"></i>
-            <span>Home</span>
-          </NavLink>
+            icon="pi pi-home"
+            label="Home"
+            collapsed={sidebarCollapsed}
+          />
 
           {/* Lakehouse */}
           <NavSection
@@ -197,22 +176,20 @@ export default function ProjectPage() {
             collapsed={sidebarCollapsed}
             onToggle={() => setLakehouseExpanded((v) => !v)}
           >
-            <NavLink
+            <SideNavLink
               to={`/project/${projectName}/lakehouse/polaris`}
-              className={subLinkClass}
-              title={title('Polaris')}
-            >
-              <i className="pi pi-table"></i>
-              <span>Polaris</span>
-            </NavLink>
-            <NavLink
+              icon="pi pi-table"
+              label="Polaris"
+              collapsed={sidebarCollapsed}
+              sub
+            />
+            <SideNavLink
               to={`/project/${projectName}/lakehouse/trino`}
-              className={subLinkClass}
-              title={title('Trino')}
-            >
-              <i className="pi pi-bolt"></i>
-              <span>Trino</span>
-            </NavLink>
+              icon="pi pi-bolt"
+              label="Trino"
+              collapsed={sidebarCollapsed}
+              sub
+            />
           </NavSection>
 
           {/* Data Engineering */}
@@ -223,37 +200,34 @@ export default function ProjectPage() {
             collapsed={sidebarCollapsed}
             onToggle={() => setDataEngExpanded((v) => !v)}
           >
-            <NavLink
+            <SideNavLink
               to={`/project/${projectName}/data-engineering/airflow`}
-              className={subLinkClass}
-              title={title('Airflow')}
-            >
-              <i className="pi pi-sitemap"></i>
-              <span>Airflow</span>
-            </NavLink>
-            <NavLink
+              icon="pi pi-sitemap"
+              label="Airflow"
+              collapsed={sidebarCollapsed}
+              sub
+            />
+            <SideNavLink
               to={`/project/${projectName}/spark/applications`}
-              className={subLinkClass}
-              title={title('Spark Applications')}
-            >
-              <i className="pi pi-play"></i>
-              <span>Spark Applications</span>
-            </NavLink>
-            <NavLink
+              icon="pi pi-play"
+              label="Spark Applications"
+              collapsed={sidebarCollapsed}
+              sub
+            />
+            <SideNavLink
               to={`/project/${projectName}/spark/history-server`}
-              className={subLinkClass}
-              title={title('Spark History')}
-            >
-              <i className="pi pi-history"></i>
-              <span>Spark History</span>
-            </NavLink>
-            <span
-              className="nav-link sub-link disabled"
-              title={sidebarCollapsed ? 'Kafka — exploration' : 'Direction future, non engagé'}
-            >
-              <i className="pi pi-share-alt"></i>
-              <span>Kafka</span>
-            </span>
+              icon="pi pi-history"
+              label="Spark History"
+              collapsed={sidebarCollapsed}
+              sub
+            />
+            <DisabledNavLink
+              icon="pi pi-share-alt"
+              label="Kafka"
+              collapsed={sidebarCollapsed}
+              title={futureTitle}
+              collapsedTitle="Kafka — exploration"
+            />
           </NavSection>
 
           {/* Notebooks */}
@@ -264,14 +238,13 @@ export default function ProjectPage() {
             collapsed={sidebarCollapsed}
             onToggle={() => setNotebookExpanded((v) => !v)}
           >
-            <NavLink
+            <SideNavLink
               to={`/project/${projectName}/services`}
-              className={subLinkClass}
-              title={title('JupyterHub')}
-            >
-              <i className="pi pi-desktop"></i>
-              <span>JupyterHub</span>
-            </NavLink>
+              icon="pi pi-desktop"
+              label="JupyterHub"
+              collapsed={sidebarCollapsed}
+              sub
+            />
           </NavSection>
 
           {/* SQL & BI */}
@@ -282,21 +255,20 @@ export default function ProjectPage() {
             collapsed={sidebarCollapsed}
             onToggle={() => setSqlBiExpanded((v) => !v)}
           >
-            <NavLink
+            <SideNavLink
               to={`/project/${projectName}/bi/superset`}
-              className={subLinkClass}
-              title={title('Superset')}
-            >
-              <i className="pi pi-chart-line"></i>
-              <span>Superset</span>
-            </NavLink>
-            <span
-              className="nav-link sub-link disabled"
-              title={sidebarCollapsed ? 'SQL Editor — exploration' : 'Direction future, non engagé'}
-            >
-              <i className="pi pi-pencil"></i>
-              <span>SQL Editor</span>
-            </span>
+              icon="pi pi-chart-line"
+              label="Superset"
+              collapsed={sidebarCollapsed}
+              sub
+            />
+            <DisabledNavLink
+              icon="pi pi-pencil"
+              label="SQL Editor"
+              collapsed={sidebarCollapsed}
+              title={futureTitle}
+              collapsedTitle="SQL Editor — exploration"
+            />
           </NavSection>
 
           {/* Machine Learning */}
@@ -307,61 +279,40 @@ export default function ProjectPage() {
             collapsed={sidebarCollapsed}
             onToggle={() => setMlExpanded((v) => !v)}
           >
-            <span
-              className="nav-link sub-link disabled"
-              title={sidebarCollapsed ? 'Kubeflow — exploration' : 'Direction future, non engagé'}
-            >
-              <i className="pi pi-sitemap"></i>
-              <span>Kubeflow</span>
-            </span>
-            <span
-              className="nav-link sub-link disabled"
-              title={sidebarCollapsed ? 'MLflow — exploration' : 'Direction future, non engagé'}
-            >
-              <i className="pi pi-flag"></i>
-              <span>MLflow</span>
-            </span>
-            <span
-              className="nav-link sub-link disabled"
-              title={sidebarCollapsed ? 'KServe — exploration' : 'Direction future, non engagé'}
-            >
-              <i className="pi pi-send"></i>
-              <span>KServe</span>
-            </span>
+            <DisabledNavLink
+              icon="pi pi-sitemap"
+              label="Kubeflow"
+              collapsed={sidebarCollapsed}
+              title={futureTitle}
+              collapsedTitle="Kubeflow — exploration"
+            />
+            <DisabledNavLink
+              icon="pi pi-flag"
+              label="MLflow"
+              collapsed={sidebarCollapsed}
+              title={futureTitle}
+              collapsedTitle="MLflow — exploration"
+            />
+            <DisabledNavLink
+              icon="pi pi-send"
+              label="KServe"
+              collapsed={sidebarCollapsed}
+              title={futureTitle}
+              collapsedTitle="KServe — exploration"
+            />
           </NavSection>
-        </nav>
-
-        <nav className="nav-bottom" aria-label="Project tools">
-          <NavLink
-            to={`/project/${projectName}/secret-stores`}
-            className={navLinkClass}
-            title={title('Secrets')}
-          >
-            <i className="pi pi-lock"></i>
-            <span>Secrets</span>
-          </NavLink>
-        </nav>
-      </aside>
-
-      {/* Main layout */}
-      <div className="main-layout">
-        {/* Content */}
-        <main className="main-content">
-          <div className="content-wrapper">
-            <Outlet />
-          </div>
-        </main>
-
-        {/* Footer */}
-        <footer className="main-footer">
-          <div className="footer-left">
-            <span>© 2026 OKDP. All rights reserved.</span>
-          </div>
-          <div className="footer-right">
-            <span>v1.0.0</span>
-          </div>
-        </footer>
-      </div>
-    </div>
+        </>
+      }
+      navBottom={
+        <SideNavLink
+          to={`/project/${projectName}/secret-stores`}
+          icon="pi pi-lock"
+          label="Secrets"
+          collapsed={sidebarCollapsed}
+        />
+      }
+    >
+      <Outlet />
+    </ConsoleShell>
   );
 }

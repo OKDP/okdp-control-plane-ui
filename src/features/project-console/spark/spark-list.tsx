@@ -14,7 +14,6 @@ import { applyListEvent } from '../../../core/api/sse';
 import type { SparkAppInstance, SparkUIInfo } from '../../../core/models/spark.model';
 import { apiErrorMessage, formatMediumDate } from '../services/service-utils';
 import { getStatusSeverity, isTerminalStatus } from './spark-utils';
-import './spark-list.css';
 
 function shortenImage(image: string): string {
   if (!image) return '';
@@ -124,11 +123,11 @@ export function SparkList() {
   };
 
   return (
-    <div className="spark-list">
+    <div>
       <Toast ref={toast} />
       <ConfirmDialog />
 
-      <div className="filter-bar">
+      <div className="mb-3">
         <IconField>
           <InputIcon className="pi pi-search" />
           <InputText
@@ -150,8 +149,8 @@ export function SparkList() {
           className="minimal-table"
           dataKey="name"
           emptyMessage={
-            <div className="empty-state-inline">
-              <i className="pi pi-bolt"></i>
+            <div className="flex items-center justify-center gap-2 p-7 text-[14px] text-fg-secondary">
+              <i className="pi pi-bolt text-[1.2rem] opacity-50"></i>
               No Spark jobs found. Click <strong>Submit job</strong> to run your first Spark
               application.
             </div>
@@ -162,7 +161,10 @@ export function SparkList() {
             field="name"
             style={{ width: '25%' }}
             body={(app: SparkAppInstance) => (
-              <a className="app-name app-link" onClick={() => viewDetail(app)}>
+              <a
+                className="cursor-pointer font-medium text-primary no-underline transition-colors duration-250 ease-smooth hover:text-primary-700 hover:underline"
+                onClick={() => viewDetail(app)}
+              >
                 {app.name}
               </a>
             )}
@@ -171,13 +173,17 @@ export function SparkList() {
             header="Type"
             field="type"
             style={{ width: '12%' }}
-            body={(app: SparkAppInstance) => <span className="type-badge">{app.type}</span>}
+            body={(app: SparkAppInstance) => (
+              <span className="inline-flex items-center rounded-sm border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary">
+                {app.type}
+              </span>
+            )}
           />
           <Column
             header="Image"
             style={{ width: '15%' }}
             body={(app: SparkAppInstance) => (
-              <span className="image-text" title={app.image}>
+              <span className="text-[12px] text-fg-secondary [font-family:monospace]" title={app.image}>
                 {shortenImage(app.image)}
               </span>
             )}
@@ -194,7 +200,7 @@ export function SparkList() {
             header="Created"
             style={{ width: '15%' }}
             body={(app: SparkAppInstance) => (
-              <span className="created-date">{formatMediumDate(app.createdAt)}</span>
+              <span className="text-[13px] text-fg-secondary">{formatMediumDate(app.createdAt)}</span>
             )}
           />
           <Column

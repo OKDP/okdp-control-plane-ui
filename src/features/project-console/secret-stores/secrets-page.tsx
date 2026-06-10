@@ -1,7 +1,6 @@
 import { TabPanel, TabView } from 'primereact/tabview';
 import { SecretStoreList } from './secret-store-list';
 import { ExternalSecretList } from './external-secret-list';
-import './secrets-page.css';
 
 export default function SecretsPage() {
   return (

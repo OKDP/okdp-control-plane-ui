@@ -13,7 +13,6 @@ import { InputIcon } from 'primereact/inputicon';
 import type { MenuItem } from 'primereact/menuitem';
 import { identityApi, type Group } from '../../../../core/api/identity-api';
 import { useIdentityGroups } from '../use-identity';
-import './group-list.css';
 
 export function GroupList() {
   const toast = useRef<Toast>(null);

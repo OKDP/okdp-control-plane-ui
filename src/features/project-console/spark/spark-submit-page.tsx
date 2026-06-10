@@ -9,9 +9,14 @@ import { Toast } from 'primereact/toast';
 import { sparkApi } from '../../../core/api/spark-api';
 import type { SparkAppRequest, SparkImage } from '../../../core/models/spark.model';
 import { apiErrorMessage } from '../services/service-utils';
-import { buildSections, CORE_KEYS_SUBMIT, parseKeyValue, type SchemaSection } from './spark-utils';
+import {
+  buildSections,
+  CORE_KEYS_SUBMIT,
+  parseKeyValue,
+  SECTION_BADGE_TONES,
+  type SchemaSection,
+} from './spark-utils';
 import { SparkPropertyField } from './spark-property-field';
-import './spark-pages.css';
 
 const FALLBACK_SECTIONS: SchemaSection[] = [
   {
@@ -208,28 +213,32 @@ export default function SparkSubmitPage() {
     <>
       <Toast ref={toast} />
 
-      <div className="spark-page submit-page">
-        <div className="page-header">
-          <nav className="breadcrumb">
+      <div className="mx-auto max-w-[860px] pt-3">
+        <div className="mb-7">
+          <nav className="mb-5 flex items-center gap-2 text-[13px]">
             <a
-              className="breadcrumb-link"
+              className="flex cursor-pointer items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 font-medium text-fg-secondary no-underline transition-all duration-250 ease-smooth hover:bg-surface-tertiary hover:text-fg"
               onClick={goBack}
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
-              <i className="pi pi-arrow-left breadcrumb-back-icon"></i>
+              <i className="pi pi-arrow-left text-[11px]"></i>
               Spark Applications
             </a>
-            <i className="pi pi-angle-right breadcrumb-sep"></i>
-            <span className="breadcrumb-current">Submit Job</span>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
+            <span className="text-[13px] font-medium text-fg-muted">Submit Job</span>
           </nav>
-          <div className="header-row">
-            <div className="header-badge">
-              <i className="pi pi-bolt"></i>
+          <div className="flex flex-wrap items-center gap-3.5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-[0_6px_16px_rgba(245,158,11,0.25)] [background:linear-gradient(135deg,#f59e0b,#d97706)]">
+              <i className="pi pi-bolt text-[1.4rem] text-white"></i>
             </div>
-            <div className="header-text">
-              <h2>Submit Spark Application</h2>
-              <p className="page-desc">Configure and submit a new Spark job or paste raw YAML</p>
+            <div className="min-w-0 flex-1">
+              <h2 className="m-0 text-[28px] leading-[1.2] font-extrabold tracking-[-0.03em] text-fg">
+                Submit Spark Application
+              </h2>
+              <p className="mt-1.5 mb-0 text-[15px] text-fg-secondary">
+                Configure and submit a new Spark job or paste raw YAML
+              </p>
             </div>
           </div>
         </div>
@@ -237,22 +246,26 @@ export default function SparkSubmitPage() {
         <TabView>
           <TabPanel header="Guided">
             {schemaLoading ? (
-              <div className="loading-state">
-                <i className="pi pi-spin pi-spinner"></i>
+              <div className="flex flex-row items-center justify-center gap-2 p-7 text-[14px] text-fg-secondary">
+                <i className="pi pi-spin pi-spinner text-[1.2rem]"></i>
                 <span>Loading CRD schema...</span>
               </div>
             ) : (
-              <div className="form-card">
-                <div className="card-section">
-                  <div className="section-header">
-                    <div className="section-icon-badge basics">
-                      <i className="pi pi-bookmark"></i>
+              <div className="mt-3 rounded-xl border border-border-light bg-surface p-7 shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
+                <div className="py-5 first:pt-0 not-last:border-b not-last:border-b-border-light">
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-50">
+                      <i className="pi pi-bookmark text-[1rem] text-primary"></i>
                     </div>
-                    <h3 className="section-title">Application Name</h3>
+                    <h3 className="m-0 text-[17px] font-bold tracking-[-0.02em] text-fg">
+                      Application Name
+                    </h3>
                   </div>
-                  <div className="form-grid">
-                    <div className="form-field full-width">
-                      <label>Name *</label>
+                  <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+                    <div className="col-span-full flex flex-col gap-1.5">
+                      <label className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary">
+                        Name *
+                      </label>
                       <InputText
                         value={appName}
                         placeholder="e.g. spark-pi"
@@ -263,22 +276,36 @@ export default function SparkSubmitPage() {
                 </div>
 
                 {schemaSections.map((section) => (
-                  <div key={section.title} className="card-section">
-                    <div className="section-header">
-                      <div className={`section-icon-badge ${section.iconClass}`}>
-                        <i className={'pi ' + section.icon}></i>
+                  <div
+                    key={section.title}
+                    className="py-5 first:pt-0 not-last:border-b not-last:border-b-border-light"
+                  >
+                    <div className="mb-5 flex items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${SECTION_BADGE_TONES[section.iconClass]?.badge ?? ''}`}
+                      >
+                        <i
+                          className={`pi ${section.icon} ${SECTION_BADGE_TONES[section.iconClass]?.icon ?? 'text-[1rem]'}`}
+                        ></i>
                       </div>
-                      <h3 className="section-title">{section.title}</h3>
+                      <h3 className="m-0 text-[17px] font-bold tracking-[-0.02em] text-fg">
+                        {section.title}
+                      </h3>
                     </div>
-                    <div className="form-grid">
+                    <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
                       {section.properties.map((prop) => (
                         <div
                           key={prop.key}
-                          className={`form-field${prop.isObject || prop.isArray ? ' full-width' : ''}`}
+                          className={`flex flex-col gap-1.5${prop.isObject || prop.isArray ? ' col-span-full' : ''}`}
                         >
-                          <label title={prop.description}>
+                          <label
+                            className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary"
+                            title={prop.description}
+                          >
                             {prop.key}
-                            {prop.description && <i className="pi pi-info-circle info-icon"></i>}
+                            {prop.description && (
+                              <i className="pi pi-info-circle cursor-help text-[11px] opacity-50"></i>
+                            )}
                           </label>
                           <SparkPropertyField
                             prop={prop}
@@ -293,7 +320,7 @@ export default function SparkSubmitPage() {
                   </div>
                 ))}
 
-                <div className="form-actions">
+                <div className="mt-5 flex justify-end gap-2 border-t border-t-border-light pt-3">
                   <Button label="Cancel" severity="secondary" outlined onClick={goBack} />
                   <Button
                     label="Submit"
@@ -307,18 +334,20 @@ export default function SparkSubmitPage() {
             )}
           </TabPanel>
           <TabPanel header="YAML">
-            <div className="form-card">
-              <div className="form-field">
-                <label>SparkApplication YAML</label>
+            <div className="mt-3 rounded-xl border border-border-light bg-surface p-7 shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary">
+                  SparkApplication YAML
+                </label>
                 <InputTextarea
                   value={yamlContent}
                   rows={20}
                   placeholder="Paste your SparkApplication YAML here..."
-                  className="yaml-editor"
+                  className="w-full resize-y text-[13px]! [font-family:monospace]!"
                   onChange={(e) => setYamlContent(e.target.value)}
                 />
               </div>
-              <div className="form-actions">
+              <div className="mt-5 flex justify-end gap-2 border-t border-t-border-light pt-3">
                 <Button label="Cancel" severity="secondary" outlined onClick={goBack} />
                 <Button
                   label="Submit YAML"

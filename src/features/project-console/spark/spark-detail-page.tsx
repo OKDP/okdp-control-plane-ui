@@ -8,7 +8,6 @@ import { sparkApi } from '../../../core/api/spark-api';
 import type { SparkAppInstance } from '../../../core/models/spark.model';
 import { formatMediumDateTime } from '../services/service-utils';
 import { getExecutorSeverity, getStatusSeverity, isTerminalStatus } from './spark-utils';
-import './spark-pages.css';
 
 export default function SparkDetailPage() {
   const navigate = useNavigate();
@@ -118,35 +117,37 @@ export default function SparkDetailPage() {
     <>
       <Toast ref={toast} />
 
-      <div className="spark-page detail-page">
-        <div className="page-header animate-in">
-          <nav className="breadcrumb">
+      <div className="mx-auto max-w-[960px] pt-3">
+        <div className="mb-7 animate-in">
+          <nav className="mb-5 flex items-center gap-2 text-[13px]">
             <a
-              className="breadcrumb-link"
+              className="flex cursor-pointer items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 font-medium text-fg-secondary no-underline transition-all duration-250 ease-smooth hover:bg-surface-tertiary hover:text-fg"
               onClick={goBack}
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
-              <i className="pi pi-arrow-left breadcrumb-back-icon"></i>
+              <i className="pi pi-arrow-left text-[11px]"></i>
               Spark Jobs
             </a>
-            <i className="pi pi-angle-right breadcrumb-sep"></i>
-            <span className="breadcrumb-current">{app?.name}</span>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
+            <span className="text-[13px] font-medium text-fg-muted">{app?.name}</span>
           </nav>
-          <div className="header-row">
-            <div className="header-badge">
-              <i className="pi pi-bolt"></i>
+          <div className="flex flex-wrap items-center gap-3.5">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-[0_6px_16px_rgba(245,158,11,0.25)] [background:linear-gradient(135deg,#f59e0b,#d97706)]">
+              <i className="pi pi-bolt text-[1.4rem] text-white"></i>
             </div>
-            <div className="header-text">
-              <div className="header-title-row">
-                <h2>{app?.name}</h2>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="m-0 text-[28px] leading-[1.2] font-extrabold tracking-[-0.03em] text-fg">
+                  {app?.name}
+                </h2>
                 {app && <Tag value={app.status} severity={getStatusSeverity(app.status)} />}
               </div>
-              <p className="page-desc">
+              <p className="mt-1.5 mb-0 text-[15px] text-fg-secondary">
                 {app?.type} · {app?.mode}
               </p>
             </div>
-            <div className="header-actions">
+            <div className="ml-auto flex flex-wrap gap-2">
               {app?.status === 'RUNNING' ? (
                 <Button
                   icon="pi pi-external-link"
@@ -188,59 +189,86 @@ export default function SparkDetailPage() {
         </div>
 
         {loading ? (
-          <div className="loading-state animate-in">
-            <div className="loading-spinner-ring">
-              <i className="pi pi-spin pi-spinner"></i>
+          <div className="flex animate-in flex-col items-center justify-center gap-3 p-16 text-fg-muted">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
+              <i className="pi pi-spin pi-spinner text-[1.3rem] text-primary"></i>
             </div>
             <p>Loading job details...</p>
           </div>
         ) : app ? (
-          <div className="detail-content animate-in">
-            <div className="info-card">
-              <div className="info-grid">
-                <div className="info-item">
-                  <span className="info-label">Name</span>
-                  <span className="info-value">{app.name}</span>
+          <div className="flex animate-[fadeInUp_0.45s_cubic-bezier(0.22,1,0.36,1)_0.08s_backwards] flex-col gap-5">
+            <div className="rounded-xl border border-border-light bg-surface p-5">
+              <div className="grid grid-cols-2 gap-x-7 gap-y-3 max-md:grid-cols-1">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
+                    Name
+                  </span>
+                  <span className="text-[14px] font-medium text-fg">{app.name}</span>
                 </div>
-                <div className="info-item">
-                  <span className="info-label">Type</span>
-                  <span className="info-value">{app.type}</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
+                    Type
+                  </span>
+                  <span className="text-[14px] font-medium text-fg">{app.type}</span>
                 </div>
-                <div className="info-item">
-                  <span className="info-label">Image</span>
-                  <span className="info-value mono">{app.image}</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
+                    Image
+                  </span>
+                  <span className="text-[13px] font-medium text-fg [font-family:monospace]">
+                    {app.image}
+                  </span>
                 </div>
-                <div className="info-item">
-                  <span className="info-label">Created</span>
-                  <span className="info-value">{formatMediumDateTime(app.createdAt)}</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
+                    Created
+                  </span>
+                  <span className="text-[14px] font-medium text-fg">
+                    {formatMediumDateTime(app.createdAt)}
+                  </span>
                 </div>
                 {app.driverPodName && (
-                  <div className="info-item">
-                    <span className="info-label">Driver Pod</span>
-                    <span className="info-value mono">{app.driverPodName}</span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
+                      Driver Pod
+                    </span>
+                    <span className="text-[13px] font-medium text-fg [font-family:monospace]">
+                      {app.driverPodName}
+                    </span>
                   </div>
                 )}
                 {app.errorMessage && (
-                  <div className="info-item full-width">
-                    <span className="info-label">Error</span>
-                    <span className="info-value error-text">{app.errorMessage}</span>
+                  <div className="col-span-full flex flex-col gap-1">
+                    <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
+                      Error
+                    </span>
+                    <span className="text-[14px] font-medium text-accent-red">
+                      {app.errorMessage}
+                    </span>
                   </div>
                 )}
               </div>
             </div>
 
             {executorKeys.length > 0 && (
-              <div className="section-card">
-                <div className="section-header">
-                  <div className="section-icon-badge executors">
-                    <i className="pi pi-objects-column"></i>
+              <div className="rounded-xl border border-border-light bg-surface p-5">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-purple-light">
+                    <i className="pi pi-objects-column text-[1rem] text-accent-purple"></i>
                   </div>
-                  <h3 className="section-title">Executors</h3>
+                  <h3 className="m-0 flex-1 text-[16px] font-bold tracking-[-0.02em] text-fg">
+                    Executors
+                  </h3>
                 </div>
-                <div className="executor-list">
+                <div className="flex flex-col">
                   {executorKeys.map((key) => (
-                    <div key={key} className="executor-row">
-                      <span className="executor-name">{key}</span>
+                    <div
+                      key={key}
+                      className="flex items-center justify-between border-b border-b-border-light py-2 last:border-b-0"
+                    >
+                      <span className="text-[13px] font-medium text-fg [font-family:monospace]">
+                        {key}
+                      </span>
                       <Tag value={executors[key]} severity={getExecutorSeverity(executors[key])} />
                     </div>
                   ))}
@@ -248,14 +276,16 @@ export default function SparkDetailPage() {
               </div>
             )}
 
-            <div className="section-card">
-              <div className="section-header">
-                <div className="section-icon-badge logs">
-                  <i className="pi pi-file-edit"></i>
+            <div className="rounded-xl border border-border-light bg-surface p-5">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-50">
+                  <i className="pi pi-file-edit text-[1rem] text-primary"></i>
                 </div>
-                <h3 className="section-title">Driver Logs</h3>
-                <div className="log-controls">
-                  <label className="follow-label">
+                <h3 className="m-0 flex-1 text-[16px] font-bold tracking-[-0.02em] text-fg">
+                  Driver Logs
+                </h3>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-[13px] text-fg-secondary">
                     <InputSwitch checked={followMode} onChange={(e) => setFollowMode(!!e.value)} />
                     <span>Follow</span>
                   </label>
@@ -268,18 +298,22 @@ export default function SparkDetailPage() {
                   />
                 </div>
               </div>
-              <div className="log-viewer">
-                <pre className="log-content">{logContent || 'No logs available.'}</pre>
+              <div className="max-h-[500px] overflow-auto rounded-md bg-[#1e1e1e] p-3">
+                <pre className="m-0 text-[12px] leading-[1.6] break-all whitespace-pre-wrap text-[#d4d4d4] [font-family:monospace]">
+                  {logContent || 'No logs available.'}
+                </pre>
               </div>
             </div>
           </div>
         ) : (
-          <div className="empty-state animate-in">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-exclamation-triangle empty-icon"></i>
+          <div className="flex animate-in flex-col items-center justify-center gap-3 rounded-xl border border-border-light bg-surface p-16 text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-surface-tertiary">
+              <i className="pi pi-exclamation-triangle text-[1.5rem] text-fg-muted"></i>
             </div>
-            <h3>Job not found</h3>
-            <p>The Spark application could not be loaded.</p>
+            <h3 className="m-0 text-[16px] font-semibold">Job not found</h3>
+            <p className="m-0 max-w-[340px] text-[14px] text-fg-secondary">
+              The Spark application could not be loaded.
+            </p>
             <Button
               icon="pi pi-arrow-left"
               severity="secondary"

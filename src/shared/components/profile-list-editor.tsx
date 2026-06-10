@@ -4,7 +4,12 @@ import { Dropdown } from 'primereact/dropdown';
 import { InputNumber } from 'primereact/inputnumber';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Panel } from 'primereact/panel';
-import './profile-list-editor.css';
+
+/* The resource-panel class scopes the PrimeReact Panel overrides in
+   styles/components/primereact-overrides.css. */
+const FIELD_CLASS = 'mb-5 flex flex-col gap-1.5';
+const FIELD_LABEL_CLASS = 'block text-[14px] font-semibold tracking-[-0.01em] text-fg-secondary';
+const FIELD_ROW_2_CLASS = 'grid grid-cols-2 gap-3.5';
 
 export interface Profile {
   type: string;
@@ -55,8 +60,8 @@ interface NumberFieldProps {
 
 function ResourceNumberField({ label, value, step, min, max, onChange }: NumberFieldProps) {
   return (
-    <div className="field">
-      <label>{label}</label>
+    <div className={FIELD_CLASS}>
+      <label className={FIELD_LABEL_CLASS}>{label}</label>
       <InputNumber
         value={value}
         showButtons
@@ -108,13 +113,20 @@ export function ProfileListEditor({
     setProfiles((list) => list.filter((_, i) => i !== index));
 
   return (
-    <div className="profile-list">
+    <div className="flex flex-col gap-3">
       {profiles.map((profile, index) => (
-        <div key={index} className="profile-card">
-          <div className="profile-header">
-            <div className="profile-header-left">
-              <span className="profile-number">{index + 1}</span>
-              <span className="profile-label">Profile {index + 1}</span>
+        <div
+          key={index}
+          className="animate-[fadeInUp_var(--db-transition-spring)_backwards] overflow-hidden rounded-xl border border-border-light bg-surface shadow-[0_2px_8px_rgba(0,0,0,0.02)] [transition:box-shadow_0.3s_ease,border-color_0.3s_ease,transform_var(--db-transition-spring)] hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
+        >
+          <div className="flex items-center justify-between border-b border-border-light bg-surface-secondary px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-primary text-[12px] font-semibold text-white">
+                {index + 1}
+              </span>
+              <span className="text-[15px] font-bold tracking-[-0.02em] text-fg">
+                Profile {index + 1}
+              </span>
             </div>
             <Button
               icon="pi pi-times"
@@ -126,10 +138,10 @@ export function ProfileListEditor({
             />
           </div>
 
-          <div className="profile-body">
-            <div className="field-row-2">
-              <div className="field">
-                <label>Type</label>
+          <div className="flex flex-col gap-4 p-4">
+            <div className={FIELD_ROW_2_CLASS}>
+              <div className={FIELD_CLASS}>
+                <label className={FIELD_LABEL_CLASS}>Type</label>
                 <Dropdown
                   value={profile.type}
                   options={PROFILE_TYPE_OPTIONS}
@@ -141,8 +153,8 @@ export function ProfileListEditor({
                   onChange={(e) => updateProfile(index, { type: e.value, image: '' })}
                 />
               </div>
-              <div className="field">
-                <label>Image</label>
+              <div className={FIELD_CLASS}>
+                <label className={FIELD_LABEL_CLASS}>Image</label>
                 <Dropdown
                   value={profile.image}
                   options={getImagesForType(profile.type)}
@@ -158,7 +170,7 @@ export function ProfileListEditor({
             </div>
 
             <Panel header="Resources" toggleable collapsed className="resource-panel">
-              <div className="field-row-2">
+              <div className={FIELD_ROW_2_CLASS}>
                 <ResourceNumberField
                   label="CPU Request (vCPU)"
                   value={profile.cpuRequest}
@@ -176,7 +188,7 @@ export function ProfileListEditor({
                   onChange={(v) => updateProfile(index, { cpuLimit: v })}
                 />
               </div>
-              <div className="field-row-2">
+              <div className={FIELD_ROW_2_CLASS}>
                 <ResourceNumberField
                   label="Memory Request (GiB)"
                   value={profile.memoryRequestGi}
@@ -194,9 +206,9 @@ export function ProfileListEditor({
                   onChange={(v) => updateProfile(index, { memoryLimitGi: v })}
                 />
               </div>
-              <div className="field">
-                <label>GPU</label>
-                <div className="gpu-row">
+              <div className={FIELD_CLASS}>
+                <label className={FIELD_LABEL_CLASS}>GPU</label>
+                <div className="flex items-center gap-3.5">
                   <InputSwitch
                     checked={profile.gpuEnabled}
                     onChange={(e) => updateProfile(index, { gpuEnabled: !!e.value })}
@@ -207,7 +219,7 @@ export function ProfileListEditor({
                       showButtons
                       min={1}
                       max={8}
-                      className="gpu-count"
+                      className="w-[120px]"
                       onValueChange={(e) => updateProfile(index, { gpuCount: e.value ?? 1 })}
                     />
                   )}

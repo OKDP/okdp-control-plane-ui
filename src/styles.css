@@ -1,8 +1,10 @@
 /* Main Global Styles Entry Point */
+@import 'tailwindcss';
 @import 'primeicons/primeicons.css';
 
 /* 1. Tokens & Base */
 @import './styles/variables.css';
+@import './styles/theme.css';
 @import './styles/base.css';
 
 /* 2. Components */
@@ -11,6 +13,14 @@
 @import './styles/components/dialogs.css';
 @import './styles/components/forms.css';
 @import './styles/components/okdp-design.css';
+@import './styles/components/primereact-overrides.css';
 
-/* Note: Component-specific styles should be minimized. 
+/* Dark mode is class-based (body.dark-mode), not media-query based */
+@custom-variant dark (&:where(body.dark-mode, body.dark-mode *));
+
+/* OS-level dark scheme — only for the few legacy rules that keyed off
+   prefers-color-scheme instead of the app's body.dark-mode toggle */
+@custom-variant os-dark (@media (prefers-color-scheme: dark));
+
+/* Note: Component-specific styles should be minimized.
    Use the shared classes defined above. */

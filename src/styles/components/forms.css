@@ -1,27 +1,25 @@
 /* Unified Form Styles
    PrimeNG input theming is handled via CSS vars in variables.css:
-   --p-inputtext-border-radius, --p-inputtext-focus-border-color, etc.
-   This file adds form layout patterns. */
+   --p-inputtext-border-radius, --p-inputtext-focus-border-color, etc. */
 
-.field {
+@utility field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: var(--db-space-lg);
+  & label {
+    display: block;
+    font-weight: 500;
+    font-size: var(--db-font-size-base);
+    color: var(--db-text-primary);
+    letter-spacing: -0.005em;
+  }
 }
 
-.field label {
-  display: block;
-  font-weight: 500;
-  font-size: var(--db-font-size-base);
-  color: var(--db-text-primary);
-  letter-spacing: -0.005em;
-}
-
-/* Common input class for consistency */
-.dialog-input,
-input[pInputText],
-textarea[pInputTextarea] {
+/* Common input class. Applied to PrimeReact InputText components, so it
+   must stay plain (unlayered) CSS to keep overriding the unlayered
+   PrimeReact theme's .p-inputtext rules. */
+.dialog-input {
   width: 100%;
   box-sizing: border-box;
   padding: 9px 12px;
@@ -36,42 +34,37 @@ textarea[pInputTextarea] {
     box-shadow var(--db-transition-base);
 }
 
-.dialog-input:hover,
-input[pInputText]:hover,
-textarea[pInputTextarea]:hover {
+.dialog-input:hover {
   border-color: var(--db-border-color);
 }
 
-.dialog-input:focus,
-input[pInputText]:focus,
-textarea[pInputTextarea]:focus {
+.dialog-input:focus {
   border-color: var(--db-primary);
   box-shadow: var(--db-shadow-focus);
   outline: none;
 }
 
-.dialog-input:disabled,
-input[pInputText]:disabled {
+.dialog-input:disabled {
   background: var(--db-bg-tertiary);
   color: var(--db-text-muted);
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-.optional {
+@utility optional {
   font-weight: 400;
   color: var(--db-text-muted);
   font-size: var(--db-font-size-sm);
   margin-left: var(--db-space-xs);
 }
 
-.field-checkbox {
+@utility field-checkbox {
   display: flex;
   align-items: center;
   gap: var(--db-space-sm);
 }
 
-.field-help {
+@utility field-help {
   color: var(--db-text-muted);
   font-size: var(--db-font-size-xs);
   line-height: 1.4;

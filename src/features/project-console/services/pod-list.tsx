@@ -2,7 +2,6 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
 import type { Pod } from '../../../core/models/service.model';
-import './pod-list.css';
 
 function getStatusSeverity(
   status: string,
@@ -35,8 +34,8 @@ export function PodList({ pods, onViewLogs }: PodListProps) {
       className="minimal-table"
       dataKey="name"
       emptyMessage={
-        <div className="empty-state-inline">
-          <i className="pi pi-box"></i>
+        <div className="flex items-center justify-center gap-2 p-7 text-[14px] text-fg-secondary">
+          <i className="pi pi-box text-[1.2rem] opacity-50"></i>
           No pods found for this instance.
         </div>
       }
@@ -44,7 +43,9 @@ export function PodList({ pods, onViewLogs }: PodListProps) {
       <Column
         header="Pod"
         style={{ width: '35%' }}
-        body={(pod: Pod) => <span className="pod-name">{pod.name}</span>}
+        body={(pod: Pod) => (
+          <span className="text-[13px] font-medium [font-family:monospace]">{pod.name}</span>
+        )}
       />
       <Column
         header="Status"
@@ -57,7 +58,11 @@ export function PodList({ pods, onViewLogs }: PodListProps) {
       <Column
         style={{ width: '20%', textAlign: 'right' }}
         body={(pod: Pod) => (
-          <button className="logs-btn" title="View pod logs" onClick={() => onViewLogs(pod)}>
+          <button
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-3 py-1.5 text-[13px] font-medium text-primary transition-colors duration-250 ease-smooth hover:bg-primary-50"
+            title="View pod logs"
+            onClick={() => onViewLogs(pod)}
+          >
             <i className="pi pi-file"></i> Logs
           </button>
         )}

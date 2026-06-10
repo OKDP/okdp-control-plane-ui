@@ -15,7 +15,6 @@ import type { MenuItem } from 'primereact/menuitem';
 import { projectApi, type Project, type ProjectEvent } from '../../../core/api/project-api';
 import { applyListEvent } from '../../../core/api/sse';
 import { logger } from '../../../core/services/logger';
-import './project-list.css';
 
 export default function ProjectList() {
   const toast = useRef<Toast>(null);
