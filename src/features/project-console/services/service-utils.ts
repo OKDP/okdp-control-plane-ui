@@ -21,7 +21,7 @@ export function tagClass(status: string): string {
 export interface ServiceArea {
   /** Breadcrumb / back-link label. */
   label: string;
-  /** URL segments of the service area under /project/:projectId. */
+  /** URL segments of the service area under /projects/:projectId. */
   basePath: string[];
 }
 

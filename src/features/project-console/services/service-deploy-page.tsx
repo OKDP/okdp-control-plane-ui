@@ -212,7 +212,7 @@ export default function ServiceDeployPage() {
     if (returnTo) {
       navigate(returnTo);
     } else {
-      navigate(`/project/${projectId}/${areaBasePath(service?.name).join('/')}`);
+      navigate(`/projects/${projectId}/${areaBasePath(service?.name).join('/')}`);
     }
   };
 
@@ -252,7 +252,7 @@ export default function ServiceDeployPage() {
           if (returnTo) {
             navigate(returnTo);
           } else {
-            navigate(`/project/${projectId}/${areaBasePath(service.name).join('/')}`);
+            navigate(`/projects/${projectId}/${areaBasePath(service.name).join('/')}`);
           }
         }, 400);
       })

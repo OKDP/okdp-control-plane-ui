@@ -184,7 +184,7 @@ export default function ServiceDetailPage() {
     if (returnTo) {
       navigate(returnTo);
     } else {
-      navigate(`/project/${projectId}/${basePath}`);
+      navigate(`/projects/${projectId}/${basePath}`);
     }
   };
 
@@ -196,7 +196,7 @@ export default function ServiceDetailPage() {
   const editInstance = () => {
     if (projectId) {
       const returnTo = encodeURIComponent(location.pathname + location.search);
-      navigate(`/project/${projectId}/${basePath}/${serviceName}/edit?returnTo=${returnTo}`);
+      navigate(`/projects/${projectId}/${basePath}/${serviceName}/edit?returnTo=${returnTo}`);
     }
   };
 

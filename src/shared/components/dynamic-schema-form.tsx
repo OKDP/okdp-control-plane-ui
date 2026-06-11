@@ -8,7 +8,7 @@ import { InputSwitch } from 'primereact/inputswitch';
 import { Password } from 'primereact/password';
 
 /* The dsf-root class scopes the .field-invalid PrimeReact-input override in
-   styles/components/primereact-overrides.css. */
+   the PrimeReact overrides section of styles.css. */
 const FIELD_CLASS = 'mb-5 flex flex-col gap-1.5';
 const FIELD_LABEL_CLASS = 'block text-[13px] font-medium tracking-[-0.005em] text-fg-secondary';
 

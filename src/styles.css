@@ -1,19 +1,31 @@
-/* Main Global Styles Entry Point */
+/* ============================================================
+   OKDP Control Plane UI — global stylesheet (single entry point)
+
+   Structure:
+     1. Imports        — Tailwind, fonts, icons, design tokens
+     2. Variants       — class-based dark mode, OS dark scheme
+     3. Theme          — --db-* tokens exposed as Tailwind utilities
+     4. Base layer     — body, scrollbar, selection, focus, motion
+     5. Keyframes      — legacy animations referenced by utilities
+     6. Page layout    — legacy page-level patterns (top-bar, buttons)
+     7. Design system  — okdp @utility classes (services / spark)
+     8. PrimeReact     — unlayered overrides the theme CSS requires
+     9. Dark mode      — PrimeReact surfaces re-skinned via --db-* tokens
+   ============================================================ */
+
+/* Cascade layer order. The PrimeReact theme ships its component styles
+   inside `@layer primereact`; without an explicit order it would be
+   declared first and lose to Tailwind's preflight (`base` resets every
+   element's margin/padding/border), stripping PrimeReact components bare.
+   Declaring the order up front slots `primereact` above preflight while
+   keeping utilities strongest. */
+@layer theme, base, primereact, components, utilities;
+
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 @import 'primeicons/primeicons.css';
-
-/* 1. Tokens & Base */
+@import 'primereact/resources/themes/lara-light-blue/theme.css';
 @import './styles/variables.css';
-@import './styles/theme.css';
-@import './styles/base.css';
-
-/* 2. Components */
-@import './styles/components/layout.css';
-@import './styles/components/tables.css';
-@import './styles/components/dialogs.css';
-@import './styles/components/forms.css';
-@import './styles/components/okdp-design.css';
-@import './styles/components/primereact-overrides.css';
 
 /* Dark mode is class-based (body.dark-mode), not media-query based */
 @custom-variant dark (&:where(body.dark-mode, body.dark-mode *));
@@ -22,5 +34,2176 @@
    prefers-color-scheme instead of the app's body.dark-mode toggle */
 @custom-variant os-dark (@media (prefers-color-scheme: dark));
 
-/* Note: Component-specific styles should be minimized.
-   Use the shared classes defined above. */
+/* =========================================
+   Tailwind theme mapping
+   =========================================
+   Exposes the --db-* design tokens (variables.css) as Tailwind utilities.
+   `inline` makes utilities reference the --db-* variables directly, so the
+   body.dark-mode variable flip keeps working with zero token duplication. */
+
+@theme inline {
+  /* ===== Brand palette ===== */
+  --color-primary: var(--db-primary);
+  --color-primary-hover: var(--db-primary-hover);
+  --color-primary-light: var(--db-primary-light);
+  --color-primary-50: var(--db-primary-50);
+  --color-primary-100: var(--db-primary-100);
+  --color-primary-200: var(--db-primary-200);
+  --color-primary-300: var(--db-primary-300);
+  --color-primary-400: var(--db-primary-400);
+  --color-primary-500: var(--db-primary-500);
+  --color-primary-600: var(--db-primary-600);
+  --color-primary-700: var(--db-primary-700);
+  --color-primary-800: var(--db-primary-800);
+  --color-primary-900: var(--db-primary-900);
+
+  /* ===== Semantic surfaces ===== */
+  --color-surface: var(--db-bg-primary);
+  --color-surface-secondary: var(--db-bg-secondary);
+  --color-surface-tertiary: var(--db-bg-tertiary);
+  --color-elevated: var(--db-bg-elevated);
+
+  /* ===== Text ===== */
+  --color-fg: var(--db-text-primary);
+  --color-fg-secondary: var(--db-text-secondary);
+  --color-fg-muted: var(--db-text-muted);
+
+  /* ===== Borders ===== */
+  --color-border: var(--db-border-color);
+  --color-border-light: var(--db-border-light);
+  --color-border-subtle: var(--db-border-subtle);
+
+  /* ===== Accents ===== */
+  --color-accent-blue: var(--db-accent-blue);
+  --color-accent-blue-light: var(--db-accent-blue-light);
+  --color-accent-purple: var(--db-accent-purple);
+  --color-accent-purple-light: var(--db-accent-purple-light);
+  --color-accent-red: var(--db-accent-red);
+  --color-accent-red-light: var(--db-accent-red-light);
+  --color-accent-amber: var(--db-accent-amber);
+  --color-accent-amber-light: var(--db-accent-amber-light);
+
+  /* ===== Status ===== */
+  --color-success: var(--db-success);
+  --color-warning: var(--db-warning);
+  --color-danger: var(--db-danger);
+
+  /* ===== Radii ===== */
+  --radius-sm: var(--db-radius-sm);
+  --radius-md: var(--db-radius-md);
+  --radius-lg: var(--db-radius-lg);
+  --radius-xl: var(--db-radius-xl);
+  --radius-2xl: var(--db-radius-2xl);
+
+  /* ===== Shadows ===== */
+  --shadow-xs: var(--db-shadow-xs);
+  --shadow-sm: var(--db-shadow-sm);
+  --shadow-md: var(--db-shadow-md);
+  --shadow-lg: var(--db-shadow-lg);
+  --shadow-xl: var(--db-shadow-xl);
+  --shadow-card: var(--db-shadow-card);
+  --shadow-focus: var(--db-shadow-focus);
+
+  /* ===== Typography ===== */
+  --font-sans: 'DM Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* Font-size utilities set only the size (no paired line-height) so text
+     keeps inheriting the body line-height, exactly like the legacy CSS. */
+  --text-*: initial;
+  --text-xs: var(--db-font-size-xs);
+  --text-sm: var(--db-font-size-sm);
+  --text-base: var(--db-font-size-base);
+  --text-md: var(--db-font-size-md);
+  --text-lg: var(--db-font-size-lg);
+  --text-xl: var(--db-font-size-xl);
+  --text-2xl: var(--db-font-size-2xl);
+
+  --leading-tight: var(--db-line-height-tight);
+  --leading-base: var(--db-line-height-base);
+
+  /* ===== Motion ===== */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-fade-in-up: fade-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-in: fade-in 0.25s ease-out;
+  --animate-log-pulse: log-pulse 1.4s ease-in-out infinite;
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes log-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+    }
+    70% {
+      box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+  }
+}
+
+/* Base layer — participates in the cascade below unlayered component CSS,
+   after Tailwind's preflight (this file is imported after 'tailwindcss'). */
+@layer base {
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--db-bg-secondary);
+    background-image: radial-gradient(
+      circle at top 30%,
+      rgba(65, 146, 143, 0.05) 0%,
+      transparent 60%
+    );
+    background-attachment: fixed;
+    color: var(--db-text-primary);
+    font-family: 'DM Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: var(--db-font-size-base);
+    line-height: var(--db-line-height-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Theme (light/dark) switch transition */
+    transition:
+      background-color var(--db-transition-fast),
+      border-color var(--db-transition-fast);
+  }
+
+  main {
+    min-height: 100vh;
+  }
+
+  /* Smooth scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--db-border-color);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--db-text-secondary);
+  }
+
+  /* Selection */
+  ::selection {
+    background: var(--db-primary-100);
+    color: var(--db-primary-800);
+  }
+
+  /* Focus-visible for keyboard accessibility */
+  :focus-visible {
+    outline: 2px solid var(--db-primary);
+    outline-offset: 2px;
+  }
+
+  button:focus:not(:focus-visible),
+  a:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Accessibility: Reduced Motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Keyframe animations — still referenced by legacy component CSS.
+   fadeInUp uses the 8px offset: okdp-design.css redefined it that way after
+   base.css, so 8px has always been the effective value. */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ========== Utilities ========== */
+/* 0.35s: the okdp-design.css redefinition of .animate-in was the one that
+   applied, so its timing is the canonical one. */
+@utility animate-in {
+  animation: fadeInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+
+
+
+/* ========== Cursor ========== */
+button,
+[role='button'],
+a[href] {
+  cursor: pointer;
+}
+
+/* =========================================
+   Workspace & Page Layout
+   =========================================
+   Shell chrome (header, sidebar, nav, main layout) lives as Tailwind
+   utilities in shared/components/console-shell.tsx. The page-level
+   patterns below are still consumed by the feature pages and migrate
+   with them. */
+
+.workspace-container {
+  padding: 0;
+  background-color: transparent;
+}
+
+/* Page Top Bar (Header + Search) */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--db-space-lg);
+}
+
+.left-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--db-space-sm);
+}
+
+.page-title,
+h1 {
+  font-size: var(--db-font-size-xl);
+  font-weight: 600;
+  color: var(--db-text-primary);
+  margin: 0;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* =========================================
+   Buttons — Consolidated
+   ========================================= */
+
+/* Primary action button (PrimeNG-compatible) */
+button.create-btn,
+.p-button.create-btn {
+  background-color: var(--db-primary);
+  color: white;
+  border: none;
+  border-radius: var(--db-radius-md);
+  padding: 7px 14px;
+  font-weight: 500;
+  font-size: var(--db-font-size-md);
+  cursor: pointer;
+  transition: background var(--db-transition-base);
+}
+
+button.create-btn:hover,
+.p-button.create-btn:hover {
+  background-color: var(--db-primary-hover);
+}
+
+/* Secondary button */
+.btn-secondary {
+  background: var(--db-bg-primary);
+  color: var(--db-text-primary);
+  border: 1px solid var(--db-border-color);
+  padding: 7px var(--db-space-md);
+  border-radius: var(--db-radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: var(--db-font-size-md);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    background var(--db-transition-base),
+    border-color var(--db-transition-base);
+}
+
+.btn-secondary:hover {
+  background: var(--db-bg-tertiary);
+  border-color: var(--db-border-color);
+}
+
+/* Row-level actions */
+.actions {
+  display: flex;
+  gap: var(--db-space-sm);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.action-link {
+  background: none;
+  border: none;
+  color: var(--db-text-secondary);
+  cursor: pointer;
+  font-size: var(--db-font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--db-radius-sm);
+  transition:
+    color var(--db-transition-fast),
+    background var(--db-transition-fast);
+}
+
+.action-link:hover {
+  background-color: var(--db-bg-tertiary);
+  color: var(--db-primary);
+}
+
+.action-link.primary {
+  color: var(--db-primary);
+  font-weight: 500;
+}
+
+/* =========================================
+   RESPONSIVE BREAKPOINTS
+   ========================================= */
+
+/* Mobile */
+@media (max-width: 768px) {
+  .top-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--db-space-md);
+  }
+}
+
+/* Unified Table Styles
+   These rules style PrimeReact DataTable internals through the
+   .minimal-table wrapper class. They must stay plain (unlayered) CSS:
+   the PrimeReact theme stylesheet is unlayered, so utility-layer rules
+   could not override it, and PrimeReact 10 has no --p-* design tokens
+   to move them to. */
+
+.p-datatable.minimal-table {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: var(--db-radius-2xl);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.03);
+}
+
+.p-datatable.minimal-table .p-datatable-header {
+  display: none;
+}
+
+.p-datatable.minimal-table .p-datatable-thead > tr > th {
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--db-text-secondary);
+  font-weight: 700;
+  font-size: var(--db-font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 16px 20px;
+  text-align: left;
+  border: none;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr {
+  transition: background-color var(--db-transition-fast);
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr > td {
+  padding: 18px 20px;
+  color: var(--db-text-primary);
+  font-size: var(--db-font-size-base);
+  font-weight: 500;
+  line-height: var(--db-line-height-base);
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
+  border-bottom: none;
+}
+
+.p-datatable.minimal-table .p-datatable-tbody > tr:hover {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Global Dialog Styles
+   Base PrimeNG dialog theming is handled via CSS vars in variables.css:
+   --p-dialog-border-radius, --p-dialog-header-background, etc.
+
+   The .db-dialog rules style PrimeReact Dialog internals and must stay
+   plain (unlayered) CSS so they keep overriding the unlayered PrimeReact
+   theme stylesheet. */
+
+.db-dialog .p-dialog-header {
+  padding: var(--db-space-lg) var(--db-space-xl) var(--db-space-sm) var(--db-space-xl);
+  border-bottom: none;
+}
+
+.db-dialog .p-dialog-content {
+  padding: var(--db-space-sm) var(--db-space-xl) var(--db-space-lg) var(--db-space-xl);
+}
+
+.db-dialog .p-dialog-footer {
+  padding: var(--db-space-md) var(--db-space-xl);
+  border-top: 1px solid var(--db-border-light);
+}
+
+/* Dialog content layout patterns */
+@utility dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-sm);
+}
+
+@utility dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Unified Form Styles
+   PrimeNG input theming is handled via CSS vars in variables.css:
+   --p-inputtext-border-radius, --p-inputtext-focus-border-color, etc. */
+
+@utility field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--db-space-lg);
+  & label {
+    display: block;
+    font-weight: 500;
+    font-size: var(--db-font-size-base);
+    color: var(--db-text-primary);
+    letter-spacing: -0.005em;
+  }
+}
+
+/* Common input class. Applied to PrimeReact InputText components, so it
+   must stay plain (unlayered) CSS to keep overriding the unlayered
+   PrimeReact theme's .p-inputtext rules. */
+.dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-size: var(--db-font-size-md);
+  font-family: inherit;
+  border-radius: var(--db-radius-md);
+  border: 1px solid var(--db-border-light);
+  background: var(--db-bg-primary);
+  color: var(--db-text-primary);
+  transition:
+    border-color var(--db-transition-base),
+    box-shadow var(--db-transition-base);
+}
+
+.dialog-input:hover {
+  border-color: var(--db-border-color);
+}
+
+.dialog-input:focus {
+  border-color: var(--db-primary);
+  box-shadow: var(--db-shadow-focus);
+  outline: none;
+}
+
+.dialog-input:disabled {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@utility optional {
+  font-weight: 400;
+  color: var(--db-text-muted);
+  font-size: var(--db-font-size-sm);
+  margin-left: var(--db-space-xs);
+}
+
+@utility field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-sm);
+}
+
+@utility field-help {
+  color: var(--db-text-muted);
+  font-size: var(--db-font-size-xs);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* ============================================================
+   OKDP Console — services / spark design system
+   Shared multi-element patterns expressed as Tailwind @utility
+   classes (per the migration roadmap). State variants (.active,
+   .danger, .done, …) are nested so they ship with their parent
+   utility even when toggled dynamically at runtime.
+
+   A few rules stay as plain (unlayered) CSS because they are
+   cascade-coupled with layout.css rules that migrate with the
+   feature pages; they are marked "legacy cascade".
+   ============================================================ */
+
+/* Shared utility classes */
+@utility mono {
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@utility muted-text {
+  color: var(--db-text-muted);
+  font-size: var(--db-font-size-sm);
+  &.small {
+    font-size: 12px;
+  }
+}
+
+/* ========== Page heading ========== */
+@utility page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+/* Legacy cascade: must out-rank the global `.page-title, h1` rule still
+   living in layout.css, so it cannot move into the utilities layer yet. */
+.page-heading h1.page-title {
+  margin: 6px 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+@utility page-sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--db-text-secondary);
+  max-width: 640px;
+}
+
+@utility breadcrumb-thin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--db-text-muted);
+  font-weight: 500;
+  & .bc-current {
+    color: var(--db-text-secondary);
+  }
+}
+
+/* ========== Buttons ========== */
+/* Legacy cascade: the page-layout section above defines button.create-btn /
+   .p-button.create-btn and .btn-secondary for the admin pages; these
+   stay unlayered to preserve today's specificity interplay until the
+   feature pages migrate. */
+.create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  background: var(--db-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--db-radius-md);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(65, 146, 143, 0.25);
+  transition:
+    background var(--db-transition-fast),
+    transform var(--db-transition-fast),
+    box-shadow var(--db-transition-fast);
+}
+.create-btn:hover {
+  background: var(--db-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(65, 146, 143, 0.25);
+}
+.create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.create-btn.danger {
+  background: var(--db-danger);
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.2);
+}
+.create-btn.danger:hover {
+  background: #b91c1c;
+}
+.create-btn i {
+  font-size: 13px;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--db-bg-primary);
+  color: var(--db-text-primary);
+  border: 1px solid var(--db-border-color);
+  border-radius: var(--db-radius-md);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--db-transition-fast),
+    border-color var(--db-transition-fast),
+    color var(--db-transition-fast);
+}
+.btn-secondary:hover {
+  background: var(--db-bg-tertiary);
+  border-color: var(--db-border-color);
+}
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-secondary.danger {
+  color: var(--db-danger);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+.btn-secondary.danger:hover {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: var(--db-danger);
+}
+.btn-secondary i {
+  font-size: 12px;
+}
+
+/* ========== Stat strip ========== */
+@utility stat-strip {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+@utility stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  background: var(--db-bg-primary);
+  color: var(--db-text-secondary);
+  border: 1px solid var(--db-border-light);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--db-transition-fast);
+  &:hover {
+    border-color: var(--db-border-color);
+    color: var(--db-text-primary);
+  }
+  &.active {
+    background: var(--db-primary-50);
+    border-color: var(--db-primary-200);
+    color: var(--db-primary-700);
+    font-weight: 600;
+  }
+  & .sc-count {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-secondary);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  &.active .sc-count {
+    background: var(--db-primary);
+    color: #fff;
+  }
+  &.chip-warn.active {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #c2410c;
+  }
+  &.chip-warn.active .sc-count {
+    background: var(--db-warning);
+  }
+  &.chip-danger.active {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+  }
+  &.chip-danger.active .sc-count {
+    background: var(--db-danger);
+  }
+}
+
+/* ========== Filter bar ========== */
+@utility okdp-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+@utility okdp-search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+}
+
+/* Legacy cascade: must out-rank the global .search-icon rule still living
+   in layout.css. */
+.okdp-search-wrapper i.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--db-text-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+@utility okdp-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 32px;
+  border: 1px solid var(--db-border-light);
+  background: var(--db-bg-primary);
+  border-radius: var(--db-radius-md);
+  font: inherit;
+  font-size: 13px;
+  color: var(--db-text-primary);
+  transition:
+    border-color var(--db-transition-fast),
+    box-shadow var(--db-transition-fast);
+  &::placeholder {
+    color: var(--db-text-muted);
+  }
+  &:focus {
+    outline: none;
+    border-color: var(--db-primary);
+    box-shadow: var(--db-shadow-focus);
+  }
+}
+
+@utility filter-hint {
+  font-size: 12px;
+  color: var(--db-text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ========== OKDP minimal table (native, not PrimeNG) ========== */
+@utility okdp-table-wrapper {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-xl);
+  overflow: hidden;
+}
+
+@utility okdp-table {
+  width: 100%;
+  border-collapse: collapse;
+  & th {
+    background: var(--db-bg-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--db-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--db-border-light);
+  }
+  & td {
+    padding: 14px 16px;
+    font-size: 13.5px;
+    border-bottom: 1px solid var(--db-border-subtle);
+    vertical-align: middle;
+  }
+  & tbody tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+@utility clickable-row {
+  cursor: pointer;
+  transition: background var(--db-transition-fast);
+  &:hover {
+    background: var(--db-bg-secondary);
+  }
+}
+
+@utility cell-instance {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+@utility cell-name {
+  font-weight: 600;
+  color: var(--db-text-primary);
+  font-size: 14px;
+}
+
+@utility cell-ns {
+  font-size: 11.5px;
+  color: var(--db-text-muted);
+}
+
+@utility version-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--db-bg-secondary);
+  color: var(--db-text-secondary);
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--db-border-light);
+  font-weight: 500;
+}
+
+@utility okdp-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+@utility icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--db-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--db-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--db-transition-fast),
+    color var(--db-transition-fast);
+  &:hover {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+  }
+  &.primary:hover {
+    color: var(--db-primary);
+    background: var(--db-primary-50);
+  }
+  &.danger:hover {
+    color: var(--db-danger);
+    background: rgba(220, 38, 38, 0.06);
+  }
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  & i {
+    font-size: 13px;
+  }
+}
+
+/* ========== Status tag (native, not PrimeNG) ========== */
+@utility okdp-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-secondary);
+  white-space: nowrap;
+  &.okdp-tag-success {
+    background: #ecfdf5;
+    color: #047857;
+  }
+  &.okdp-tag-warn {
+    background: #fffbeb;
+    color: #b45309;
+  }
+  &.okdp-tag-danger {
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+  &.okdp-tag-info {
+    background: var(--db-accent-blue-light);
+    color: var(--db-accent-blue);
+  }
+}
+
+@utility okdp-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.4s infinite;
+}
+
+/* ========== Empty state ========== */
+@utility empty-state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 24px;
+  gap: 10px;
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-xl);
+  text-align: center;
+  & h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--db-text-primary);
+  }
+  & p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--db-text-secondary);
+    max-width: 360px;
+  }
+  & .create-btn {
+    margin-top: 12px;
+  }
+}
+
+@utility empty-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+
+/* ========== Detail page ========== */
+@utility detail-page {
+  padding-top: 4px;
+  max-width: 1040px;
+  margin: 0 auto;
+  & .page-header {
+    margin-bottom: 20px;
+  }
+}
+
+@utility breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+}
+
+@utility breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--db-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  transition: all var(--db-transition-base);
+  &:hover {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+  }
+}
+
+@utility breadcrumb-current {
+  color: var(--db-text-muted);
+  font-weight: 500;
+}
+
+@utility header-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+@utility header-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--db-radius-lg);
+  background: linear-gradient(135deg, var(--db-primary-500), var(--db-primary-700));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 6px 16px rgba(65, 146, 143, 0.25);
+  color: #fff;
+  & i {
+    font-size: 20px;
+    color: #fff;
+  }
+}
+
+@utility header-text {
+  flex: 1;
+  min-width: 0;
+  & h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--db-text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+}
+
+@utility header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@utility page-desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--db-text-secondary);
+}
+
+@utility header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ========== Tabs ========== */
+@utility okdp-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--db-border-light);
+  margin-bottom: 16px;
+}
+
+@utility okdp-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--db-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition:
+    color var(--db-transition-fast),
+    border-color var(--db-transition-fast);
+  &:hover {
+    color: var(--db-text-primary);
+  }
+  &.active {
+    color: var(--db-primary);
+    border-bottom-color: var(--db-primary);
+    font-weight: 600;
+  }
+  &.active .tab-count {
+    background: var(--db-primary-50);
+    color: var(--db-primary);
+  }
+}
+
+@utility tab-count {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ========== Info card ========== */
+@utility detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@utility info-card {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-xl);
+  padding: 18px;
+}
+
+@utility section-card {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-xl);
+  padding: 18px;
+}
+
+@utility info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px 24px;
+}
+
+@utility info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+@utility info-item-wide {
+  grid-column: 1 / -1;
+}
+
+@utility info-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--db-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@utility info-value {
+  font-size: 13.5px;
+  color: var(--db-text-primary);
+  font-weight: 500;
+}
+
+@utility info-link {
+  color: var(--db-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@utility section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+@utility section-icon-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--db-primary-50);
+  color: var(--db-primary);
+  & i {
+    font-size: 13px;
+  }
+  &.chart {
+    background: var(--db-accent-blue-light);
+    color: var(--db-accent-blue);
+  }
+}
+
+@utility section-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+/* ========== Resource usage metrics ========== */
+@utility metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@utility metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Unbounded variant — no limit declared on the pod. Drop the bar in
+     favour of a prominent used-value readout and a "no limit" hint. */
+  &.unbounded .metric-bar {
+    display: none;
+  }
+  &.unbounded .metric-pct {
+    display: none;
+  }
+  &.unbounded .metric-value {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 0 2px;
+  }
+  &.unbounded .metric-value-big {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--db-text-primary);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: -0.01em;
+  }
+  &.unbounded .metric-hint {
+    font-size: 11px;
+    color: var(--db-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  &.unbounded .metric-hint::before {
+    content: '∞';
+    color: var(--db-text-muted);
+    font-size: 14px;
+    line-height: 1;
+  }
+}
+
+@utility metric-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+@utility metric-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--db-text-secondary);
+}
+
+@utility metric-unit {
+  font-size: 11.5px;
+  color: var(--db-text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  & .metric-used {
+    color: var(--db-text-primary);
+    font-weight: 600;
+  }
+  & .metric-sep {
+    margin: 0 4px;
+    color: var(--db-border-color);
+  }
+}
+
+@utility metric-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--db-bg-tertiary);
+  overflow: hidden;
+  position: relative;
+}
+
+@utility metric-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--db-primary);
+  &.tone-warn {
+    background: var(--db-warning);
+  }
+  &.tone-danger {
+    background: var(--db-danger);
+  }
+}
+
+@utility metric-pct {
+  font-size: 11px;
+  color: var(--db-text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-align: right;
+}
+
+/* ========== Alerts ========== */
+@utility alert {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--db-radius-lg);
+  border: 1px solid;
+  & > i:first-child {
+    font-size: 18px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+  & strong {
+    display: block;
+    font-size: 13.5px;
+    margin-bottom: 4px;
+  }
+  & p {
+    margin: 0;
+    font-size: 12.5px;
+    opacity: 0.85;
+  }
+}
+
+@utility alert-danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+@utility alert-warn {
+  background: #fffbeb;
+  border-color: #fed7aa;
+  color: #92400e;
+}
+
+/* ========== Parameters list ========== */
+@utility param-list {
+  display: flex;
+  flex-direction: column;
+}
+
+@utility param-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--db-border-subtle);
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+@utility param-key {
+  font-size: 12.5px;
+  color: var(--db-text-secondary);
+  font-weight: 500;
+}
+
+@utility param-value {
+  font-size: 12.5px;
+  color: var(--db-text-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
+/* ========== Deploy wizard ========== */
+@utility deploy-page {
+  padding-top: 4px;
+  max-width: 820px;
+  margin: 0 auto;
+  & .page-header {
+    margin-bottom: 20px;
+  }
+}
+
+@utility wizard-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+
+@utility wstep {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--db-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  &.active .wstep-num {
+    background: var(--db-primary);
+    color: #fff;
+    box-shadow: 0 0 0 4px var(--db-primary-50);
+  }
+  &.active .wstep-label {
+    color: var(--db-primary);
+    font-weight: 600;
+  }
+  &.done .wstep-num {
+    background: var(--db-primary);
+    color: #fff;
+  }
+  &.done .wstep-label {
+    color: var(--db-text-secondary);
+  }
+}
+
+@utility wstep-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all var(--db-transition-base);
+  & i {
+    font-size: 10px;
+  }
+}
+
+@utility wstep-line {
+  flex: 1;
+  min-width: 36px;
+  height: 1.5px;
+  background: var(--db-border-light);
+  margin: 0 6px;
+  border-radius: 1px;
+}
+
+@utility form-card {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-xl);
+  padding: 24px;
+}
+
+@utility form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@utility form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  & > label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--db-text-primary);
+  }
+}
+
+@utility field-hint {
+  font-size: 11.5px;
+  color: var(--db-text-muted);
+  &.err {
+    color: var(--db-danger);
+  }
+}
+
+@utility field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+@utility text-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--db-border-color);
+  background: var(--db-bg-primary);
+  border-radius: var(--db-radius-md);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--db-text-primary);
+  transition:
+    border-color var(--db-transition-fast),
+    box-shadow var(--db-transition-fast);
+  &:focus {
+    outline: none;
+    border-color: var(--db-primary);
+    box-shadow: var(--db-shadow-focus);
+  }
+  &:disabled {
+    background: var(--db-bg-secondary);
+    color: var(--db-text-muted);
+    cursor: not-allowed;
+  }
+}
+
+@utility review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 24px;
+  margin-bottom: 20px;
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@utility review-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--db-border-light);
+  gap: 12px;
+}
+
+@utility review-label {
+  font-size: 12px;
+  color: var(--db-text-muted);
+  font-weight: 500;
+}
+
+@utility review-value {
+  font-size: 13px;
+  color: var(--db-text-primary);
+  font-weight: 500;
+  text-align: right;
+}
+
+@utility wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@utility wa-right {
+  display: flex;
+  gap: 8px;
+}
+
+@utility deploy-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@utility progress-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px;
+  border-radius: var(--db-radius-md);
+  transition: background var(--db-transition-base);
+  &.active {
+    background: var(--db-primary-50);
+  }
+  &.done .ps-dot {
+    background: var(--db-primary);
+    color: #fff;
+  }
+  &.active .ps-dot {
+    background: var(--db-primary);
+    color: #fff;
+  }
+}
+
+@utility ps-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  & i {
+    font-size: 11px;
+  }
+}
+
+@utility ps-label {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--db-text-primary);
+  font-weight: 500;
+}
+
+@utility ps-status {
+  font-size: 11.5px;
+  &.ok {
+    color: var(--db-success);
+    font-weight: 600;
+  }
+}
+
+/* ========== Edit banner ========== */
+@utility edit-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: color-mix(in oklab, var(--db-primary) 7%, transparent);
+  border: 1px solid color-mix(in oklab, var(--db-primary) 22%, transparent);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--db-text-primary);
+  & > i {
+    color: var(--db-primary);
+    font-size: 16px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+}
+
+/* PrimeReact-internal overrides that cannot be expressed as Tailwind
+   utilities: the PrimeReact 10 theme stylesheet is unlayered, so it would
+   out-rank utility-layer rules, and this PrimeReact major has no --p-*
+   design tokens to target instead. Keep this file small. */
+
+/* DynamicSchemaForm — invalid-field highlight on PrimeReact inputs */
+.dsf-root .field-invalid,
+.dsf-root .field-invalid.p-inputtext {
+  border-color: var(--db-danger, #dc2626) !important;
+  background-color: rgba(220, 38, 38, 0.04);
+}
+
+/* Project console header — borderless project-switcher Dropdown */
+.project-switcher .p-dropdown {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  transition: background var(--db-transition-fast);
+  border-radius: var(--db-radius-md);
+  padding: 2px 6px;
+}
+
+.project-switcher .p-dropdown .p-dropdown-label {
+  padding: 4px 6px;
+  font-weight: 600;
+  font-size: var(--db-font-size-md);
+  color: var(--db-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.project-switcher .p-dropdown .p-dropdown-trigger {
+  color: var(--db-text-muted);
+  width: 1.5rem;
+}
+
+.project-switcher .p-dropdown:not(.p-disabled):hover {
+  background: var(--db-bg-tertiary);
+}
+
+.project-switcher .p-dropdown:focus-within {
+  box-shadow: none;
+}
+
+/* Project-switcher dropdown panel (appended to document.body) */
+.project-dropdown-panel.p-dropdown-panel {
+  background: var(--db-bg-primary);
+  border: 1px solid var(--db-border-light);
+  border-radius: var(--db-radius-lg);
+  box-shadow: var(--db-shadow-lg);
+  margin-top: 4px;
+  padding: 4px;
+}
+
+.project-dropdown-panel .p-dropdown-items-wrapper {
+  padding: 0;
+}
+
+.project-dropdown-panel .p-dropdown-item {
+  border-radius: var(--db-radius-sm);
+  margin-bottom: 1px;
+  padding: 6px 10px;
+  transition: background var(--db-transition-fast);
+  color: var(--db-text-secondary);
+  font-size: var(--db-font-size-base);
+}
+
+.project-dropdown-panel .p-dropdown-item:hover,
+.project-dropdown-panel .p-dropdown-item.p-focus {
+  background: var(--db-bg-secondary);
+  color: var(--db-text-primary);
+}
+
+.project-dropdown-panel .p-dropdown-item.p-highlight {
+  background: var(--db-primary-50);
+  color: var(--db-primary);
+  font-weight: 500;
+}
+
+/* Identity & secrets pages — TabView spacing and tab panel animation */
+.identity-page .p-tabview-nav,
+.secrets-page .p-tabview-nav {
+  gap: 24px;
+  padding-left: 4px;
+}
+
+.identity-page .p-tabview-panel,
+.secrets-page .p-tabview-panel {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Landing page — primary sign-in Button skin */
+.login-btn {
+  width: 100%;
+  padding: 10px 1.5rem;
+  font-size: var(--db-font-size-md);
+  font-weight: 500;
+  justify-content: center;
+  background: var(--db-primary);
+  border-color: var(--db-primary);
+  border-radius: var(--db-radius-md);
+  transition: background var(--db-transition-base);
+}
+
+.login-btn:hover {
+  background: var(--db-primary-hover);
+  border-color: var(--db-primary-hover);
+}
+
+/* ProfileListEditor — borderless inline Panel for the Resources section */
+.resource-panel .p-panel-header {
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--db-border-light);
+}
+
+.resource-panel .p-panel-content {
+  padding: 14px 0 0 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.resource-panel .p-panel-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--db-text-secondary);
+}
+
+/* ============================================================
+   9. Dark mode — PrimeReact component surfaces
+   ============================================================
+   variables.css flips the --db-* tokens under body.dark-mode, which
+   covers everything the app styles itself. The lara-light theme,
+   however, hardcodes light surfaces inside @layer primereact; the
+   unlayered overrides below re-skin the components the app uses so
+   they follow the flipped tokens. */
+
+/* ===== Popup menus ===== */
+body.dark-mode .p-menu {
+  background: var(--db-bg-elevated);
+  color: var(--db-text-primary);
+  border: 1px solid var(--db-border-color);
+}
+
+body.dark-mode .p-menu .p-menuitem > .p-menuitem-content {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-menu .p-menuitem > .p-menuitem-content .p-menuitem-link .p-menuitem-text,
+body.dark-mode .p-menu .p-menuitem > .p-menuitem-content .p-menuitem-link .p-menuitem-icon {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-menu .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus > .p-menuitem-content,
+body.dark-mode
+  .p-menu
+  .p-menuitem:not(.p-highlight):not(.p-disabled)
+  > .p-menuitem-content:hover {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-primary);
+}
+
+body.dark-mode
+  .p-menu
+  .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus
+  > .p-menuitem-content
+  .p-menuitem-link
+  .p-menuitem-text,
+body.dark-mode
+  .p-menu
+  .p-menuitem:not(.p-highlight):not(.p-disabled)
+  > .p-menuitem-content:hover
+  .p-menuitem-link
+  .p-menuitem-text {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-menu .p-submenu-header {
+  background: transparent;
+  color: var(--db-text-muted);
+}
+
+body.dark-mode .p-menu .p-menu-separator {
+  border-top-color: var(--db-border-color);
+}
+
+/* ===== Dialogs (incl. ConfirmDialog) ===== */
+body.dark-mode .p-dialog .p-dialog-header,
+body.dark-mode .p-dialog .p-dialog-content,
+body.dark-mode .p-dialog .p-dialog-footer {
+  background: var(--db-bg-elevated);
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-dialog .p-dialog-header .p-dialog-title {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-dialog .p-dialog-header .p-dialog-header-icon {
+  color: var(--db-text-secondary);
+}
+
+body.dark-mode .p-dialog .p-dialog-header .p-dialog-header-icon:enabled:hover {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-confirm-dialog .p-confirm-dialog-icon,
+body.dark-mode .p-confirm-dialog .p-confirm-dialog-message {
+  color: var(--db-text-primary);
+}
+
+/* ===== Toasts ===== */
+body.dark-mode .p-toast .p-toast-message {
+  background: var(--db-bg-elevated);
+  color: var(--db-text-primary);
+  border: 1px solid var(--db-border-color);
+  border-left-width: 4px;
+}
+
+body.dark-mode .p-toast .p-toast-message .p-toast-summary,
+body.dark-mode .p-toast .p-toast-message .p-toast-detail,
+body.dark-mode .p-toast .p-toast-message .p-toast-icon-close {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-success {
+  border-left-color: var(--db-success);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-success .p-toast-message-icon {
+  color: var(--db-success);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-error {
+  border-left-color: var(--db-danger);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-error .p-toast-message-icon {
+  color: var(--db-danger);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-warn {
+  border-left-color: var(--db-warning);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-warn .p-toast-message-icon {
+  color: var(--db-warning);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-info {
+  border-left-color: var(--db-accent-blue);
+}
+
+body.dark-mode .p-toast .p-toast-message.p-toast-message-info .p-toast-message-icon {
+  color: var(--db-accent-blue);
+}
+
+/* ===== Text inputs (InputText, Textarea, Password, number/dropdown labels) ===== */
+body.dark-mode .p-inputtext {
+  background: var(--db-bg-secondary);
+  color: var(--db-text-primary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-inputtext::placeholder {
+  color: var(--db-text-muted);
+}
+
+body.dark-mode .p-inputtext:enabled:hover {
+  border-color: var(--db-text-muted);
+}
+
+body.dark-mode .p-inputtext:enabled:focus {
+  border-color: var(--db-primary);
+}
+
+body.dark-mode .p-input-icon,
+body.dark-mode .p-icon-field > .p-input-icon {
+  color: var(--db-text-muted);
+}
+
+body.dark-mode .p-password-panel {
+  background: var(--db-bg-elevated);
+  color: var(--db-text-primary);
+}
+
+/* ===== Dropdown / MultiSelect ===== */
+body.dark-mode .p-dropdown,
+body.dark-mode .p-multiselect {
+  background: var(--db-bg-secondary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-dropdown:not(.p-disabled):hover,
+body.dark-mode .p-multiselect:not(.p-disabled):hover {
+  border-color: var(--db-text-muted);
+}
+
+body.dark-mode .p-dropdown:not(.p-disabled).p-focus,
+body.dark-mode .p-multiselect:not(.p-disabled).p-focus {
+  border-color: var(--db-primary);
+}
+
+body.dark-mode .p-dropdown .p-dropdown-label,
+body.dark-mode .p-multiselect .p-multiselect-label {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-dropdown .p-dropdown-label.p-placeholder,
+body.dark-mode .p-multiselect .p-multiselect-label.p-placeholder {
+  color: var(--db-text-muted);
+}
+
+body.dark-mode .p-dropdown .p-dropdown-trigger,
+body.dark-mode .p-multiselect .p-multiselect-trigger {
+  color: var(--db-text-secondary);
+}
+
+body.dark-mode .p-dropdown-panel,
+body.dark-mode .p-multiselect-panel {
+  background: var(--db-bg-elevated);
+  color: var(--db-text-primary);
+  border: 1px solid var(--db-border-color);
+}
+
+body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item,
+body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item {
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover,
+body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-focus:not(.p-highlight),
+body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item:not(.p-highlight):not(.p-disabled):hover,
+body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item.p-focus:not(.p-highlight) {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight,
+body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item.p-highlight {
+  background: var(--db-primary-100);
+  color: var(--db-primary);
+}
+
+body.dark-mode .p-multiselect-panel .p-multiselect-header {
+  background: var(--db-bg-elevated);
+  color: var(--db-text-primary);
+  border-bottom-color: var(--db-border-color);
+}
+
+body.dark-mode .p-multiselect.p-multiselect-chip .p-multiselect-token {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-primary);
+}
+
+/* ===== Checkbox / InputSwitch ===== */
+body.dark-mode .p-checkbox .p-checkbox-box {
+  background: var(--db-bg-secondary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-checkbox .p-checkbox-box.p-highlight {
+  background: var(--db-primary);
+  border-color: var(--db-primary);
+}
+
+body.dark-mode .p-inputswitch:not(.p-highlight) .p-inputswitch-slider {
+  background: var(--db-border-color);
+}
+
+/* ===== TabView ===== */
+body.dark-mode .p-tabview .p-tabview-nav {
+  background: transparent;
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  background: transparent;
+  color: var(--db-text-secondary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  color: var(--db-primary);
+  border-color: var(--db-primary);
+}
+
+body.dark-mode .p-tabview .p-tabview-panels {
+  background: transparent;
+  color: var(--db-text-primary);
+}
+
+/* ===== Panel ===== */
+body.dark-mode .p-panel .p-panel-header {
+  background: var(--db-bg-secondary);
+  color: var(--db-text-primary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-panel .p-panel-content {
+  background: transparent;
+  color: var(--db-text-primary);
+  border-color: var(--db-border-color);
+}
+
+/* The resource panel opts out of panel chrome; keep its transparent look. */
+body.dark-mode .resource-panel .p-panel-header,
+body.dark-mode .resource-panel .p-panel-content {
+  background: transparent;
+  border-color: var(--db-border-light);
+}
+
+/* ===== Tag ===== */
+body.dark-mode .p-tag.p-tag-success {
+  background: rgba(5, 150, 105, 0.18);
+  color: #34d399;
+}
+
+body.dark-mode .p-tag.p-tag-warning {
+  background: rgba(217, 119, 6, 0.18);
+  color: #fbbf24;
+}
+
+body.dark-mode .p-tag.p-tag-danger {
+  background: rgba(220, 38, 38, 0.18);
+  color: #f87171;
+}
+
+/* ===== Secondary / text buttons ===== */
+body.dark-mode .p-button.p-button-secondary.p-button-outlined,
+body.dark-mode .p-button.p-button-secondary.p-button-text {
+  color: var(--db-text-secondary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-button.p-button-secondary.p-button-outlined:enabled:hover,
+body.dark-mode .p-button.p-button-secondary.p-button-text:enabled:hover {
+  background: var(--db-bg-tertiary);
+  color: var(--db-text-primary);
+  border-color: var(--db-border-color);
+}
+
+body.dark-mode .p-button.p-button-text:not(.p-button-danger):not(.p-button-secondary) {
+  color: var(--db-primary);
+}
+
+body.dark-mode .p-button.p-button-text:not(.p-button-danger):not(.p-button-secondary):enabled:hover {
+  background: var(--db-primary-50);
+  color: var(--db-primary);
+}
+
+/* ===== DataTable ===== */
+body.dark-mode .p-datatable .p-datatable-thead > tr > th {
+  background: var(--db-bg-secondary);
+  color: var(--db-text-secondary);
+  border-color: var(--db-border-light);
+}
+
+body.dark-mode .p-datatable .p-datatable-tbody > tr {
+  background: transparent;
+  color: var(--db-text-primary);
+}
+
+body.dark-mode .p-datatable .p-datatable-tbody > tr > td {
+  border-color: var(--db-border-light);
+}
+
+/* The minimal table's glassmorphism is built on white tints; flip them. */
+body.dark-mode .p-datatable.minimal-table {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .p-datatable.minimal-table .p-datatable-thead > tr > th {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr > td {
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+
+body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
+  border-bottom: none;
+}
+
+body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}

@@ -85,9 +85,9 @@ export function ProjectContextProvider({ children }: { children: ReactNode }) {
 
       // Navigate — preserve the current sub-route (e.g. secret-stores)
       const currentUrl = window.location.pathname;
-      const projectPathMatch = currentUrl.match(/^\/project\/[^/]+(\/.*)?$/);
+      const projectPathMatch = currentUrl.match(/^\/projects\/[^/]+(\/.*)?$/);
       const subPath = projectPathMatch?.[1] ?? '';
-      navigate(`/project/${projectId}${subPath}`);
+      navigate(`/projects/${projectId}${subPath}`);
     },
     [navigate],
   );
@@ -112,8 +112,9 @@ export function ProjectContextProvider({ children }: { children: ReactNode }) {
 
       if (availableProjects.length === 0) {
         clearContext();
-        if (!window.location.pathname.startsWith('/admin')) {
-          navigate('/admin/projects');
+        const projectlessPaths = ['/projects', '/identity', '/home'];
+        if (!projectlessPaths.some((p) => window.location.pathname.startsWith(p))) {
+          navigate('/projects');
         }
       } else {
         selectProject(availableProjects[0].name);

@@ -138,7 +138,7 @@ export default function ServiceEditPage() {
     if (returnTo) {
       navigate(returnTo);
     } else {
-      navigate(`/project/${project}/${areaBasePath(instance?.service).join('/')}`);
+      navigate(`/projects/${project}/${areaBasePath(instance?.service).join('/')}`);
     }
   };
 

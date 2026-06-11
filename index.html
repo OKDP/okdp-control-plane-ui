@@ -5,9 +5,25 @@
     <title>OKDP - Control Plane</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/svg+xml" href="/images/okdp-notext.svg" />
   </head>
   <body>
+    <script>
+      // Apply the saved theme before first paint to avoid a light flash.
+      // Key and resolution logic mirror src/core/theme/theme-context.tsx.
+      (function () {
+        try {
+          var mode = localStorage.getItem('okdp-theme');
+          var dark =
+            mode === 'dark' ||
+            (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.body.classList.add('dark-mode');
+        } catch (e) {
+          /* storage unavailable — keep light */
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

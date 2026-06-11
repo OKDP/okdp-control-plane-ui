@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import 'primereact/resources/themes/lara-light-blue/theme.css';
-import 'primereact/resources/primereact.min.css';
+// The PrimeReact theme is imported by styles.css: it must load after the
+// @layer order declared there, or preflight strips its component styles.
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(

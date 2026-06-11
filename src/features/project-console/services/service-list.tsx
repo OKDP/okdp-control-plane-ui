@@ -14,7 +14,7 @@ export interface ServiceListProps {
   emptyMessage?: string;
   emptyTitle?: string;
   /**
-   * URL segments under /project/:projectId for the parent "area" (e.g.
+   * URL segments under /projects/:projectId for the parent "area" (e.g.
    * ['services'] for Jupyter, ['spark', 'history-server'] for Spark
    * History Server). Used for detail/edit navigation so the sidebar
    * highlights the correct entry.
@@ -36,6 +36,9 @@ export function ServiceList({
   const toast = useRef<Toast>(null);
 
   const [services, setServices] = useState<ServiceInstance[]>([]);
+  // Deletion runs until the backend confirms (slow helm uninstall); these
+  // names render as "Deleting…" with their row actions disabled.
+  const [deletingNames, setDeletingNames] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('All');
@@ -68,6 +71,14 @@ export function ServiceList({
     const unsubscribe = serviceApi.subscribeServices(projectName, {
       next: (event) => {
         if (!matchesFilter(event.object)) return;
+        if (event.type === 'DELETED') {
+          setDeletingNames((names) => {
+            if (!names.has(event.object.name)) return names;
+            const next = new Set(names);
+            next.delete(event.object.name);
+            return next;
+          });
+        }
         setServices((current) => applyListEvent(current, event, (s) => s.name));
       },
     });
@@ -123,7 +134,7 @@ export function ServiceList({
   const viewDetail = (svc: ServiceInstance) => {
     if (projectName) {
       navigate(
-        `/project/${projectName}/${basePath.join('/')}/${svc.name}?returnTo=${encodeURIComponent(currentUrl)}`,
+        `/projects/${projectName}/${basePath.join('/')}/${svc.name}?returnTo=${encodeURIComponent(currentUrl)}`,
       );
     }
   };
@@ -131,7 +142,7 @@ export function ServiceList({
   const editService = (svc: ServiceInstance) => {
     if (projectName) {
       navigate(
-        `/project/${projectName}/${basePath.join('/')}/${svc.name}/edit?returnTo=${encodeURIComponent(currentUrl)}`,
+        `/projects/${projectName}/${basePath.join('/')}/${svc.name}/edit?returnTo=${encodeURIComponent(currentUrl)}`,
       );
     }
   };
@@ -147,9 +158,18 @@ export function ServiceList({
       message: `This will remove "${svc.name}" and all its pods. This cannot be undone.`,
       header: 'Delete this instance?',
       icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
       acceptClassName: 'p-button-danger',
       accept: () => {
         if (!projectName) return;
+        const clearDeleting = () =>
+          setDeletingNames((names) => {
+            const next = new Set(names);
+            next.delete(svc.name);
+            return next;
+          });
+        setDeletingNames((names) => new Set(names).add(svc.name));
         serviceApi
           .deleteService(projectName, svc.name)
           .then(() => {
@@ -158,9 +178,11 @@ export function ServiceList({
               summary: 'Instance deleted',
               detail: `"${svc.name}" has been removed`,
             });
+            clearDeleting();
             setServices((current) => current.filter((s) => s.name !== svc.name));
           })
           .catch((err) => {
+            clearDeleting();
             toast.current?.show({
               severity: 'error',
               summary: 'Error',
@@ -248,66 +270,86 @@ export function ServiceList({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((svc) => (
-                <tr key={svc.name} className="clickable-row" onClick={() => viewDetail(svc)}>
-                  <td>
-                    <div className="cell-instance">
-                      <span className="cell-name">{svc.name}</span>
-                      <span className="cell-ns mono">{svc.releaseName || svc.service}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="version-badge mono">{svc.serviceTag}</span>
-                  </td>
-                  <td>
-                    <span className={`okdp-tag ${tagClass(svc.status)}`}>
-                      {(svc.status === 'Installing' || svc.status === 'Updating') && (
-                        <span className="okdp-tag-dot"></span>
+              {filtered.map((svc) => {
+                const deleting = deletingNames.has(svc.name);
+                return (
+                  <tr
+                    key={svc.name}
+                    className={deleting ? 'clickable-row opacity-50' : 'clickable-row'}
+                    onClick={() => viewDetail(svc)}
+                  >
+                    <td>
+                      <div className="cell-instance">
+                        <span className="cell-name">{svc.name}</span>
+                        <span className="cell-ns mono">{svc.releaseName || svc.service}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="version-badge mono">{svc.serviceTag}</span>
+                    </td>
+                    <td>
+                      {deleting ? (
+                        <span className="okdp-tag okdp-tag-warn">
+                          <i className="pi pi-spin pi-spinner text-[0.7rem]"></i>
+                          Deleting…
+                        </span>
+                      ) : (
+                        <span className={`okdp-tag ${tagClass(svc.status)}`}>
+                          {(svc.status === 'Installing' || svc.status === 'Updating') && (
+                            <span className="okdp-tag-dot"></span>
+                          )}
+                          {svc.status}
+                        </span>
                       )}
-                      {svc.status}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="muted-text small mono">{svc.targetNamespace || '—'}</span>
-                  </td>
-                  <td>
-                    <span className="muted-text">
-                      {svc.createdAt ? formatMediumDate(svc.createdAt) : '—'}
-                    </span>
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <div className="okdp-actions">
-                      <button
-                        className="icon-btn"
-                        title="View details"
-                        onClick={() => viewDetail(svc)}
-                      >
-                        <i className="pi pi-eye"></i>
-                      </button>
-                      <button className="icon-btn" title="Edit" onClick={() => editService(svc)}>
-                        <i className="pi pi-pencil"></i>
-                      </button>
-                      {svc.url && (
+                    </td>
+                    <td>
+                      <span className="muted-text small mono">{svc.targetNamespace || '—'}</span>
+                    </td>
+                    <td>
+                      <span className="muted-text">
+                        {svc.createdAt ? formatMediumDate(svc.createdAt) : '—'}
+                      </span>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div className="okdp-actions">
                         <button
-                          className="icon-btn primary"
-                          title="Open in a new tab"
-                          disabled={svc.status !== 'Ready'}
-                          onClick={() => openService(svc)}
+                          className="icon-btn"
+                          title="View details"
+                          onClick={() => viewDetail(svc)}
                         >
-                          <i className="pi pi-external-link"></i>
+                          <i className="pi pi-eye"></i>
                         </button>
-                      )}
-                      <button
-                        className="icon-btn danger"
-                        title="Delete"
-                        onClick={() => confirmDelete(svc)}
-                      >
-                        <i className="pi pi-trash"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        <button
+                          className="icon-btn"
+                          title="Edit"
+                          disabled={deleting}
+                          onClick={() => editService(svc)}
+                        >
+                          <i className="pi pi-pencil"></i>
+                        </button>
+                        {svc.url && (
+                          <button
+                            className="icon-btn primary"
+                            title="Open in a new tab"
+                            disabled={svc.status !== 'Ready'}
+                            onClick={() => openService(svc)}
+                          >
+                            <i className="pi pi-external-link"></i>
+                          </button>
+                        )}
+                        <button
+                          className="icon-btn danger"
+                          title="Delete"
+                          disabled={deleting}
+                          onClick={() => confirmDelete(svc)}
+                        >
+                          <i className="pi pi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

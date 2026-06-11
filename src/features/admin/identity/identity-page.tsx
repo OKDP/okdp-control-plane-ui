@@ -4,7 +4,7 @@ import { GroupList } from './groups/group-list';
 
 export default function IdentityPage() {
   return (
-    /* identity-page scopes the TabView overrides in primereact-overrides.css */
+    /* identity-page scopes the TabView overrides in the PrimeReact overrides section of styles.css */
     <div className="identity-page">
       <TabView>
         <TabPanel header="Users" leftIcon="pi pi-user mr-2">

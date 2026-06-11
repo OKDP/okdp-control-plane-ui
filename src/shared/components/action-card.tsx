@@ -29,7 +29,7 @@ export function ActionCard({ to, icon, tone, title, description }: ActionCardPro
   return (
     <Link
       to={to}
-      className="group flex cursor-pointer items-center gap-3 rounded-xl border border-white/70 bg-white/60 px-5 py-3 text-fg no-underline shadow-[0_4px_16px_rgba(0,0,0,0.02)] backdrop-blur-md transition-all duration-250 ease-smooth hover:-translate-y-0.5 hover:border-white hover:bg-white/95 hover:shadow-[0_12px_28px_rgba(0,0,0,0.05)]"
+      className="group flex cursor-pointer items-center gap-3 rounded-xl border border-white/70 bg-white/60 px-5 py-3 text-fg no-underline shadow-[0_4px_16px_rgba(0,0,0,0.02)] backdrop-blur-md transition-all duration-250 ease-smooth hover:-translate-y-0.5 hover:border-white hover:bg-white/95 hover:shadow-[0_12px_28px_rgba(0,0,0,0.05)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_4px_16px_rgba(0,0,0,0.2)] dark:hover:border-white/20 dark:hover:bg-white/[0.08] dark:hover:shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
     >
       <div
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${ICON_TONES[tone]}`}

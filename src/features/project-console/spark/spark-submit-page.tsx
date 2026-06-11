@@ -117,7 +117,7 @@ export default function SparkSubmitPage() {
 
   const goBack = () => {
     if (projectId) {
-      navigate(`/project/${projectId}/spark/applications`);
+      navigate(`/projects/${projectId}/spark/applications`);
     }
   };
 
@@ -172,7 +172,7 @@ export default function SparkSubmitPage() {
           summary: 'Submitted',
           detail: `Spark job "${req.name}" submitted`,
         });
-        navigate(`/project/${projectId}/spark/applications`);
+        navigate(`/projects/${projectId}/spark/applications`);
       })
       .catch((err) => {
         toast.current?.show({
@@ -197,7 +197,7 @@ export default function SparkSubmitPage() {
           summary: 'Submitted',
           detail: 'Spark job submitted from YAML',
         });
-        navigate(`/project/${projectId}/spark/applications`);
+        navigate(`/projects/${projectId}/spark/applications`);
       })
       .catch((err) => {
         toast.current?.show({

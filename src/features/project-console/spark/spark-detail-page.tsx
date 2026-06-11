@@ -106,7 +106,7 @@ export default function SparkDetailPage() {
 
   const goBack = () => {
     if (projectId) {
-      navigate(`/project/${projectId}/spark/applications`);
+      navigate(`/projects/${projectId}/spark/applications`);
     }
   };
 

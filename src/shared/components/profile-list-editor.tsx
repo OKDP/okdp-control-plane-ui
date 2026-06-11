@@ -6,7 +6,7 @@ import { InputSwitch } from 'primereact/inputswitch';
 import { Panel } from 'primereact/panel';
 
 /* The resource-panel class scopes the PrimeReact Panel overrides in
-   styles/components/primereact-overrides.css. */
+   the PrimeReact overrides section of styles.css. */
 const FIELD_CLASS = 'mb-5 flex flex-col gap-1.5';
 const FIELD_LABEL_CLASS = 'block text-[14px] font-semibold tracking-[-0.01em] text-fg-secondary';
 const FIELD_ROW_2_CLASS = 'grid grid-cols-2 gap-3.5';

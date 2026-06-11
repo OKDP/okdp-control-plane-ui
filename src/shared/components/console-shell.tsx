@@ -1,10 +1,12 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { Avatar } from 'primereact/avatar';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { useAuth } from '../../core/auth/auth-context';
+import { useTheme, type ThemeMode } from '../../core/theme/theme-context';
+import { ENV_BAR_STORAGE_KEY } from '../../core/storage-keys';
 import { environment } from '../../config/environment';
 import { sideNavIconClass, sideNavLabelClass, sideNavLinkClass } from './console-nav-classes';
 
@@ -42,8 +44,10 @@ const TOPBAR_BTN_CLASS =
 interface ConsoleShellProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  /** Extra header widgets rendered before the GitHub link (e.g. project switcher). */
-  headerExtras?: ReactNode;
+  /** Header widgets rendered right after the brand block (e.g. project switcher). */
+  headerLeft?: ReactNode;
+  /** Environment color painted as a strip across the top of the header. */
+  accentColor?: string;
   nav: ReactNode;
   navBottom?: ReactNode;
   navBottomAriaLabel?: string;
@@ -55,21 +59,85 @@ interface ConsoleShellProps {
 export function ConsoleShell({
   collapsed,
   onToggleCollapsed,
-  headerExtras,
+  headerLeft,
+  accentColor,
   nav,
   navBottom,
   navBottomAriaLabel,
   children,
 }: ConsoleShellProps) {
   const auth = useAuth();
+  const { theme, setTheme } = useTheme();
   const menuRef = useRef<Menu>(null);
+  const themeMenuRef = useRef<Menu>(null);
+  const [envBarEnabled, setEnvBarEnabled] = useState(
+    () => localStorage.getItem(ENV_BAR_STORAGE_KEY) !== 'false',
+  );
+
+  const toggleEnvBar = () => {
+    setEnvBarEnabled((enabled) => {
+      localStorage.setItem(ENV_BAR_STORAGE_KEY, String(!enabled));
+      return !enabled;
+    });
+  };
 
   const displayName = auth.profile?.firstName ?? auth.profile?.username ?? 'User';
   const first = (auth.profile?.firstName ?? auth.profile?.username ?? '?').charAt(0).toUpperCase();
   const last = (auth.profile?.lastName ?? '').charAt(0).toUpperCase();
   const initials = `${first}${last || ''}`;
 
+  const themeOption = (mode: ThemeMode, icon: string, label: string): MenuItem => ({
+    label,
+    icon,
+    command: () => setTheme(mode),
+    // Custom template to append the active-mode check mark. Templates replace
+    // the .p-menuitem-content wrapper too, so it must be reproduced for the
+    // theme's padding/hover rules to keep applying.
+    template: (item, options) => (
+      <div className="p-menuitem-content">
+        <a className={options.className} onClick={options.onClick}>
+          <span className={options.iconClassName}></span>
+          <span className={options.labelClassName}>{item.label}</span>
+          {theme === mode && <i className="pi pi-check ml-auto text-[0.7rem] text-primary"></i>}
+        </a>
+      </div>
+    ),
+  });
+
+  const themeMenu: MenuItem[] = [
+    themeOption('system', 'pi pi-desktop', 'System'),
+    themeOption('light', 'pi pi-sun', 'Light'),
+    themeOption('dark', 'pi pi-moon', 'Dark'),
+  ];
+
+  const themeIcon =
+    theme === 'dark' ? 'pi pi-moon' : theme === 'light' ? 'pi pi-sun' : 'pi pi-desktop';
+
   const profileMenu: MenuItem[] = [
+    {
+      label: 'Preferences',
+      items: [
+        {
+          label: 'Environment color bar',
+          icon: 'pi pi-palette',
+          command: toggleEnvBar,
+          // Same template trick as the theme options: reproduce the
+          // .p-menuitem-content wrapper and append the check mark.
+          template: (item, options) => (
+            <div className="p-menuitem-content">
+              <a className={options.className} onClick={options.onClick}>
+                <span className={options.iconClassName}></span>
+                <span className={options.labelClassName}>{item.label}</span>
+                {envBarEnabled && (
+                  <i className="pi pi-check ml-auto text-[0.7rem] text-primary"></i>
+                )}
+              </a>
+            </div>
+          ),
+        },
+      ],
+    },
+    { separator: true },
     {
       label: 'Sign out',
       icon: 'pi pi-sign-out',
@@ -86,7 +154,14 @@ export function ConsoleShell({
       } grid-rows-[var(--db-header-height)_1fr] bg-surface transition-[grid-template-columns] duration-400 ease-smooth max-lg:grid-cols-[var(--db-sidebar-collapsed-width)_1fr] max-md:grid-cols-[1fr]`}
     >
       {/* Unified header */}
-      <header className="z-20 col-span-2 row-start-1 flex h-(--db-header-height) items-center justify-between border-b border-border-light bg-surface px-3 transition-[background-color,border-color] duration-150 ease-smooth max-md:col-span-1">
+      <header className="relative z-20 col-span-2 row-start-1 flex h-(--db-header-height) items-center justify-between border-b border-border-light bg-surface px-3 transition-[background-color,border-color] duration-150 ease-smooth max-md:col-span-1">
+        {accentColor && envBarEnabled && (
+          <div
+            className="absolute inset-x-0 top-0 h-[3px]"
+            style={{ background: accentColor }}
+            aria-hidden="true"
+          ></div>
+        )}
         <div
           className={`flex items-center gap-2 ${
             collapsed
@@ -94,33 +169,32 @@ export function ConsoleShell({
               : 'w-(--db-sidebar-width) min-w-(--db-sidebar-width)'
           } max-lg:w-(--db-sidebar-collapsed-width) max-lg:min-w-(--db-sidebar-collapsed-width) max-md:w-auto max-md:min-w-auto`}
         >
-          <button
-            className="-ml-0.5 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-sm border-none bg-transparent p-0 text-fg-muted transition-[color,background-color] duration-150 ease-smooth hover:bg-surface-tertiary hover:text-fg"
-            onClick={onToggleCollapsed}
-            title={collapsed ? 'Expand' : 'Collapse'}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <i className={`${collapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'} text-[1.1rem]`}></i>
-          </button>
-          <div className="flex items-center justify-center">
+          <Link to="/home" title="Home" className="flex items-center justify-center no-underline">
             <img src="/images/okdp-notext.svg" alt="okdp" className="h-auto w-6" />
             <div
               className={`flex flex-row items-baseline gap-1 overflow-hidden leading-none whitespace-nowrap transition-[max-width,margin] duration-400 ease-smooth ${
-                collapsed
-                  ? 'ml-0 max-w-0'
-                  : 'ml-2 max-w-[150px] max-lg:ml-0 max-lg:max-w-0'
+                collapsed ? 'ml-0 max-w-0' : 'ml-2 max-w-[150px] max-lg:ml-0 max-lg:max-w-0'
               } max-md:ml-2 max-md:max-w-[150px]`}
             >
               <span className="text-[1.075rem] font-bold tracking-[-0.02em] text-fg">okdp</span>
               <span className="text-[1.075rem] font-normal text-fg-secondary">console</span>
             </div>
-          </div>
+          </Link>
+          <button
+            className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-sm border-none bg-transparent p-0 text-fg-muted transition-[color,background-color] duration-150 ease-smooth hover:bg-surface-tertiary hover:text-fg"
+            onClick={onToggleCollapsed}
+            title={collapsed ? 'Expand' : 'Collapse'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <i
+              className={`${collapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'} text-[1.1rem]`}
+            ></i>
+          </button>
         </div>
 
-        <div className="flex flex-1 justify-start pl-3">{/* Reserved */}</div>
+        <div className="flex flex-1 items-center justify-start gap-2 pl-3">{headerLeft}</div>
 
         <div className="flex items-center gap-2">
-          {headerExtras}
           <a
             href={environment.githubUrl}
             target="_blank"
@@ -130,6 +204,17 @@ export function ConsoleShell({
           >
             <i className="pi pi-github text-[1rem]"></i>
           </a>
+
+          <button
+            className={TOPBAR_BTN_CLASS}
+            onClick={(e) => themeMenuRef.current?.toggle(e)}
+            title="Theme"
+            aria-label="Theme menu"
+            aria-haspopup="menu"
+          >
+            <i className={`${themeIcon} text-[1rem]`}></i>
+          </button>
+          <Menu ref={themeMenuRef} model={themeMenu} popup />
 
           <div
             className="flex items-center gap-2 rounded-md border-none bg-transparent py-1 pr-2 pl-1 transition-[background-color] duration-150 ease-smooth hover:bg-surface-tertiary"

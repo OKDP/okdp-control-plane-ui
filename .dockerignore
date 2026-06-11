@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+out-tsc
+tmp
+npm-debug.log
+yarn-error.log
+.idea
+.vscode
+coverage
+Dockerfile
+.dockerignore

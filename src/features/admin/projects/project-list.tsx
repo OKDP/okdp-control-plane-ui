@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -15,8 +15,18 @@ import type { MenuItem } from 'primereact/menuitem';
 import { projectApi, type Project, type ProjectEvent } from '../../../core/api/project-api';
 import { applyListEvent } from '../../../core/api/sse';
 import { logger } from '../../../core/services/logger';
+import { useAuth } from '../../../core/auth/auth-context';
+import {
+  PROJECT_COLOR_PALETTE,
+  clearProjectColor,
+  getProjectColor,
+  setProjectColor,
+} from '../../../core/services/project-colors';
+import EmptyState from '../../../shared/components/empty-state';
 
 export default function ProjectList() {
+  const auth = useAuth();
+  const isAdmin = auth.hasRole('admins');
   const toast = useRef<Toast>(null);
   const menuRef = useRef<Menu>(null);
   const selectedProjectRef = useRef<Project | null>(null);
@@ -25,9 +35,14 @@ export default function ProjectList() {
   // Mirror of `projects` so the SSE handler can decide on toasts without
   // side effects inside the state updater (updaters must stay pure).
   const projectsRef = useRef<Project[]>([]);
+  // Deletion runs until the backend's DELETED event removes the row; these
+  // names render as "Deleting…" in the meantime.
+  const [deletingNames, setDeletingNames] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
   const [visible, setVisible] = useState(false);
   const [newProject, setNewProject] = useState<Project>({ name: '', description: '' });
+  const [newColor, setNewColor] = useState<string>(PROJECT_COLOR_PALETTE[0]);
 
   const showSuccess = (detail: string) =>
     toast.current?.show({ severity: 'success', summary: 'Success', detail, life: 3000 });
@@ -52,6 +67,13 @@ export default function ProjectList() {
         showSuccess(`Project ${project.name} created`);
       } else if (event.type === 'DELETED' && exists) {
         showSuccess(`Project ${project.name} deleted`);
+        clearProjectColor(project.name);
+        setDeletingNames((names) => {
+          if (!names.has(project.name)) return names;
+          const next = new Set(names);
+          next.delete(project.name);
+          return next;
+        });
       }
 
       applyProjects(applyListEvent(projectsRef.current, event, (p) => p.name));
@@ -62,12 +84,16 @@ export default function ProjectList() {
       .then((data) => {
         if (cancelled) return;
         applyProjects(data);
+        setLoaded(true);
         unsubscribe = projectApi.subscribeProjects({
           next: handleProjectEvent,
           error: (err) => logger.error('Stream error', err),
         });
       })
-      .catch(() => showError('Failed to load projects'));
+      .catch(() => {
+        if (!cancelled) setLoaded(true);
+        showError('Failed to load projects');
+      });
 
     return () => {
       cancelled = true;
@@ -90,14 +116,19 @@ export default function ProjectList() {
 
   const showDialog = () => {
     setNewProject({ name: '', description: '' });
+    setNewColor(PROJECT_COLOR_PALETTE[0]);
     setVisible(true);
   };
 
   const createProject = () => {
+    // Store the color before the request: the watch ADDED event often beats
+    // the HTTP response, and the new row must not flash the fallback color.
+    setProjectColor(newProject.name, newColor);
     projectApi
       .createProject(newProject)
       .then(() => setVisible(false))
       .catch((err) => {
+        clearProjectColor(newProject.name);
         showError('Failed to create project');
         logger.error('Failed to create project', err);
       });
@@ -116,7 +147,15 @@ export default function ProjectList() {
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
       accept: () => {
-        projectApi.deleteProject(project.name).catch(() => showError('Failed to delete project'));
+        setDeletingNames((names) => new Set(names).add(project.name));
+        projectApi.deleteProject(project.name).catch(() => {
+          setDeletingNames((names) => {
+            const next = new Set(names);
+            next.delete(project.name);
+            return next;
+          });
+          showError('Failed to delete project');
+        });
       },
     });
   };
@@ -128,76 +167,134 @@ export default function ProjectList() {
     </div>
   );
 
+  const empty = loaded && projects.length === 0;
+
+  // DataTable memoizes its rows against `value`: the deleting flag must be
+  // part of the row objects for the cells to repaint when it flips.
+  const rows = useMemo<(Project & { deleting: boolean })[]>(
+    () => projects.map((p) => ({ ...p, deleting: deletingNames.has(p.name) })),
+    [projects, deletingNames],
+  );
+
   return (
     <div className="workspace-container">
       {/* Top Bar: Title + Search (Left) | Create Button (Right) */}
       <div className="top-bar">
         <div className="left-group">
           <h1>Projects</h1>
-          <IconField>
-            <InputIcon className="pi pi-search" />
-            <InputText
-              type="text"
-              placeholder="Filter projects..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-            />
-          </IconField>
+          {!empty && (
+            <IconField>
+              <InputIcon className="pi pi-search" />
+              <InputText
+                type="text"
+                placeholder="Filter projects..."
+                value={globalFilter}
+                onChange={(e) => setGlobalFilter(e.target.value)}
+              />
+            </IconField>
+          )}
         </div>
 
-        <Button label="Create project" onClick={showDialog} className="create-btn" />
+        {isAdmin && !empty && (
+          <Button label="Create project" onClick={showDialog} className="create-btn" />
+        )}
       </div>
 
-      {/* Data Table */}
-      <div className="table-wrapper">
-        <DataTable
-          value={projects}
-          globalFilter={globalFilter}
-          globalFilterFields={['name', 'description']}
-          className="minimal-table"
-          emptyMessage="No projects found."
-          rowClassName={() => 'workspace-row'}
-        >
-          <Column
-            header="Name"
-            field="name"
-            style={{ width: '30%' }}
-            body={(project: Project) => <span className="project-name">{project.name}</span>}
-          />
-          <Column
-            header="Description"
-            field="description"
-            style={{ width: '60%' }}
-            className="description-cell"
-            body={(project: Project) => project.description || '-'}
-          />
-          <Column
-            style={{ width: '10%', textAlign: 'right' }}
-            body={(project: Project) => (
-              <div className="actions">
-                <Link
-                  to={`/project/${project.name}`}
-                  className="action-link primary visible-btn"
-                  style={{ textDecoration: 'none' }}
-                >
-                  Open <i className="pi pi-external-link"></i>
-                </Link>
+      {empty ? (
+        /* Getting started: the platform has no project yet. */
+        <EmptyState
+          icon="pi pi-sparkles"
+          title="Welcome to OKDP"
+          description={
+            isAdmin
+              ? 'There is no project on this platform yet. Create your first project to get started.'
+              : 'There is no project you can access yet. Ask your platform administrator to create one and grant you access.'
+          }
+          action={
+            isAdmin && (
+              <Button
+                label="Create your first project"
+                icon="pi pi-plus"
+                onClick={showDialog}
+                className="create-btn mt-3"
+              />
+            )
+          }
+        />
+      ) : (
+        /* Data Table */
+        <div className="table-wrapper">
+          <DataTable
+            value={rows}
+            dataKey="name"
+            globalFilter={globalFilter}
+            globalFilterFields={['name', 'description']}
+            className="minimal-table"
+            emptyMessage="No projects found."
+            rowClassName={(row: Project & { deleting: boolean }) =>
+              row.deleting ? 'workspace-row opacity-50' : 'workspace-row'
+            }
+          >
+            <Column
+              header="Name"
+              field="name"
+              style={{ width: '30%' }}
+              body={(project: Project) => (
+                <span className="project-name flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: getProjectColor(project.name) }}
+                  ></span>
+                  {project.name}
+                </span>
+              )}
+            />
+            <Column
+              header="Description"
+              field="description"
+              style={{ width: '60%' }}
+              className="description-cell"
+              body={(project: Project) => project.description || '-'}
+            />
+            <Column
+              style={{ width: '10%', textAlign: 'right' }}
+              body={(project: Project & { deleting: boolean }) =>
+                project.deleting ? (
+                  <div className="actions">
+                    <span className="flex items-center gap-1.5 px-2 py-1 text-sm font-medium text-fg-secondary">
+                      <i className="pi pi-spin pi-spinner text-[0.85rem]"></i>
+                      Deleting…
+                    </span>
+                  </div>
+                ) : (
+                  <div className="actions">
+                    <Link
+                      to={`/projects/${project.name}`}
+                      className="action-link primary visible-btn"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      Open <i className="pi pi-external-link"></i>
+                    </Link>
 
-                <Button
-                  icon="pi pi-ellipsis-v"
-                  text
-                  rounded
-                  onClick={(e) => {
-                    selectedProjectRef.current = project;
-                    menuRef.current?.toggle(e);
-                  }}
-                />
-              </div>
-            )}
-          />
-        </DataTable>
-        <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
-      </div>
+                    {isAdmin && (
+                      <Button
+                        icon="pi pi-ellipsis-v"
+                        text
+                        rounded
+                        onClick={(e) => {
+                          selectedProjectRef.current = project;
+                          menuRef.current?.toggle(e);
+                        }}
+                      />
+                    )}
+                  </div>
+                )
+              }
+            />
+          </DataTable>
+          <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
+        </div>
+      )}
 
       {/* Create Dialog */}
       <Dialog
@@ -236,6 +333,34 @@ export default function ProjectList() {
               className="w-full dialog-input"
               placeholder="Briefly describe the purpose of this project..."
             />
+          </div>
+
+          <div className="field">
+            <label id="project-color-label">
+              Color <span className="optional">(only visible to you)</span>
+            </label>
+            <div
+              className="flex items-center gap-2"
+              role="radiogroup"
+              aria-labelledby="project-color-label"
+            >
+              {PROJECT_COLOR_PALETTE.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  role="radio"
+                  aria-checked={newColor === color}
+                  aria-label={`Project color ${color}`}
+                  className={`h-7 w-7 cursor-pointer rounded-full border-2 transition-transform duration-150 ease-smooth hover:scale-110 ${
+                    newColor === color
+                      ? 'border-fg ring-2 ring-(--db-primary-200)'
+                      : 'border-transparent'
+                  }`}
+                  style={{ background: color }}
+                  onClick={() => setNewColor(color)}
+                ></button>
+              ))}
+            </div>
           </div>
         </div>
       </Dialog>

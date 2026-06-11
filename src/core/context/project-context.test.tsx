@@ -116,7 +116,7 @@ describe('ProjectContextProvider', () => {
 
       expect(result.current.currentProjectId).toBe('proj-a');
       expect(sessionStorage.getItem('okdp-selected-projectId')).toBe('proj-a');
-      await waitFor(() => expect(currentPath).toBe('/project/proj-a'));
+      await waitFor(() => expect(currentPath).toBe('/projects/proj-a'));
     });
   });
 
@@ -130,7 +130,7 @@ describe('ProjectContextProvider', () => {
       emitSse({ type: 'DELETED', object: { name: 'proj-b' } as Project });
       emitSse({ type: 'DELETED', object: { name: 'proj-a' } as Project });
 
-      await waitFor(() => expect(currentPath).toBe('/admin/projects'));
+      await waitFor(() => expect(currentPath).toBe('/projects'));
       expect(result.current.currentProjectId).toBeNull();
     });
 
@@ -143,7 +143,7 @@ describe('ProjectContextProvider', () => {
       emitSse({ type: 'DELETED', object: { name: 'proj-a' } as Project });
 
       await waitFor(() => expect(result.current.currentProjectId).toBe('proj-b'));
-      await waitFor(() => expect(currentPath).toBe('/project/proj-b'));
+      await waitFor(() => expect(currentPath).toBe('/projects/proj-b'));
     });
   });
 });

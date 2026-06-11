@@ -98,7 +98,7 @@ export default function ServicesPage(props: ServicesPageProps) {
     if (serviceFilter) {
       params.set('service', serviceFilter);
     }
-    navigate(`/project/${projectId}/${basePath.join('/')}/deploy?${params.toString()}`);
+    navigate(`/projects/${projectId}/${basePath.join('/')}/deploy?${params.toString()}`);
   };
 
   return (
