@@ -199,34 +199,37 @@ export function PodLogViewer({
       </div>
 
       <div
-        className="max-h-[520px] min-h-[320px] overflow-auto bg-[#111827] text-[12.5px] leading-[1.7] text-[#e5e7eb] [font-family:'JetBrains_Mono','Fira_Code',Consolas,monospace]"
+        className="log-block max-h-[520px] min-h-[320px] overflow-auto"
         ref={logContainerRef}
         onScroll={onScroll}
       >
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-14 text-[13px] text-[#9ca3af]">
+          <div className="log-muted flex items-center justify-center gap-2 p-14 text-[13px]">
             <i className="pi pi-spin pi-spinner text-[16px]"></i>
             Loading logs...
           </div>
         ) : lines.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 p-14 text-[13px] text-[#6b7280]">
+          <div className="log-muted flex items-center justify-center gap-2 p-14 text-[13px]">
             No logs available.
           </div>
         ) : (
           <div className="py-3">
             {lines.map((line, i) => (
-              <div key={i} className="flex gap-4 px-4 break-all whitespace-pre-wrap hover:bg-white/3">
-                <span className="min-w-8 shrink-0 text-right text-[#6b7280] select-none">
+              <div
+                key={i}
+                className="flex gap-4 px-4 break-all whitespace-pre-wrap hover:bg-white/3"
+              >
+                <span className="log-dim min-w-8 shrink-0 text-right select-none">
                   {formatLineNo(i + 1)}
                 </span>
-                <span className="flex-1 text-[#e5e7eb]">{line}</span>
+                <span className="flex-1">{line}</span>
               </div>
             ))}
             {followMode && (
               <div className="flex gap-4 px-4 pt-1.5 pb-0.5">
                 <span className="min-w-8 shrink-0 text-right select-none"></span>
-                <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[#10b981]">
-                  <span className="h-2 w-2 animate-log-pulse rounded-full bg-[#10b981] shadow-[0_0_0_0_rgba(16,185,129,0.5)]"></span>
+                <span className="log-live inline-flex items-center gap-2 font-medium">
+                  <span className="h-2 w-2 animate-log-pulse rounded-full bg-current"></span>
                   streaming
                 </span>
               </div>

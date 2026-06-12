@@ -45,11 +45,13 @@
   --db-danger: #dc2626;
 
   /* ========== Design Tokens ========== */
-  --db-radius-sm: 8px;
-  --db-radius-md: 12px;
-  --db-radius-lg: 16px;
-  --db-radius-xl: 24px;
-  --db-radius-2xl: 32px;
+  /* Radius scale: previous 6/8/12/16/24/32 reduced by ~0.75, same ratios. */
+  --db-radius-xs: 4px;
+  --db-radius-sm: 6px;
+  --db-radius-md: 9px;
+  --db-radius-lg: 12px;
+  --db-radius-xl: 18px;
+  --db-radius-2xl: 24px;
   --db-radius-full: 9999px;
 
   --db-space-xs: 4px;
@@ -69,7 +71,6 @@
 
   --db-transition-fast: 0.15s cubic-bezier(0.22, 1, 0.36, 1);
   --db-transition-base: 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-  --db-transition-slow: 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   --db-transition-spring: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* Sidebar */
@@ -77,81 +78,19 @@
   --db-sidebar-collapsed-width: 68px;
   --db-header-height: 60px;
 
+  /* Shared content width of the deployment-flow forms (deploy / edit /
+     spark submit), centered inside the main view zone. */
+  --db-form-width: 820px;
+
   /* Legacy Mapping */
   --db-text: var(--db-text-primary);
   --db-border: var(--db-border-light);
   --db-link: var(--db-primary);
 
-  /* ========== PrimeNG Aura Theme Overrides ========== */
-  --p-primary-color: var(--db-primary);
-  --p-primary-contrast-color: #ffffff;
-  --p-primary-hover-color: var(--db-primary-hover);
-  --p-primary-active-color: var(--db-primary-700);
-  --p-highlight-background: var(--db-primary-50);
-  --p-highlight-color: var(--db-primary-700);
-  --p-highlight-focus-background: var(--db-primary-100);
-  --p-highlight-focus-color: var(--db-primary-800);
-  --p-focus-ring-color: rgba(65, 146, 143, 0.25);
-
-  /* PrimeNG Component Overrides */
-  --p-tabs-active-bar-background: var(--db-primary);
-  --p-tabs-tab-active-color: var(--db-primary);
-  --p-tabs-tab-color: var(--db-text-secondary);
-  --p-tablist-active-bar-height: 2px;
-  --p-button-primary-background: var(--db-primary);
-  --p-button-primary-border-color: var(--db-primary);
-  --p-button-primary-hover-background: var(--db-primary-hover);
-  --p-button-primary-hover-border-color: var(--db-primary-hover);
-  --p-button-primary-active-background: var(--db-primary-700);
-  --p-button-primary-active-border-color: var(--db-primary-700);
-  --p-checkbox-checked-background: var(--db-primary);
-  --p-checkbox-checked-border-color: var(--db-primary);
-  --p-togglebutton-checked-background: var(--db-primary);
-  --p-select-focus-border-color: var(--db-primary);
-  --p-inputtext-focus-border-color: var(--db-primary);
-  --p-tag-success-background: #ecfdf5;
-  --p-tag-success-color: #059669;
-  --p-tag-border-radius: var(--db-radius-sm);
-
-  /* PrimeNG Tab overrides — eliminates need for ::ng-deep in tab components */
-  --p-tabs-tab-background: transparent;
-  --p-tabs-tab-hover-color: var(--db-text-primary);
-  --p-tabs-tab-active-background: transparent;
-  --p-tabs-tabpanel-background: transparent;
-  --p-tablist-background: transparent;
-
-  /* PrimeNG Table overrides — eliminates need for !important in tables */
-  --p-datatable-header-cell-background: var(--db-bg-secondary);
-  --p-datatable-row-background: transparent;
-  --p-datatable-body-cell-border-color: var(--db-border-light);
-  --p-datatable-header-cell-border-color: var(--db-border-light);
-  --p-datatable-row-hover-background: var(--db-bg-secondary);
-  --p-datatable-row-hover-color: var(--db-text-primary);
-  --p-datatable-header-cell-padding: 12px 18px;
-  --p-datatable-body-cell-padding: 12px 18px;
-
-  /* PrimeNG Dialog overrides */
-  --p-dialog-border-radius: var(--db-radius-2xl);
-  --p-dialog-header-background: var(--db-bg-primary);
-  --p-dialog-content-background: var(--db-bg-primary);
-  --p-dialog-footer-background: var(--db-bg-primary);
-
-  /* PrimeNG Input overrides */
-  --p-inputtext-border-radius: var(--db-radius-lg);
-  --p-inputtext-padding-y: 11px;
-  --p-inputtext-padding-x: 16px;
-  --p-select-border-radius: var(--db-radius-lg);
-  --p-inputnumber-border-radius: var(--db-radius-lg);
-  --p-inputtext-focus-ring-color: var(--db-shadow-focus);
-
-  /* PrimeNG Button density */
-  --p-button-padding-y: 11px;
-  --p-button-padding-x: 24px;
-  --p-button-sm-padding-y: 8px;
-  --p-button-sm-padding-x: 16px;
-  --p-button-border-radius: var(--db-radius-full);
-
   /* Typography density */
+  /* Single mono stack for counts, hints and logs. No mono webfont is
+     shipped — this is the system stack every mono surface shares. */
+  --db-font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
   --db-font-size-xs: 12px;
   --db-font-size-sm: 13px;
   --db-font-size-base: 15px;
@@ -197,11 +136,6 @@ body.dark-mode {
   --db-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
   --db-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
   --db-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
-
-  /* PrimeNG dark mode overrides */
-  --p-datatable-header-cell-background: var(--db-bg-tertiary);
-  --p-datatable-row-hover-background: rgba(90, 177, 174, 0.06);
-  --p-dialog-footer-background: var(--db-bg-secondary);
 
   /* Legacy mapping */
   --db-text: var(--db-text-primary);

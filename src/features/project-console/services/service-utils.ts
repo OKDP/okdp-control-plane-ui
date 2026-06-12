@@ -1,21 +1,27 @@
 import { HttpError } from '../../../core/api/http';
+import type { StatusTone } from '../../../shared/components/status-tag';
 
-/** Map an instance/pod status to the okdp tag color class. */
-export function tagClass(status: string): string {
+/** Map an instance status to its StatusTag tone. */
+export function statusTone(status: string): StatusTone {
   switch (status) {
     case 'Ready':
     case 'Running':
-      return 'okdp-tag-success';
+      return 'success';
     case 'Installing':
     case 'Updating':
-      return 'okdp-tag-warn';
+      return 'warning';
     case 'Error':
     case 'CrashLoopBackOff':
     case 'Failed':
-      return 'okdp-tag-danger';
+      return 'danger';
     default:
-      return 'okdp-tag-info';
+      return 'info';
   }
+}
+
+/** In-flight instance states — rendered with the animated activity dot. */
+export function isTransitioning(status: string): boolean {
+  return status === 'Installing' || status === 'Updating';
 }
 
 export interface ServiceArea {
@@ -31,12 +37,12 @@ export interface ServiceArea {
  * app-routes.tsx and the sidebar links mirror these paths).
  */
 export const SERVICE_AREAS: Record<string, ServiceArea> = {
-  jupyterhub: { label: 'Jupyter', basePath: ['services'] },
+  jupyterhub: { label: 'JupyterHub', basePath: ['jupyterhub'] },
   'spark-history-server': { label: 'History Server', basePath: ['spark', 'history-server'] },
-  trino: { label: 'Trino', basePath: ['lakehouse', 'trino'] },
-  polaris: { label: 'Polaris', basePath: ['lakehouse', 'polaris'] },
-  superset: { label: 'Superset', basePath: ['bi', 'superset'] },
-  airflow: { label: 'Airflow', basePath: ['data-engineering', 'airflow'] },
+  trino: { label: 'Trino', basePath: ['trino'] },
+  polaris: { label: 'Polaris', basePath: ['polaris'] },
+  superset: { label: 'Superset', basePath: ['superset'] },
+  airflow: { label: 'Airflow', basePath: ['airflow'] },
 };
 
 /** Breadcrumb back-link label for a service name. */
@@ -46,7 +52,7 @@ export function parentLabel(service: string | undefined | null): string {
 
 /** URL segments of a service's console area, defaulting to the generic list. */
 export function areaBasePath(service: string | undefined | null): string[] {
-  return SERVICE_AREAS[service ?? '']?.basePath ?? ['services'];
+  return SERVICE_AREAS[service ?? '']?.basePath ?? ['jupyterhub'];
 }
 
 /**
@@ -93,6 +99,26 @@ export function stripProfileEditorFields(schema: any): any {
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Mirror of the backend's formatCPU: compact human-readable core count. */
+export function formatCpuCores(cores: number): string {
+  if (cores === 0) return '0';
+  return cores < 1 ? cores.toFixed(3) : cores.toFixed(2);
+}
+
+/** Mirror of the backend's formatMemory: byte value in binary units. */
+export function formatMemoryBytes(bytes: number): string {
+  if (bytes === 0) return '0';
+  const units: [number, string][] = [
+    [1024 ** 3, 'Gi'],
+    [1024 ** 2, 'Mi'],
+    [1024, 'Ki'],
+  ];
+  for (const [threshold, suffix] of units) {
+    if (bytes >= threshold) return `${(bytes / threshold).toFixed(2)}${suffix}`;
+  }
+  return `${bytes.toFixed(0)}B`;
+}
 
 /** Angular `date: 'mediumDate'` equivalent (e.g. "Jun 10, 2026"). */
 export function formatMediumDate(value: string | undefined | null): string {

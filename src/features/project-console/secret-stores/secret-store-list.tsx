@@ -7,12 +7,8 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Checkbox } from 'primereact/checkbox';
-import { Tag } from 'primereact/tag';
 import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
 import type { MenuItem } from 'primereact/menuitem';
 import {
   secretStoreApi,
@@ -22,22 +18,28 @@ import {
   type VaultAuthType,
 } from '../../../core/api/secret-store-api';
 import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils';
-import { statusSeverity } from './secret-status';
+import { statusTone } from './secret-status';
+import { StatusTag } from '../../../shared/components/status-tag';
 import { StatusDetailContent } from './status-detail';
+import SearchFilter from '../../../shared/components/search-filter';
+import { PageHeader } from '../../../shared/components/page-header';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { k8sNameError } from '../../../shared/utils/k8s-names';
+import { DialogFooter } from '../../../shared/components/dialog-footer';
+import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 
 const SECTION_TITLE_CLASS = 'm-0 mb-3 text-[14px] font-semibold text-fg';
 const DIVIDER_CLASS = 'my-4 border-0 border-t border-t-border';
 const MODE_SWITCH_CLASS =
-  'mb-4 flex rounded-[6px] border border-border-light bg-surface-secondary p-1';
+  'mb-4 flex rounded-sm border border-border-light bg-surface-secondary p-1';
 const MODE_BTN_CLASS =
-  'flex-1 cursor-pointer rounded-[4px] border-none p-2 transition-all duration-200';
+  'flex-1 cursor-pointer rounded-xs border-none p-2 transition-all duration-200';
 const MODE_BTN_ACTIVE_CLASS = 'bg-surface font-semibold text-fg shadow-[0_1px_3px_rgba(0,0,0,0.1)]';
 const MODE_BTN_IDLE_CLASS = 'bg-transparent font-medium text-fg-secondary';
 
 const modeBtnClass = (active: boolean) =>
   `${MODE_BTN_CLASS} ${active ? MODE_BTN_ACTIVE_CLASS : MODE_BTN_IDLE_CLASS}`;
 
-const NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 const POLL_INTERVAL_MS = 10_000;
 
 const AUTH_TYPE_OPTIONS: { label: string; value: VaultAuthType }[] = [
@@ -71,17 +73,18 @@ const EMPTY_FORM: StoreForm = {
   isDefault: false,
 };
 
-const getStatusSeverity = (status: string) => statusSeverity(status, 'Ready');
+const getStatusTone = (status: string) => statusTone(status, 'Ready');
 
 export function SecretStoreList() {
   const { projectId = '' } = useParams<{ projectId: string }>();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
   const menuRef = useRef<Menu>(null);
   const selectedStoreRef = useRef<SecretStore | null>(null);
 
   const [stores, setStores] = useState<SecretStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<SecretStore | null>(null);
 
   // Dialog state
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -99,11 +102,6 @@ export function SecretStoreList() {
   statusLoadingRef.current = statusLoading;
 
   const patchForm = (patch: Partial<StoreForm>) => setForm((f) => ({ ...f, ...patch }));
-
-  const showSuccess = (detail: string) =>
-    toast.current?.show({ severity: 'success', summary: 'Success', detail, life: 3000 });
-  const showError = (detail: string) =>
-    toast.current?.show({ severity: 'error', summary: 'Error', detail, life: 5000 });
 
   const mergeStores = useCallback((incoming: SecretStore[]) => {
     setStores((current) => {
@@ -137,7 +135,7 @@ export function SecretStoreList() {
         showError('Failed to load secret stores');
         setLoading(false);
       });
-  }, [projectId]);
+  }, [projectId, showError]);
 
   // Initial load + 10s polling while a project is selected
   useEffect(() => {
@@ -153,14 +151,7 @@ export function SecretStoreList() {
   }, [projectId, loadStores, mergeStores]);
 
   // --- Name validation ---
-  const nameError = (() => {
-    if (!form.storeName) return '';
-    if (form.storeName.length > 63) return 'Maximum 63 characters';
-    if (!NAME_PATTERN.test(form.storeName)) {
-      return 'Lowercase letters, numbers and hyphens only (must start/end with alphanumeric)';
-    }
-    return '';
-  })();
+  const nameError = k8sNameError(form.storeName);
 
   const formValid = (() => {
     if (!form.storeName || !form.vaultServer || !form.vaultPath) return false;
@@ -250,30 +241,18 @@ export function SecretStoreList() {
       });
   };
 
-  const confirmDelete = (store: SecretStore) => {
-    confirmDialog({
-      message: (
-        <span>
-          Are you sure you want to delete <strong>{store.name}</strong>? This action cannot be
-          undone.
-        </span>
-      ),
-      header: 'Delete secret store?',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        secretStoreApi
-          .delete(projectId, store.name)
-          .then(() => {
-            showSuccess(`Secret store "${store.name}" deleted successfully`);
-            loadStores();
-          })
-          .catch((err) => {
-            showError(apiErrorMessage(err, 'Failed to delete secret store'));
-          });
-      },
-    });
+  const confirmDelete = (store: SecretStore) => setDeleteTarget(store);
+
+  const deleteStore = (store: SecretStore) => {
+    secretStoreApi
+      .delete(projectId, store.name)
+      .then(() => {
+        showSuccess(`Secret store "${store.name}" deleted successfully`);
+        loadStores();
+      })
+      .catch((err) => {
+        showError(apiErrorMessage(err, 'Failed to delete secret store'));
+      });
   };
 
   // --- Status detail ---
@@ -370,40 +349,28 @@ export function SecretStoreList() {
   ];
 
   const dialogFooter = (
-    <div
-      className="dialog-actions"
-      style={{ display: 'flex', gap: 'var(--db-space-sm)', alignItems: 'center', width: '100%' }}
-    >
-      <Button
-        severity="secondary"
-        outlined
-        icon={testing ? 'pi pi-spin pi-spinner' : 'pi pi-check-circle'}
-        label="Test Connection"
-        onClick={testConnection}
-        disabled={testing || saving || !form.vaultServer}
-      />
-      <div className="spacer" style={{ flex: 1 }}></div>
-      <Button
-        severity="secondary"
-        outlined
-        label="Cancel"
-        onClick={() => setDialogVisible(false)}
-        disabled={testing || saving}
-      />
-      <Button
-        icon={saving ? 'pi pi-spin pi-spinner' : undefined}
-        label={editMode ? 'Save' : 'Create'}
-        disabled={testing || saving || !formValid}
-        onClick={saveStore}
-      />
-    </div>
+    <DialogFooter
+      onCancel={() => setDialogVisible(false)}
+      onConfirm={saveStore}
+      confirmLabel={editMode ? 'Save' : 'Create'}
+      confirmDisabled={testing || !formValid}
+      cancelDisabled={testing}
+      busy={saving}
+      leading={
+        <Button
+          severity="secondary"
+          outlined
+          icon={testing ? 'pi pi-spin pi-spinner' : 'pi pi-check-circle'}
+          label="Test Connection"
+          onClick={testConnection}
+          disabled={testing || saving || !form.vaultServer}
+        />
+      }
+    />
   );
 
   const statusDialogFooter = (
-    <div
-      className="dialog-actions"
-      style={{ display: 'flex', gap: 'var(--db-space-sm)', alignItems: 'center', width: '100%' }}
-    >
+    <div className="dialog-actions items-center">
       <Button
         severity="secondary"
         outlined
@@ -412,7 +379,7 @@ export function SecretStoreList() {
         onClick={refreshStatus}
         disabled={statusLoading}
       />
-      <div className="spacer" style={{ flex: 1 }}></div>
+      <div className="flex-1"></div>
       <Button
         severity="secondary"
         outlined
@@ -423,24 +390,23 @@ export function SecretStoreList() {
   );
 
   return (
-    <div className="cluster-container">
+    <div>
       {/* Top Bar */}
-      <div className="top-bar">
-        <div className="left-group">
-          <h1>Secret Stores</h1>
-          <IconField>
-            <InputIcon className="pi pi-search" />
-            <InputText
-              type="text"
-              placeholder="Filter stores..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-            />
-          </IconField>
-        </div>
+      <PageHeader
+        title="Secret Stores"
+        actions={
+          <button className="create-btn" onClick={showCreateDialog}>
+            <i className="pi pi-plus"></i>
+            <span>Add secret store</span>
+          </button>
+        }
+      />
 
-        <Button label="Add secret store" onClick={showCreateDialog} className="create-btn" />
-      </div>
+      <SearchFilter
+        value={globalFilter}
+        onChange={setGlobalFilter}
+        placeholder="Filter stores..."
+      />
 
       {/* Data Table */}
       <div className="table-wrapper">
@@ -468,11 +434,7 @@ export function SecretStoreList() {
             body={(store: SecretStore) => (
               <>
                 <span className="font-medium">{store.name}</span>
-                {store.isDefault && (
-                  <span className="ml-2 rounded-[4px] bg-[#e6f4ea] px-2 py-[3px] text-[11px] font-medium text-[#1e8e3e] os-dark:bg-[rgba(21,101,192,0.3)] os-dark:text-[#90caf9]">
-                    default
-                  </span>
-                )}
+                {store.isDefault && <span className="okdp-tag okdp-tag-info ml-2">default</span>}
               </>
             )}
           />
@@ -481,7 +443,7 @@ export function SecretStoreList() {
             field="provider"
             style={{ width: '12%' }}
             body={(store: SecretStore) => (
-              <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary capitalize">
+              <span className="inline-flex items-center gap-1.5 rounded-xs border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary capitalize">
                 <i className="pi pi-shield text-[11px]"></i>
                 {store.provider}
               </span>
@@ -490,7 +452,7 @@ export function SecretStoreList() {
           <Column
             header="Server"
             style={{ width: '28%' }}
-            className="max-w-0 overflow-hidden text-[13px] text-ellipsis whitespace-nowrap text-fg-secondary [font-family:monospace]"
+            className="max-w-0 overflow-hidden text-[13px] text-ellipsis whitespace-nowrap text-fg-secondary mono"
             body={(store: SecretStore) => (
               <span title={store.vault?.server || ''}>{store.vault?.server || '-'}</span>
             )}
@@ -501,7 +463,11 @@ export function SecretStoreList() {
             style={{ width: '10%' }}
             body={(store: SecretStore) => (
               <span title={store.lastError || ''}>
-                <Tag value={store.status} severity={getStatusSeverity(store.status)} />
+                <StatusTag
+                  value={store.status}
+                  tone={getStatusTone(store.status)}
+                  pulse={store.status === 'Pending'}
+                />
               </span>
             )}
           />
@@ -563,13 +529,11 @@ export function SecretStoreList() {
               id="storeName"
               value={form.storeName}
               onChange={(e) => patchForm({ storeName: e.target.value })}
-              className={`w-full dialog-input${nameError ? ' border-[#d32f2f]!' : ''}`}
+              className={`w-full dialog-input${nameError ? ' border-danger!' : ''}`}
               placeholder="e.g., vault-main"
               disabled={editMode}
             />
-            {nameError && (
-              <small className="mt-1 block text-[12px] text-[#d32f2f]">{nameError}</small>
-            )}
+            {nameError && <small className="mt-1 block text-[12px] text-danger">{nameError}</small>}
           </div>
 
           <hr className={DIVIDER_CLASS} />
@@ -631,7 +595,7 @@ export function SecretStoreList() {
               id="caBundle"
               value={form.caBundle}
               onChange={(e) => patchForm({ caBundle: e.target.value })}
-              className="w-full dialog-input resize-y text-[12px]! [font-family:monospace]"
+              className="w-full dialog-input resize-y text-[12px]! mono"
               placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
               rows={3}
             />
@@ -734,17 +698,27 @@ export function SecretStoreList() {
         <StatusDetailContent
           loading={statusLoading}
           detail={statusDetail}
-          severity={statusDetail ? getStatusSeverity(statusDetail.status) : 'info'}
+          tone={statusDetail ? getStatusTone(statusDetail.status) : 'info'}
           checkedLabel="Last checked"
           checkedAt={statusDetail?.lastCheckedAt}
         />
       </Dialog>
 
-      <ConfirmDialog
-        className="db-confirm-dialog"
-        style={{ width: '440px' }}
-        acceptClassName="p-button-danger"
-        rejectClassName="p-button-text"
+      <DeleteConfirmDialog
+        resourceName={deleteTarget?.name ?? null}
+        resourceKind="secret store"
+        message={
+          deleteTarget && (
+            <>
+              This will remove <strong>{deleteTarget.name}</strong>. This action cannot be undone.
+            </>
+          )
+        }
+        onHide={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteStore(deleteTarget);
+          setDeleteTarget(null);
+        }}
       />
 
       <Toast ref={toast} position="bottom-right" />

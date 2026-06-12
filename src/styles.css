@@ -19,7 +19,7 @@
    element's margin/padding/border), stripping PrimeReact components bare.
    Declaring the order up front slots `primereact` above preflight while
    keeping utilities strongest. */
-@layer theme, base, primereact, components, utilities;
+@layer theme, base, primereact, primereact-overrides, components, utilities;
 
 @import 'tailwindcss';
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
@@ -89,6 +89,7 @@
   --color-danger: var(--db-danger);
 
   /* ===== Radii ===== */
+  --radius-xs: var(--db-radius-xs);
   --radius-sm: var(--db-radius-sm);
   --radius-md: var(--db-radius-md);
   --radius-lg: var(--db-radius-lg);
@@ -125,29 +126,7 @@
   --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  --animate-fade-in-up: fade-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-  --animate-fade-in: fade-in 0.25s ease-out;
   --animate-log-pulse: log-pulse 1.4s ease-in-out infinite;
-
-  @keyframes fade-in-up {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
 
   @keyframes log-pulse {
     0% {
@@ -241,8 +220,8 @@
 }
 
 /* Keyframe animations — still referenced by legacy component CSS.
-   fadeInUp uses the 8px offset: okdp-design.css redefined it that way after
-   base.css, so 8px has always been the effective value. */
+   fadeInUp uses the 8px offset, which has always been the effective value
+   carried over from the legacy stylesheets. */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -254,7 +233,9 @@
   }
 }
 
-@keyframes pulse {
+/* Named tag-pulse (not `pulse`) so it can't shadow Tailwind's built-in
+   `pulse` keyframes that the animate-pulse loading placeholders rely on. */
+@keyframes tag-pulse {
   0%,
   100% {
     opacity: 0.4;
@@ -274,15 +255,10 @@
 }
 
 /* ========== Utilities ========== */
-/* 0.35s: the okdp-design.css redefinition of .animate-in was the one that
-   applied, so its timing is the canonical one. */
+/* 0.35s is the canonical timing carried over from the legacy stylesheets. */
 @utility animate-in {
   animation: fadeInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
-
-
-
-
 
 /* ========== Cursor ========== */
 button,
@@ -299,26 +275,6 @@ a[href] {
    patterns below are still consumed by the feature pages and migrate
    with them. */
 
-.workspace-container {
-  padding: 0;
-  background-color: transparent;
-}
-
-/* Page Top Bar (Header + Search) */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--db-space-lg);
-}
-
-.left-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--db-space-sm);
-}
-
 .page-title,
 h1 {
   font-size: var(--db-font-size-xl);
@@ -329,52 +285,6 @@ h1 {
   letter-spacing: -0.01em;
 }
 
-/* =========================================
-   Buttons — Consolidated
-   ========================================= */
-
-/* Primary action button (PrimeNG-compatible) */
-button.create-btn,
-.p-button.create-btn {
-  background-color: var(--db-primary);
-  color: white;
-  border: none;
-  border-radius: var(--db-radius-md);
-  padding: 7px 14px;
-  font-weight: 500;
-  font-size: var(--db-font-size-md);
-  cursor: pointer;
-  transition: background var(--db-transition-base);
-}
-
-button.create-btn:hover,
-.p-button.create-btn:hover {
-  background-color: var(--db-primary-hover);
-}
-
-/* Secondary button */
-.btn-secondary {
-  background: var(--db-bg-primary);
-  color: var(--db-text-primary);
-  border: 1px solid var(--db-border-color);
-  padding: 7px var(--db-space-md);
-  border-radius: var(--db-radius-md);
-  cursor: pointer;
-  font-weight: 500;
-  font-size: var(--db-font-size-md);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition:
-    background var(--db-transition-base),
-    border-color var(--db-transition-base);
-}
-
-.btn-secondary:hover {
-  background: var(--db-bg-tertiary);
-  border-color: var(--db-border-color);
-}
-
 /* Row-level actions */
 .actions {
   display: flex;
@@ -383,121 +293,117 @@ button.create-btn:hover,
   align-items: center;
 }
 
-.action-link {
-  background: none;
-  border: none;
-  color: var(--db-text-secondary);
-  cursor: pointer;
-  font-size: var(--db-font-size-sm);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: var(--db-radius-sm);
-  transition:
-    color var(--db-transition-fast),
-    background var(--db-transition-fast);
-}
-
-.action-link:hover {
-  background-color: var(--db-bg-tertiary);
-  color: var(--db-primary);
-}
-
-.action-link.primary {
-  color: var(--db-primary);
-  font-weight: 500;
-}
-
 /* =========================================
    RESPONSIVE BREAKPOINTS
    ========================================= */
 
-/* Mobile */
+/* Mobile — stack the heading's action zone under the title. */
 @media (max-width: 768px) {
-  .top-bar {
+  .page-heading {
     flex-direction: column;
     align-items: stretch;
     gap: var(--db-space-md);
   }
 }
 
-/* Unified Table Styles
-   These rules style PrimeReact DataTable internals through the
-   .minimal-table wrapper class. They must stay plain (unlayered) CSS:
-   the PrimeReact theme stylesheet is unlayered, so utility-layer rules
-   could not override it, and PrimeReact 10 has no --p-* design tokens
-   to move them to. */
+/* ============================================================
+   PrimeReact overrides — @layer primereact-overrides
 
-.p-datatable.minimal-table {
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: var(--db-radius-2xl);
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.03);
+   The lara theme ships in @layer primereact and reads no design tokens, so
+   these rules re-theme PrimeReact's internal DOM. The layer is ordered
+   after primereact (so these win over the theme) but before utilities (so
+   Tailwind classes still win). They can't be Tailwind @utility classes —
+   they target descendant structure, not single elements. Collected here as
+   several merged `@layer primereact-overrides` blocks.
+   ============================================================ */
+
+/* DataTable internals via the .minimal-table wrapper. */
+@layer primereact-overrides {
+  .p-datatable.minimal-table {
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    /* xl is the app-wide container radius (okdp-table-wrapper, cards,
+       empty-state-panel); the glass tables align on it too. */
+    border-radius: var(--db-radius-xl);
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.03);
+  }
+
+  .p-datatable.minimal-table .p-datatable-header {
+    display: none;
+  }
+
+  .p-datatable.minimal-table .p-datatable-thead > tr > th {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--db-text-secondary);
+    font-weight: 700;
+    font-size: var(--db-font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 16px 20px;
+    text-align: left;
+    border: none;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+  }
+
+  .p-datatable.minimal-table .p-datatable-tbody > tr {
+    transition: background-color var(--db-transition-fast);
+  }
+
+  .p-datatable.minimal-table .p-datatable-tbody > tr > td {
+    padding: 18px 20px;
+    color: var(--db-text-primary);
+    font-size: var(--db-font-size-base);
+    font-weight: 500;
+    line-height: var(--db-line-height-base);
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  }
+
+  .p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
+    border-bottom: none;
+  }
+
+  .p-datatable.minimal-table .p-datatable-tbody > tr:hover {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+  }
 }
 
-.p-datatable.minimal-table .p-datatable-header {
-  display: none;
-}
+/* Global Dialog Styles — .db-dialog styles PrimeReact Dialog internals. */
+@layer primereact-overrides {
+  /* The lara theme hardcodes a 6px dialog radius and reads no design token;
+   align the frame on the same xl container radius as the tables and cards.
+   Header and footer corners must match the frame because the dialog root
+   does not clip its children. */
+  .db-dialog.p-dialog {
+    border-radius: var(--db-radius-xl);
+  }
 
-.p-datatable.minimal-table .p-datatable-thead > tr > th {
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--db-text-secondary);
-  font-weight: 700;
-  font-size: var(--db-font-size-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  padding: 16px 20px;
-  text-align: left;
-  border: none;
-  border-bottom: 2px solid rgba(0, 0, 0, 0.04);
-}
+  .db-dialog .p-dialog-header {
+    padding: var(--db-space-lg) var(--db-space-xl) var(--db-space-sm) var(--db-space-xl);
+    border-bottom: none;
+    border-top-left-radius: var(--db-radius-xl);
+    border-top-right-radius: var(--db-radius-xl);
+  }
 
-.p-datatable.minimal-table .p-datatable-tbody > tr {
-  transition: background-color var(--db-transition-fast);
-}
+  .db-dialog .p-dialog-content {
+    padding: var(--db-space-sm) var(--db-space-xl) var(--db-space-lg) var(--db-space-xl);
+  }
 
-.p-datatable.minimal-table .p-datatable-tbody > tr > td {
-  padding: 18px 20px;
-  color: var(--db-text-primary);
-  font-size: var(--db-font-size-base);
-  font-weight: 500;
-  line-height: var(--db-line-height-base);
-  border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
-}
+  /* Footer-less dialogs: the content pane carries the bottom corners. */
+  .db-dialog .p-dialog-content:last-of-type {
+    border-bottom-left-radius: var(--db-radius-xl);
+    border-bottom-right-radius: var(--db-radius-xl);
+  }
 
-.p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
-  border-bottom: none;
-}
-
-.p-datatable.minimal-table .p-datatable-tbody > tr:hover {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-}
-
-/* Global Dialog Styles
-   Base PrimeNG dialog theming is handled via CSS vars in variables.css:
-   --p-dialog-border-radius, --p-dialog-header-background, etc.
-
-   The .db-dialog rules style PrimeReact Dialog internals and must stay
-   plain (unlayered) CSS so they keep overriding the unlayered PrimeReact
-   theme stylesheet. */
-
-.db-dialog .p-dialog-header {
-  padding: var(--db-space-lg) var(--db-space-xl) var(--db-space-sm) var(--db-space-xl);
-  border-bottom: none;
-}
-
-.db-dialog .p-dialog-content {
-  padding: var(--db-space-sm) var(--db-space-xl) var(--db-space-lg) var(--db-space-xl);
-}
-
-.db-dialog .p-dialog-footer {
-  padding: var(--db-space-md) var(--db-space-xl);
-  border-top: 1px solid var(--db-border-light);
+  .db-dialog .p-dialog-footer {
+    padding: var(--db-space-md) var(--db-space-xl);
+    border-top: 1px solid var(--db-border-light);
+    border-bottom-left-radius: var(--db-radius-xl);
+    border-bottom-right-radius: var(--db-radius-xl);
+  }
 }
 
 /* Dialog content layout patterns */
@@ -513,9 +419,29 @@ button.create-btn:hover,
   gap: 8px;
 }
 
-/* Unified Form Styles
-   PrimeNG input theming is handled via CSS vars in variables.css:
-   --p-inputtext-border-radius, --p-inputtext-focus-border-color, etc. */
+/* Unified Form Styles — control corners (the lara theme hardcodes them). */
+@layer primereact-overrides {
+  /* Uniform control corners. The lara theme hardcodes 6px on inputs and
+   buttons, so every regular control aligns on the md token instead.
+   Circular .p-button-rounded buttons and fused input-group corners keep
+   their theme values through higher-specificity theme rules. */
+  .p-inputtext,
+  .p-dropdown,
+  .p-multiselect,
+  .p-button:not(.p-button-rounded) {
+    border-radius: var(--db-radius-md);
+  }
+
+  /* Stacked InputNumber spinners: keep the fused inner edge flat and align
+   the outer corners on the same md radius as their input. */
+  .p-inputnumber-buttons-stacked .p-inputnumber-button-up {
+    border-radius: 0 var(--db-radius-md) 0 0;
+  }
+
+  .p-inputnumber-buttons-stacked .p-inputnumber-button-down {
+    border-radius: 0 0 var(--db-radius-md) 0;
+  }
+}
 
 @utility field {
   display: flex;
@@ -531,39 +457,40 @@ button.create-btn:hover,
   }
 }
 
-/* Common input class. Applied to PrimeReact InputText components, so it
-   must stay plain (unlayered) CSS to keep overriding the unlayered
-   PrimeReact theme's .p-inputtext rules. */
-.dialog-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 12px;
-  font-size: var(--db-font-size-md);
-  font-family: inherit;
-  border-radius: var(--db-radius-md);
-  border: 1px solid var(--db-border-light);
-  background: var(--db-bg-primary);
-  color: var(--db-text-primary);
-  transition:
-    border-color var(--db-transition-base),
-    box-shadow var(--db-transition-base);
-}
+/* Common input class. Applied to PrimeReact InputText components; in
+   primereact-overrides so it beats the lara theme's .p-inputtext rules. */
+@layer primereact-overrides {
+  .dialog-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    font-size: var(--db-font-size-md);
+    font-family: inherit;
+    border-radius: var(--db-radius-md);
+    border: 1px solid var(--db-border-light);
+    background: var(--db-bg-primary);
+    color: var(--db-text-primary);
+    transition:
+      border-color var(--db-transition-base),
+      box-shadow var(--db-transition-base);
+  }
 
-.dialog-input:hover {
-  border-color: var(--db-border-color);
-}
+  .dialog-input:hover {
+    border-color: var(--db-border-color);
+  }
 
-.dialog-input:focus {
-  border-color: var(--db-primary);
-  box-shadow: var(--db-shadow-focus);
-  outline: none;
-}
+  .dialog-input:focus {
+    border-color: var(--db-primary);
+    box-shadow: var(--db-shadow-focus);
+    outline: none;
+  }
 
-.dialog-input:disabled {
-  background: var(--db-bg-tertiary);
-  color: var(--db-text-muted);
-  cursor: not-allowed;
-  opacity: 0.7;
+  .dialog-input:disabled {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-muted);
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
 }
 
 @utility optional {
@@ -594,13 +521,13 @@ button.create-btn:hover,
    utility even when toggled dynamically at runtime.
 
    A few rules stay as plain (unlayered) CSS because they are
-   cascade-coupled with layout.css rules that migrate with the
-   feature pages; they are marked "legacy cascade".
+   cascade-coupled with the legacy page-layout rules earlier in this
+   file; they are marked "legacy cascade".
    ============================================================ */
 
 /* Shared utility classes */
 @utility mono {
-  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--db-font-mono);
 }
 
 @utility muted-text {
@@ -615,25 +542,25 @@ button.create-btn:hover,
 @utility page-heading {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  /* Center the action button on the block: with breadcrumb above and
+     subtitle below, the center line is the title row. */
+  align-items: center;
   gap: 24px;
   margin-bottom: 20px;
 }
 
-/* Legacy cascade: must out-rank the global `.page-title, h1` rule still
-   living in layout.css, so it cannot move into the utilities layer yet. */
+/* Legacy cascade: must out-rank the global `.page-title, h1` rule defined
+   earlier in this file, so it cannot move into the utilities layer yet.
+   Size and weight come from that global rule — every page title reads the
+   same; only the breadcrumb/subtitle rhythm is special here. */
 .page-heading h1.page-title {
   margin: 6px 0 4px;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--db-text-primary);
-  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 @utility page-sub {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--db-font-size-base);
   color: var(--db-text-secondary);
   max-width: 640px;
 }
@@ -651,21 +578,23 @@ button.create-btn:hover,
 }
 
 /* ========== Buttons ========== */
-/* Legacy cascade: the page-layout section above defines button.create-btn /
-   .p-button.create-btn and .btn-secondary for the admin pages; these
-   stay unlayered to preserve today's specificity interplay until the
-   feature pages migrate. */
+/* The single definitions of the app's primary/secondary buttons, applied to
+   native <button> and to PrimeReact <Button className>. Kept unlayered so
+   they override the lara .p-button theme (which ships in @layer primereact —
+   unlayered rules outrank any cascade layer). */
 .create-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 14px;
+  /* 7px / font-size-md preserve the footprint the old duplicate definition
+     produced by specificity; only the duplication was removed. */
+  padding: 7px 14px;
   background: var(--db-primary);
   color: #fff;
   border: none;
   border-radius: var(--db-radius-md);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--db-font-size-md);
   font-weight: 500;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(65, 146, 143, 0.25);
@@ -749,7 +678,7 @@ button.create-btn:hover,
   background: var(--db-bg-primary);
   color: var(--db-text-secondary);
   border: 1px solid var(--db-border-light);
-  border-radius: 999px;
+  border-radius: var(--db-radius-full);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -769,10 +698,10 @@ button.create-btn:hover,
     background: var(--db-bg-tertiary);
     color: var(--db-text-secondary);
     padding: 1px 8px;
-    border-radius: 999px;
+    border-radius: var(--db-radius-full);
     font-size: 11px;
     font-weight: 600;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--db-font-mono);
   }
   &.active .sc-count {
     background: var(--db-primary);
@@ -811,8 +740,8 @@ button.create-btn:hover,
   max-width: 360px;
 }
 
-/* Legacy cascade: must out-rank the global .search-icon rule still living
-   in layout.css. */
+/* Positions the search icon inside .okdp-search-wrapper; unlayered to sit
+   with the rest of the okdp-filter-bar overrides. */
 .okdp-search-wrapper i.search-icon {
   position: absolute;
   left: 12px;
@@ -848,7 +777,7 @@ button.create-btn:hover,
 @utility filter-hint {
   font-size: 12px;
   color: var(--db-text-muted);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--db-font-mono);
 }
 
 /* ========== OKDP minimal table (native, not PrimeNG) ========== */
@@ -916,7 +845,7 @@ button.create-btn:hover,
   color: var(--db-text-secondary);
   font-size: 11.5px;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--db-radius-xs);
   border: 1px solid var(--db-border-light);
   font-weight: 500;
 }
@@ -969,7 +898,7 @@ button.create-btn:hover,
   align-items: center;
   gap: 5px;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--db-radius-full);
   font-size: 11.5px;
   font-weight: 600;
   background: var(--db-bg-tertiary);
@@ -998,7 +927,7 @@ button.create-btn:hover,
   height: 6px;
   border-radius: 50%;
   background: currentColor;
-  animation: pulse 1.4s infinite;
+  animation: tag-pulse 1.4s infinite;
 }
 
 /* ========== Empty state ========== */
@@ -1069,7 +998,7 @@ button.create-btn:hover,
   text-decoration: none;
   font-weight: 500;
   padding: 4px 10px 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--db-radius-full);
   transition: all var(--db-transition-base);
   &:hover {
     background: var(--db-bg-tertiary);
@@ -1102,6 +1031,11 @@ button.create-btn:hover,
   & i {
     font-size: 20px;
     color: #fff;
+  }
+  /* Spark pages — amber brand tile, same geometry. */
+  &.amber {
+    background: linear-gradient(135deg, var(--db-accent-amber), var(--db-warning));
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.25);
   }
 }
 
@@ -1183,8 +1117,8 @@ button.create-btn:hover,
   font-size: 10.5px;
   font-weight: 700;
   padding: 1px 7px;
-  border-radius: 999px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  border-radius: var(--db-radius-full);
+  font-family: var(--db-font-mono);
 }
 
 /* ========== Info card ========== */
@@ -1260,7 +1194,7 @@ button.create-btn:hover,
 @utility section-icon-badge {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--db-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1317,7 +1251,7 @@ button.create-btn:hover,
     font-size: 18px;
     font-weight: 700;
     color: var(--db-text-primary);
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--db-font-mono);
     letter-spacing: -0.01em;
   }
   &.unbounded .metric-hint {
@@ -1351,7 +1285,7 @@ button.create-btn:hover,
 @utility metric-unit {
   font-size: 11.5px;
   color: var(--db-text-muted);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--db-font-mono);
   & .metric-used {
     color: var(--db-text-primary);
     font-weight: 600;
@@ -1364,7 +1298,7 @@ button.create-btn:hover,
 
 @utility metric-bar {
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--db-radius-full);
   background: var(--db-bg-tertiary);
   overflow: hidden;
   position: relative;
@@ -1372,7 +1306,7 @@ button.create-btn:hover,
 
 @utility metric-fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--db-radius-full);
   transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   background: var(--db-primary);
   &.tone-warn {
@@ -1386,7 +1320,7 @@ button.create-btn:hover,
 @utility metric-pct {
   font-size: 11px;
   color: var(--db-text-muted);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--db-font-mono);
   text-align: right;
 }
 
@@ -1427,6 +1361,33 @@ button.create-btn:hover,
   color: #92400e;
 }
 
+/* ========== Log viewer (terminal surface) ========== */
+/* Deliberately dark in BOTH themes — a terminal, not a themed panel. One
+   definition shared by the pod log viewer and the spark executor logs so
+   the two read identically. */
+@utility log-block {
+  background: #111827;
+  color: #e5e7eb;
+  font-family: var(--db-font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* Secondary text on the log surface (loading / empty status lines). */
+@utility log-muted {
+  color: #9ca3af;
+}
+
+/* De-emphasized log chrome (line numbers). */
+@utility log-dim {
+  color: #6b7280;
+}
+
+/* Live-stream accent — pairs with the log-pulse keyframes' emerald glow. */
+@utility log-live {
+  color: #10b981;
+}
+
 /* ========== Parameters list ========== */
 @utility param-list {
   display: flex;
@@ -1457,10 +1418,22 @@ button.create-btn:hover,
   word-break: break-all;
 }
 
+/* Settings / parameters pages share the deploy form's footprint: a centered
+   column at the shared form width, one form-card per section. */
+@utility form-page {
+  width: 100%;
+  max-width: var(--db-form-width);
+  margin: 0 auto;
+}
+
 /* ========== Deploy wizard ========== */
 @utility deploy-page {
   padding-top: 4px;
-  max-width: 820px;
+  /* Fill up to the shared form width: inside the shell's flex column the
+     auto margins would otherwise shrink-wrap the page to its widest step,
+     making the width jump between wizard steps. */
+  width: 100%;
+  max-width: var(--db-form-width);
   margin: 0 auto;
   & .page-header {
     margin-bottom: 20px;
@@ -1631,6 +1604,22 @@ button.create-btn:hover,
   flex-wrap: wrap;
 }
 
+/* Uniform action-button footprint across the deployment flow, whatever the
+   underlying button system (.create-btn / .btn-secondary natives in the
+   wizard, PrimeReact .p-button rows on the spark pages — tagged with
+   .deploy-actions): one height, one padding, and a minimum width so size
+   differences only come from genuinely longer labels. */
+.wizard-actions button,
+.deploy-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  min-width: 96px;
+  padding: 0 16px;
+}
+
 @utility wa-right {
   display: flex;
   gap: 8px;
@@ -1702,7 +1691,7 @@ button.create-btn:hover,
   margin-bottom: 16px;
   background: color-mix(in oklab, var(--db-primary) 7%, transparent);
   border: 1px solid color-mix(in oklab, var(--db-primary) 22%, transparent);
-  border-radius: 10px;
+  border-radius: var(--db-radius-md);
   font-size: 13px;
   line-height: 1.55;
   color: var(--db-text-primary);
@@ -1714,137 +1703,137 @@ button.create-btn:hover,
   }
 }
 
-/* PrimeReact-internal overrides that cannot be expressed as Tailwind
-   utilities: the PrimeReact 10 theme stylesheet is unlayered, so it would
-   out-rank utility-layer rules, and this PrimeReact major has no --p-*
-   design tokens to target instead. Keep this file small. */
+/* PrimeReact-internal overrides (continued) — the remaining component
+   skins plus the dark-mode re-skin, all in @layer primereact-overrides.
+   The native (non-PrimeReact) dark status utilities live after this block,
+   unlayered, because they must out-rank Tailwind's utilities layer. */
+@layer primereact-overrides {
+  /* DynamicSchemaForm — invalid-field highlight on PrimeReact inputs */
+  .dsf-root .field-invalid,
+  .dsf-root .field-invalid.p-inputtext {
+    border-color: var(--db-danger, #dc2626) !important;
+    background-color: rgba(220, 38, 38, 0.04);
+  }
 
-/* DynamicSchemaForm — invalid-field highlight on PrimeReact inputs */
-.dsf-root .field-invalid,
-.dsf-root .field-invalid.p-inputtext {
-  border-color: var(--db-danger, #dc2626) !important;
-  background-color: rgba(220, 38, 38, 0.04);
-}
+  /* Project console header — borderless project-switcher Dropdown */
+  .project-switcher .p-dropdown {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    transition: background var(--db-transition-fast);
+    border-radius: var(--db-radius-md);
+    padding: 2px 6px;
+  }
 
-/* Project console header — borderless project-switcher Dropdown */
-.project-switcher .p-dropdown {
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  transition: background var(--db-transition-fast);
-  border-radius: var(--db-radius-md);
-  padding: 2px 6px;
-}
+  .project-switcher .p-dropdown .p-dropdown-label {
+    padding: 4px 6px;
+    font-weight: 600;
+    font-size: var(--db-font-size-md);
+    color: var(--db-text-primary);
+    letter-spacing: -0.01em;
+  }
 
-.project-switcher .p-dropdown .p-dropdown-label {
-  padding: 4px 6px;
-  font-weight: 600;
-  font-size: var(--db-font-size-md);
-  color: var(--db-text-primary);
-  letter-spacing: -0.01em;
-}
+  .project-switcher .p-dropdown .p-dropdown-trigger {
+    color: var(--db-text-muted);
+    width: 1.5rem;
+  }
 
-.project-switcher .p-dropdown .p-dropdown-trigger {
-  color: var(--db-text-muted);
-  width: 1.5rem;
-}
+  .project-switcher .p-dropdown:not(.p-disabled):hover {
+    background: var(--db-bg-tertiary);
+  }
 
-.project-switcher .p-dropdown:not(.p-disabled):hover {
-  background: var(--db-bg-tertiary);
-}
+  .project-switcher .p-dropdown:focus-within {
+    box-shadow: none;
+  }
 
-.project-switcher .p-dropdown:focus-within {
-  box-shadow: none;
-}
+  /* Project-switcher dropdown panel (appended to document.body) */
+  .project-dropdown-panel.p-dropdown-panel {
+    background: var(--db-bg-primary);
+    border: 1px solid var(--db-border-light);
+    border-radius: var(--db-radius-lg);
+    box-shadow: var(--db-shadow-lg);
+    margin-top: 4px;
+    padding: 4px;
+  }
 
-/* Project-switcher dropdown panel (appended to document.body) */
-.project-dropdown-panel.p-dropdown-panel {
-  background: var(--db-bg-primary);
-  border: 1px solid var(--db-border-light);
-  border-radius: var(--db-radius-lg);
-  box-shadow: var(--db-shadow-lg);
-  margin-top: 4px;
-  padding: 4px;
-}
+  .project-dropdown-panel .p-dropdown-items-wrapper {
+    padding: 0;
+  }
 
-.project-dropdown-panel .p-dropdown-items-wrapper {
-  padding: 0;
-}
+  .project-dropdown-panel .p-dropdown-item {
+    border-radius: var(--db-radius-sm);
+    margin-bottom: 1px;
+    padding: 6px 10px;
+    transition: background var(--db-transition-fast);
+    color: var(--db-text-secondary);
+    font-size: var(--db-font-size-base);
+  }
 
-.project-dropdown-panel .p-dropdown-item {
-  border-radius: var(--db-radius-sm);
-  margin-bottom: 1px;
-  padding: 6px 10px;
-  transition: background var(--db-transition-fast);
-  color: var(--db-text-secondary);
-  font-size: var(--db-font-size-base);
-}
+  .project-dropdown-panel .p-dropdown-item:hover,
+  .project-dropdown-panel .p-dropdown-item.p-focus {
+    background: var(--db-bg-secondary);
+    color: var(--db-text-primary);
+  }
 
-.project-dropdown-panel .p-dropdown-item:hover,
-.project-dropdown-panel .p-dropdown-item.p-focus {
-  background: var(--db-bg-secondary);
-  color: var(--db-text-primary);
-}
+  .project-dropdown-panel .p-dropdown-item.p-highlight {
+    background: var(--db-primary-50);
+    color: var(--db-primary);
+    font-weight: 500;
+  }
 
-.project-dropdown-panel .p-dropdown-item.p-highlight {
-  background: var(--db-primary-50);
-  color: var(--db-primary);
-  font-weight: 500;
-}
+  /* Identity & secrets pages — TabView spacing and tab panel animation */
+  .identity-page .p-tabview-nav,
+  .secrets-page .p-tabview-nav {
+    gap: 24px;
+    padding-left: 4px;
+  }
 
-/* Identity & secrets pages — TabView spacing and tab panel animation */
-.identity-page .p-tabview-nav,
-.secrets-page .p-tabview-nav {
-  gap: 24px;
-  padding-left: 4px;
-}
+  .identity-page .p-tabview-panel,
+  .secrets-page .p-tabview-panel {
+    animation: fadeIn 0.25s ease-out;
+  }
 
-.identity-page .p-tabview-panel,
-.secrets-page .p-tabview-panel {
-  animation: fadeIn 0.25s ease-out;
-}
+  /* Landing page — primary sign-in Button skin */
+  .login-btn {
+    width: 100%;
+    padding: 10px 1.5rem;
+    font-size: var(--db-font-size-md);
+    font-weight: 500;
+    justify-content: center;
+    background: var(--db-primary);
+    border-color: var(--db-primary);
+    border-radius: var(--db-radius-md);
+    transition: background var(--db-transition-base);
+  }
 
-/* Landing page — primary sign-in Button skin */
-.login-btn {
-  width: 100%;
-  padding: 10px 1.5rem;
-  font-size: var(--db-font-size-md);
-  font-weight: 500;
-  justify-content: center;
-  background: var(--db-primary);
-  border-color: var(--db-primary);
-  border-radius: var(--db-radius-md);
-  transition: background var(--db-transition-base);
-}
+  .login-btn:hover {
+    background: var(--db-primary-hover);
+    border-color: var(--db-primary-hover);
+  }
 
-.login-btn:hover {
-  background: var(--db-primary-hover);
-  border-color: var(--db-primary-hover);
-}
+  /* ProfileListEditor — borderless inline Panel for the Resources section */
+  .resource-panel .p-panel-header {
+    padding: 10px 0;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--db-border-light);
+  }
 
-/* ProfileListEditor — borderless inline Panel for the Resources section */
-.resource-panel .p-panel-header {
-  padding: 10px 0;
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--db-border-light);
-}
+  .resource-panel .p-panel-content {
+    padding: 14px 0 0 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
 
-.resource-panel .p-panel-content {
-  padding: 14px 0 0 0;
-  border: none;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+  .resource-panel .p-panel-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--db-text-secondary);
+  }
 
-.resource-panel .p-panel-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--db-text-secondary);
-}
-
-/* ============================================================
+  /* ============================================================
    9. Dark mode — PrimeReact component surfaces
    ============================================================
    variables.css flips the --db-* tokens under body.dark-mode, which
@@ -1853,357 +1842,408 @@ button.create-btn:hover,
    unlayered overrides below re-skin the components the app uses so
    they follow the flipped tokens. */
 
-/* ===== Popup menus ===== */
-body.dark-mode .p-menu {
-  background: var(--db-bg-elevated);
-  color: var(--db-text-primary);
-  border: 1px solid var(--db-border-color);
+  /* ===== Popup menus ===== */
+  body.dark-mode .p-menu {
+    background: var(--db-bg-elevated);
+    color: var(--db-text-primary);
+    border: 1px solid var(--db-border-color);
+  }
+
+  body.dark-mode .p-menu .p-menuitem > .p-menuitem-content {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-menu .p-menuitem > .p-menuitem-content .p-menuitem-link .p-menuitem-text,
+  body.dark-mode .p-menu .p-menuitem > .p-menuitem-content .p-menuitem-link .p-menuitem-icon {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode
+    .p-menu
+    .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus
+    > .p-menuitem-content,
+  body.dark-mode
+    .p-menu
+    .p-menuitem:not(.p-highlight):not(.p-disabled)
+    > .p-menuitem-content:hover {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode
+    .p-menu
+    .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus
+    > .p-menuitem-content
+    .p-menuitem-link
+    .p-menuitem-text,
+  body.dark-mode
+    .p-menu
+    .p-menuitem:not(.p-highlight):not(.p-disabled)
+    > .p-menuitem-content:hover
+    .p-menuitem-link
+    .p-menuitem-text {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-menu .p-submenu-header {
+    background: transparent;
+    color: var(--db-text-muted);
+  }
+
+  body.dark-mode .p-menu .p-menu-separator {
+    border-top-color: var(--db-border-color);
+  }
+
+  /* ===== Dialogs (incl. ConfirmDialog) ===== */
+  body.dark-mode .p-dialog .p-dialog-header,
+  body.dark-mode .p-dialog .p-dialog-content,
+  body.dark-mode .p-dialog .p-dialog-footer {
+    background: var(--db-bg-elevated);
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-dialog .p-dialog-header .p-dialog-title {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-dialog .p-dialog-header .p-dialog-header-icon {
+    color: var(--db-text-secondary);
+  }
+
+  body.dark-mode .p-dialog .p-dialog-header .p-dialog-header-icon:enabled:hover {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-confirm-dialog .p-confirm-dialog-icon,
+  body.dark-mode .p-confirm-dialog .p-confirm-dialog-message {
+    color: var(--db-text-primary);
+  }
+
+  /* ===== Toasts ===== */
+  body.dark-mode .p-toast .p-toast-message {
+    background: var(--db-bg-elevated);
+    color: var(--db-text-primary);
+    border: 1px solid var(--db-border-color);
+    border-left-width: 4px;
+  }
+
+  body.dark-mode .p-toast .p-toast-message .p-toast-summary,
+  body.dark-mode .p-toast .p-toast-message .p-toast-detail,
+  body.dark-mode .p-toast .p-toast-message .p-toast-icon-close {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-success {
+    border-left-color: var(--db-success);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-success .p-toast-message-icon {
+    color: var(--db-success);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-error {
+    border-left-color: var(--db-danger);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-error .p-toast-message-icon {
+    color: var(--db-danger);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-warn {
+    border-left-color: var(--db-warning);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-warn .p-toast-message-icon {
+    color: var(--db-warning);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-info {
+    border-left-color: var(--db-accent-blue);
+  }
+
+  body.dark-mode .p-toast .p-toast-message.p-toast-message-info .p-toast-message-icon {
+    color: var(--db-accent-blue);
+  }
+
+  /* ===== Text inputs (InputText, Textarea, Password, number/dropdown labels) ===== */
+  body.dark-mode .p-inputtext {
+    background: var(--db-bg-secondary);
+    color: var(--db-text-primary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-inputtext::placeholder {
+    color: var(--db-text-muted);
+  }
+
+  body.dark-mode .p-inputtext:enabled:hover {
+    border-color: var(--db-text-muted);
+  }
+
+  body.dark-mode .p-inputtext:enabled:focus {
+    border-color: var(--db-primary);
+  }
+
+  body.dark-mode .p-input-icon,
+  body.dark-mode .p-icon-field > .p-input-icon {
+    color: var(--db-text-muted);
+  }
+
+  body.dark-mode .p-password-panel {
+    background: var(--db-bg-elevated);
+    color: var(--db-text-primary);
+  }
+
+  /* ===== Dropdown / MultiSelect ===== */
+  body.dark-mode .p-dropdown,
+  body.dark-mode .p-multiselect {
+    background: var(--db-bg-secondary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-dropdown:not(.p-disabled):hover,
+  body.dark-mode .p-multiselect:not(.p-disabled):hover {
+    border-color: var(--db-text-muted);
+  }
+
+  body.dark-mode .p-dropdown:not(.p-disabled).p-focus,
+  body.dark-mode .p-multiselect:not(.p-disabled).p-focus {
+    border-color: var(--db-primary);
+  }
+
+  body.dark-mode .p-dropdown .p-dropdown-label,
+  body.dark-mode .p-multiselect .p-multiselect-label {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-dropdown .p-dropdown-label.p-placeholder,
+  body.dark-mode .p-multiselect .p-multiselect-label.p-placeholder {
+    color: var(--db-text-muted);
+  }
+
+  body.dark-mode .p-dropdown .p-dropdown-trigger,
+  body.dark-mode .p-multiselect .p-multiselect-trigger {
+    color: var(--db-text-secondary);
+  }
+
+  body.dark-mode .p-dropdown-panel,
+  body.dark-mode .p-multiselect-panel {
+    background: var(--db-bg-elevated);
+    color: var(--db-text-primary);
+    border: 1px solid var(--db-border-color);
+  }
+
+  body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item,
+  body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item {
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode
+    .p-dropdown-panel
+    .p-dropdown-items
+    .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover,
+  body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-focus:not(.p-highlight),
+  body.dark-mode
+    .p-multiselect-panel
+    .p-multiselect-items
+    .p-multiselect-item:not(.p-highlight):not(.p-disabled):hover,
+  body.dark-mode
+    .p-multiselect-panel
+    .p-multiselect-items
+    .p-multiselect-item.p-focus:not(.p-highlight) {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight,
+  body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item.p-highlight {
+    background: var(--db-primary-100);
+    color: var(--db-primary);
+  }
+
+  body.dark-mode .p-multiselect-panel .p-multiselect-header {
+    background: var(--db-bg-elevated);
+    color: var(--db-text-primary);
+    border-bottom-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-multiselect.p-multiselect-chip .p-multiselect-token {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+  }
+
+  /* ===== Checkbox / InputSwitch ===== */
+  body.dark-mode .p-checkbox .p-checkbox-box {
+    background: var(--db-bg-secondary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-checkbox .p-checkbox-box.p-highlight {
+    background: var(--db-primary);
+    border-color: var(--db-primary);
+  }
+
+  body.dark-mode .p-inputswitch:not(.p-highlight) .p-inputswitch-slider {
+    background: var(--db-border-color);
+  }
+
+  /* ===== TabView ===== */
+  body.dark-mode .p-tabview .p-tabview-nav {
+    background: transparent;
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+    background: transparent;
+    color: var(--db-text-secondary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+    color: var(--db-primary);
+    border-color: var(--db-primary);
+  }
+
+  body.dark-mode .p-tabview .p-tabview-panels {
+    background: transparent;
+    color: var(--db-text-primary);
+  }
+
+  /* ===== Panel ===== */
+  body.dark-mode .p-panel .p-panel-header {
+    background: var(--db-bg-secondary);
+    color: var(--db-text-primary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-panel .p-panel-content {
+    background: transparent;
+    color: var(--db-text-primary);
+    border-color: var(--db-border-color);
+  }
+
+  /* The resource panel opts out of panel chrome; keep its transparent look. */
+  body.dark-mode .resource-panel .p-panel-header,
+  body.dark-mode .resource-panel .p-panel-content {
+    background: transparent;
+    border-color: var(--db-border-light);
+  }
+
+  /* ===== Secondary / text buttons ===== */
+  body.dark-mode .p-button.p-button-secondary.p-button-outlined,
+  body.dark-mode .p-button.p-button-secondary.p-button-text {
+    color: var(--db-text-secondary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-button.p-button-secondary.p-button-outlined:enabled:hover,
+  body.dark-mode .p-button.p-button-secondary.p-button-text:enabled:hover {
+    background: var(--db-bg-tertiary);
+    color: var(--db-text-primary);
+    border-color: var(--db-border-color);
+  }
+
+  body.dark-mode .p-button.p-button-text:not(.p-button-danger):not(.p-button-secondary) {
+    color: var(--db-primary);
+  }
+
+  body.dark-mode
+    .p-button.p-button-text:not(.p-button-danger):not(.p-button-secondary):enabled:hover {
+    background: var(--db-primary-50);
+    color: var(--db-primary);
+  }
+
+  /* ===== DataTable ===== */
+  body.dark-mode .p-datatable .p-datatable-thead > tr > th {
+    background: var(--db-bg-secondary);
+    color: var(--db-text-secondary);
+    border-color: var(--db-border-light);
+  }
+
+  body.dark-mode .p-datatable .p-datatable-tbody > tr {
+    background: transparent;
+    color: var(--db-text-primary);
+  }
+
+  body.dark-mode .p-datatable .p-datatable-tbody > tr > td {
+    border-color: var(--db-border-light);
+  }
+
+  /* The minimal table's glassmorphism is built on white tints; flip them. */
+  body.dark-mode .p-datatable.minimal-table {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  }
+
+  body.dark-mode .p-datatable.minimal-table .p-datatable-thead > tr > th {
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+
+  body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr > td {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+  }
+
+  body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
+    border-bottom: none;
+  }
+
+  body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+  }
 }
 
-body.dark-mode .p-menu .p-menuitem > .p-menuitem-content {
-  color: var(--db-text-primary);
-}
+/* ============================================================
+   Dark mode — native status utilities
 
-body.dark-mode .p-menu .p-menuitem > .p-menuitem-content .p-menuitem-link .p-menuitem-text,
-body.dark-mode .p-menu .p-menuitem > .p-menuitem-content .p-menuitem-link .p-menuitem-icon {
-  color: var(--db-text-primary);
-}
+   okdp-tag / alert / stat-chip are native (not PrimeReact) and hardcode
+   light status tints in their @utility definitions, so they need explicit
+   dark variants. Unlayered (not in primereact-overrides) because they must
+   out-rank the @utility classes, which live in Tailwind's utilities layer.
+   Palette mirrors the PrimeReact .p-tag dark treatment above. */
 
-body.dark-mode .p-menu .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus > .p-menuitem-content,
-body.dark-mode
-  .p-menu
-  .p-menuitem:not(.p-highlight):not(.p-disabled)
-  > .p-menuitem-content:hover {
-  background: var(--db-bg-tertiary);
-  color: var(--db-text-primary);
-}
-
-body.dark-mode
-  .p-menu
-  .p-menuitem:not(.p-highlight):not(.p-disabled).p-focus
-  > .p-menuitem-content
-  .p-menuitem-link
-  .p-menuitem-text,
-body.dark-mode
-  .p-menu
-  .p-menuitem:not(.p-highlight):not(.p-disabled)
-  > .p-menuitem-content:hover
-  .p-menuitem-link
-  .p-menuitem-text {
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-menu .p-submenu-header {
-  background: transparent;
-  color: var(--db-text-muted);
-}
-
-body.dark-mode .p-menu .p-menu-separator {
-  border-top-color: var(--db-border-color);
-}
-
-/* ===== Dialogs (incl. ConfirmDialog) ===== */
-body.dark-mode .p-dialog .p-dialog-header,
-body.dark-mode .p-dialog .p-dialog-content,
-body.dark-mode .p-dialog .p-dialog-footer {
-  background: var(--db-bg-elevated);
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-dialog .p-dialog-header .p-dialog-title {
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-dialog .p-dialog-header .p-dialog-header-icon {
-  color: var(--db-text-secondary);
-}
-
-body.dark-mode .p-dialog .p-dialog-header .p-dialog-header-icon:enabled:hover {
-  background: var(--db-bg-tertiary);
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-confirm-dialog .p-confirm-dialog-icon,
-body.dark-mode .p-confirm-dialog .p-confirm-dialog-message {
-  color: var(--db-text-primary);
-}
-
-/* ===== Toasts ===== */
-body.dark-mode .p-toast .p-toast-message {
-  background: var(--db-bg-elevated);
-  color: var(--db-text-primary);
-  border: 1px solid var(--db-border-color);
-  border-left-width: 4px;
-}
-
-body.dark-mode .p-toast .p-toast-message .p-toast-summary,
-body.dark-mode .p-toast .p-toast-message .p-toast-detail,
-body.dark-mode .p-toast .p-toast-message .p-toast-icon-close {
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-success {
-  border-left-color: var(--db-success);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-success .p-toast-message-icon {
-  color: var(--db-success);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-error {
-  border-left-color: var(--db-danger);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-error .p-toast-message-icon {
-  color: var(--db-danger);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-warn {
-  border-left-color: var(--db-warning);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-warn .p-toast-message-icon {
-  color: var(--db-warning);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-info {
-  border-left-color: var(--db-accent-blue);
-}
-
-body.dark-mode .p-toast .p-toast-message.p-toast-message-info .p-toast-message-icon {
-  color: var(--db-accent-blue);
-}
-
-/* ===== Text inputs (InputText, Textarea, Password, number/dropdown labels) ===== */
-body.dark-mode .p-inputtext {
-  background: var(--db-bg-secondary);
-  color: var(--db-text-primary);
-  border-color: var(--db-border-color);
-}
-
-body.dark-mode .p-inputtext::placeholder {
-  color: var(--db-text-muted);
-}
-
-body.dark-mode .p-inputtext:enabled:hover {
-  border-color: var(--db-text-muted);
-}
-
-body.dark-mode .p-inputtext:enabled:focus {
-  border-color: var(--db-primary);
-}
-
-body.dark-mode .p-input-icon,
-body.dark-mode .p-icon-field > .p-input-icon {
-  color: var(--db-text-muted);
-}
-
-body.dark-mode .p-password-panel {
-  background: var(--db-bg-elevated);
-  color: var(--db-text-primary);
-}
-
-/* ===== Dropdown / MultiSelect ===== */
-body.dark-mode .p-dropdown,
-body.dark-mode .p-multiselect {
-  background: var(--db-bg-secondary);
-  border-color: var(--db-border-color);
-}
-
-body.dark-mode .p-dropdown:not(.p-disabled):hover,
-body.dark-mode .p-multiselect:not(.p-disabled):hover {
-  border-color: var(--db-text-muted);
-}
-
-body.dark-mode .p-dropdown:not(.p-disabled).p-focus,
-body.dark-mode .p-multiselect:not(.p-disabled).p-focus {
-  border-color: var(--db-primary);
-}
-
-body.dark-mode .p-dropdown .p-dropdown-label,
-body.dark-mode .p-multiselect .p-multiselect-label {
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-dropdown .p-dropdown-label.p-placeholder,
-body.dark-mode .p-multiselect .p-multiselect-label.p-placeholder {
-  color: var(--db-text-muted);
-}
-
-body.dark-mode .p-dropdown .p-dropdown-trigger,
-body.dark-mode .p-multiselect .p-multiselect-trigger {
-  color: var(--db-text-secondary);
-}
-
-body.dark-mode .p-dropdown-panel,
-body.dark-mode .p-multiselect-panel {
-  background: var(--db-bg-elevated);
-  color: var(--db-text-primary);
-  border: 1px solid var(--db-border-color);
-}
-
-body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item,
-body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item {
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover,
-body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-focus:not(.p-highlight),
-body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item:not(.p-highlight):not(.p-disabled):hover,
-body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item.p-focus:not(.p-highlight) {
-  background: var(--db-bg-tertiary);
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight,
-body.dark-mode .p-multiselect-panel .p-multiselect-items .p-multiselect-item.p-highlight {
-  background: var(--db-primary-100);
-  color: var(--db-primary);
-}
-
-body.dark-mode .p-multiselect-panel .p-multiselect-header {
-  background: var(--db-bg-elevated);
-  color: var(--db-text-primary);
-  border-bottom-color: var(--db-border-color);
-}
-
-body.dark-mode .p-multiselect.p-multiselect-chip .p-multiselect-token {
-  background: var(--db-bg-tertiary);
-  color: var(--db-text-primary);
-}
-
-/* ===== Checkbox / InputSwitch ===== */
-body.dark-mode .p-checkbox .p-checkbox-box {
-  background: var(--db-bg-secondary);
-  border-color: var(--db-border-color);
-}
-
-body.dark-mode .p-checkbox .p-checkbox-box.p-highlight {
-  background: var(--db-primary);
-  border-color: var(--db-primary);
-}
-
-body.dark-mode .p-inputswitch:not(.p-highlight) .p-inputswitch-slider {
-  background: var(--db-border-color);
-}
-
-/* ===== TabView ===== */
-body.dark-mode .p-tabview .p-tabview-nav {
-  background: transparent;
-  border-color: var(--db-border-color);
-}
-
-body.dark-mode .p-tabview .p-tabview-nav li .p-tabview-nav-link {
-  background: transparent;
-  color: var(--db-text-secondary);
-  border-color: var(--db-border-color);
-}
-
-body.dark-mode .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
-  color: var(--db-primary);
-  border-color: var(--db-primary);
-}
-
-body.dark-mode .p-tabview .p-tabview-panels {
-  background: transparent;
-  color: var(--db-text-primary);
-}
-
-/* ===== Panel ===== */
-body.dark-mode .p-panel .p-panel-header {
-  background: var(--db-bg-secondary);
-  color: var(--db-text-primary);
-  border-color: var(--db-border-color);
-}
-
-body.dark-mode .p-panel .p-panel-content {
-  background: transparent;
-  color: var(--db-text-primary);
-  border-color: var(--db-border-color);
-}
-
-/* The resource panel opts out of panel chrome; keep its transparent look. */
-body.dark-mode .resource-panel .p-panel-header,
-body.dark-mode .resource-panel .p-panel-content {
-  background: transparent;
-  border-color: var(--db-border-light);
-}
-
-/* ===== Tag ===== */
-body.dark-mode .p-tag.p-tag-success {
+body.dark-mode .okdp-tag.okdp-tag-success {
   background: rgba(5, 150, 105, 0.18);
   color: #34d399;
 }
 
-body.dark-mode .p-tag.p-tag-warning {
+body.dark-mode .okdp-tag.okdp-tag-warn {
   background: rgba(217, 119, 6, 0.18);
   color: #fbbf24;
 }
 
-body.dark-mode .p-tag.p-tag-danger {
+body.dark-mode .okdp-tag.okdp-tag-danger {
   background: rgba(220, 38, 38, 0.18);
   color: #f87171;
 }
 
-/* ===== Secondary / text buttons ===== */
-body.dark-mode .p-button.p-button-secondary.p-button-outlined,
-body.dark-mode .p-button.p-button-secondary.p-button-text {
-  color: var(--db-text-secondary);
-  border-color: var(--db-border-color);
+body.dark-mode .okdp-tag.okdp-tag-info {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
 }
 
-body.dark-mode .p-button.p-button-secondary.p-button-outlined:enabled:hover,
-body.dark-mode .p-button.p-button-secondary.p-button-text:enabled:hover {
-  background: var(--db-bg-tertiary);
-  color: var(--db-text-primary);
-  border-color: var(--db-border-color);
+body.dark-mode .alert-danger {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
 }
 
-body.dark-mode .p-button.p-button-text:not(.p-button-danger):not(.p-button-secondary) {
-  color: var(--db-primary);
+body.dark-mode .alert-warn {
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(217, 119, 6, 0.35);
+  color: #fcd34d;
 }
 
-body.dark-mode .p-button.p-button-text:not(.p-button-danger):not(.p-button-secondary):enabled:hover {
-  background: var(--db-primary-50);
-  color: var(--db-primary);
+body.dark-mode .stat-chip.chip-warn.active {
+  background: rgba(217, 119, 6, 0.16);
+  border-color: rgba(217, 119, 6, 0.4);
+  color: #fbbf24;
 }
 
-/* ===== DataTable ===== */
-body.dark-mode .p-datatable .p-datatable-thead > tr > th {
-  background: var(--db-bg-secondary);
-  color: var(--db-text-secondary);
-  border-color: var(--db-border-light);
-}
-
-body.dark-mode .p-datatable .p-datatable-tbody > tr {
-  background: transparent;
-  color: var(--db-text-primary);
-}
-
-body.dark-mode .p-datatable .p-datatable-tbody > tr > td {
-  border-color: var(--db-border-light);
-}
-
-/* The minimal table's glassmorphism is built on white tints; flip them. */
-body.dark-mode .p-datatable.minimal-table {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-}
-
-body.dark-mode .p-datatable.minimal-table .p-datatable-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
-}
-
-body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr > td {
-  border-bottom-color: rgba(255, 255, 255, 0.04);
-}
-
-body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr:last-child > td {
-  border-bottom: none;
-}
-
-body.dark-mode .p-datatable.minimal-table .p-datatable-tbody > tr:hover {
-  background-color: rgba(255, 255, 255, 0.05) !important;
+body.dark-mode .stat-chip.chip-danger.active {
+  background: rgba(220, 38, 38, 0.16);
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #f87171;
 }

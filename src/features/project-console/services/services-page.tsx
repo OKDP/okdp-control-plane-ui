@@ -1,6 +1,7 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { areaBasePath, parentLabel } from './service-utils';
 import { ServiceList } from './service-list';
+import { PageHeader } from '../../../shared/components/page-header';
 
 export interface ServicesPageProps {
   title?: string;
@@ -21,17 +22,17 @@ interface ServiceAreaCopy {
 
 // Page copy per service area. Labels and the area base path (used so the
 // sidebar highlights the correct entry — otherwise anything under
-// /services/* lights up the Jupyter link, even when the user clicked Deploy
-// from the Spark History Server page) come from the SERVICE_AREAS registry
-// in service-utils.
+// /jupyterhub/* lights up the JupyterHub link, even when the user clicked
+// Deploy from the Spark History Server page) come from the SERVICE_AREAS
+// registry in service-utils.
 function areaCopy(serviceFilter: string): ServiceAreaCopy {
   switch (serviceFilter) {
     case 'jupyterhub':
       return {
-        breadcrumbParent: 'Notebook',
+        breadcrumbParent: 'Notebooks',
         subtitle:
           "Launch and manage per-user JupyterLab environments running in this project's namespace.",
-        emptyTitle: 'Launch your first Jupyter instance',
+        emptyTitle: 'Deploy JupyterHub',
       };
     case 'spark-history-server':
       return {
@@ -103,21 +104,17 @@ export default function ServicesPage(props: ServicesPageProps) {
 
   return (
     <div className="services-list animate-in">
-      <div className="page-heading">
-        <div>
-          <div className="breadcrumb-thin">
-            <span>{breadcrumbParent}</span>
-            <i className="pi pi-angle-right" style={{ fontSize: '10px' }}></i>
-            <span className="bc-current">{breadcrumbCurrent}</span>
-          </div>
-          <h1 className="page-title">{title}</h1>
-          <p className="page-sub">{subtitle}</p>
-        </div>
-        <button className="create-btn" onClick={goToDeploy}>
-          <i className="pi pi-plus"></i>
-          <span>{deployLabel}</span>
-        </button>
-      </div>
+      <PageHeader
+        breadcrumb={{ parent: breadcrumbParent, current: breadcrumbCurrent }}
+        title={title}
+        subtitle={subtitle}
+        actions={
+          <button className="create-btn" onClick={goToDeploy}>
+            <i className="pi pi-plus"></i>
+            <span>{deployLabel}</span>
+          </button>
+        }
+      />
 
       <ServiceList
         serviceFilter={serviceFilter}

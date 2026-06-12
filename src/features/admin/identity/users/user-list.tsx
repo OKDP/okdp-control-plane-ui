@@ -10,15 +10,18 @@ import { MultiSelect } from 'primereact/multiselect';
 import { Checkbox } from 'primereact/checkbox';
 import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
 import type { MenuItem } from 'primereact/menuitem';
 import { identityApi, type User } from '../../../../core/api/identity-api';
 import { useIdentityGroups, useIdentityUsers } from '../use-identity';
+import SearchFilter from '../../../../shared/components/search-filter';
+import { PageHeader } from '../../../../shared/components/page-header';
+import { useToastMessages } from '../../../../shared/hooks/use-toast-messages';
+import { DialogFooter } from '../../../../shared/components/dialog-footer';
+import DeleteConfirmDialog from '../../../../shared/components/delete-confirm-dialog';
+import { StatusTag } from '../../../../shared/components/status-tag';
 
 export function UserList() {
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
   const menuRef = useRef<Menu>(null);
   const selectedUserRef = useRef<User | null>(null);
 
@@ -28,14 +31,10 @@ export function UserList() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [userDialog, setUserDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [user, setUser] = useState<User>({ username: '', name: '' });
   const [emailInput, setEmailInput] = useState('');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-
-  const showSuccess = (detail: string) =>
-    toast.current?.show({ severity: 'success', summary: 'Success', detail });
-  const showError = (detail: string) =>
-    toast.current?.show({ severity: 'error', summary: 'Error', detail });
 
   const openNew = () => {
     setUser({ username: '', name: '', disabled: false });
@@ -54,26 +53,13 @@ export function UserList() {
   };
 
   const deleteUser = (u: User) => {
-    confirmDialog({
-      message: (
-        <span>
-          Are you sure you want to delete <strong>{u.name}</strong>? This action cannot be undone.
-        </span>
-      ),
-      header: 'Delete user?',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        identityApi
-          .deleteUser(u.username)
-          .then(() => {
-            showSuccess('User deleted');
-            refreshUsers();
-          })
-          .catch(() => showError('Failed to delete user'));
-      },
-    });
+    identityApi
+      .deleteUser(u.username)
+      .then(() => {
+        showSuccess('User deleted');
+        refreshUsers();
+      })
+      .catch(() => showError('Failed to delete user'));
   };
 
   const hideDialog = () => setUserDialog(false);
@@ -115,49 +101,53 @@ export function UserList() {
       label: 'Delete',
       icon: 'pi pi-trash',
       command: () => {
-        if (selectedUserRef.current) deleteUser(selectedUserRef.current);
+        if (selectedUserRef.current) setDeleteTarget(selectedUserRef.current);
       },
     },
   ];
 
   const dialogFooter = (
-    <div className="dialog-actions">
-      <Button severity="secondary" outlined label="Cancel" onClick={hideDialog} />
-      <Button
-        disabled={!user.name || !user.username}
-        onClick={saveUser}
-        label={isEditMode ? 'Save' : 'Create'}
-      />
-    </div>
+    <DialogFooter
+      onCancel={hideDialog}
+      onConfirm={saveUser}
+      confirmLabel={isEditMode ? 'Save' : 'Create'}
+      confirmDisabled={!user.name || !user.username}
+    />
   );
 
   return (
-    <div className="user-container">
+    <div>
       <Toast ref={toast} />
-      <ConfirmDialog
-        className="db-confirm-dialog"
-        style={{ width: '400px' }}
-        acceptClassName="p-button-danger"
-        rejectClassName="p-button-text"
+      <DeleteConfirmDialog
+        resourceName={deleteTarget?.username ?? null}
+        resourceKind="user"
+        message={
+          deleteTarget && (
+            <>
+              This will permanently remove <strong>{deleteTarget.name}</strong>. This action cannot
+              be undone.
+            </>
+          )
+        }
+        onHide={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteUser(deleteTarget);
+          setDeleteTarget(null);
+        }}
       />
 
       {/* Top Bar */}
-      <div className="top-bar">
-        <div className="left-group">
-          <h1>Users</h1>
-          <IconField>
-            <InputIcon className="pi pi-search" />
-            <InputText
-              type="text"
-              placeholder="Filter users..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-            />
-          </IconField>
-        </div>
+      <PageHeader
+        title="Users"
+        actions={
+          <button className="create-btn" onClick={openNew}>
+            <i className="pi pi-plus"></i>
+            <span>Create user</span>
+          </button>
+        }
+      />
 
-        <Button label="Create user" onClick={openNew} className="create-btn" />
-      </div>
+      <SearchFilter value={globalFilter} onChange={setGlobalFilter} placeholder="Filter users..." />
 
       {/* Data Table */}
       <div className="table-wrapper">
@@ -168,36 +158,30 @@ export function UserList() {
           globalFilterFields={['name', 'email']}
           className="minimal-table"
           emptyMessage="No users found."
-          rowClassName={() => 'user-row'}
         >
           <Column
             header="Name"
             field="name"
             style={{ width: '20%' }}
-            body={(u: User) => (
-              <div className="user-info">
-                <span className="user-name">{u.name}</span>
-              </div>
-            )}
+            body={(u: User) => <span className="font-medium">{u.name}</span>}
           />
           <Column
             header="Email"
             style={{ width: '25%' }}
-            className="email-cell"
             body={(u: User) => u.email?.join(', ') || '-'}
           />
           <Column
             header="Groups"
             style={{ width: '25%' }}
             body={(u: User) => (
-              <div className="groups-list">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {u.groups?.slice(0, 3).map((group) => (
-                  <span key={group} className="group-badge">
+                  <span key={group} className="okdp-tag">
                     {group}
                   </span>
                 ))}
                 {(u.groups?.length ?? 0) > 3 && (
-                  <span className="group-more">+{u.groups!.length - 3}</span>
+                  <span className="text-xs text-fg-muted">+{u.groups!.length - 3}</span>
                 )}
               </div>
             )}
@@ -207,9 +191,9 @@ export function UserList() {
             style={{ width: '15%' }}
             body={(u: User) =>
               u.disabled ? (
-                <span className="status-badge disabled">Disabled</span>
+                <StatusTag value="Disabled" tone="neutral" />
               ) : (
-                <span className="status-badge active">Active</span>
+                <StatusTag value="Active" tone="success" />
               )
             }
           />

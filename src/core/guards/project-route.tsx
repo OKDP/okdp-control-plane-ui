@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useOutletContext, useParams } from 'react-router-dom';
 import { useProjectContext } from '../context/project-context';
 
 /**
@@ -9,6 +9,8 @@ import { useProjectContext } from '../context/project-context';
 export function ProjectRouteSync() {
   const { projectId } = useParams<{ projectId: string }>();
   const { currentProjectId, setProjectFromRoute } = useProjectContext();
+  // Forward the shell's outlet context (view services) to the pages below.
+  const outletContext = useOutletContext();
 
   useEffect(() => {
     if (projectId) {
@@ -20,5 +22,5 @@ export function ProjectRouteSync() {
   if (projectId && currentProjectId !== projectId) {
     return null;
   }
-  return <Outlet />;
+  return <Outlet context={outletContext} />;
 }

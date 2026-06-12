@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type TagSeverity = 'success' | 'info' | 'warning' | 'danger' | 'secondary' | undefined;
+import type { StatusTone } from '../../../shared/components/status-tag';
 
-export function getStatusSeverity(status: string): TagSeverity {
+export function getStatusTone(status: string): StatusTone {
   switch (status) {
     case 'COMPLETED':
       return 'success';
@@ -15,11 +15,11 @@ export function getStatusSeverity(status: string): TagSeverity {
     case 'FAILING':
       return 'danger';
     default:
-      return 'secondary';
+      return 'neutral';
   }
 }
 
-export function getExecutorSeverity(state: string): TagSeverity {
+export function getExecutorTone(state: string): StatusTone {
   switch (state) {
     case 'COMPLETED':
       return 'success';
@@ -30,7 +30,7 @@ export function getExecutorSeverity(state: string): TagSeverity {
     case 'FAILED':
       return 'danger';
     default:
-      return 'secondary';
+      return 'neutral';
   }
 }
 

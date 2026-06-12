@@ -23,8 +23,6 @@ export interface ProjectContextValue {
   selectProject: (projectId: string) => void;
   /** Sync the context from a route param without navigating (guard equivalent). */
   setProjectFromRoute: (projectId: string) => void;
-  getLastSelectedProjectId: () => string | null;
-  clearContext: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
@@ -130,17 +128,8 @@ export function ProjectContextProvider({ children }: { children: ReactNode }) {
       isLoading,
       selectProject,
       setProjectFromRoute,
-      getLastSelectedProjectId: () => sessionStorage.getItem(STORAGE_KEY),
-      clearContext,
     }),
-    [
-      availableProjects,
-      currentProjectId,
-      isLoading,
-      selectProject,
-      setProjectFromRoute,
-      clearContext,
-    ],
+    [availableProjects, currentProjectId, isLoading, selectProject, setProjectFromRoute],
   );
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

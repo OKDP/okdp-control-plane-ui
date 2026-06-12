@@ -69,6 +69,20 @@ describe('AuthRedirector', () => {
 
       expect(currentPath).toBe('/identity');
     });
+
+    it('should keep a /settings deep link (regression: bounced back to the project)', async () => {
+      renderAt('/settings');
+      await flushEffects();
+
+      expect(currentPath).toBe('/settings');
+    });
+
+    it('should keep an /admin deep link', async () => {
+      renderAt('/admin');
+      await flushEffects();
+
+      expect(currentPath).toBe('/admin');
+    });
   });
 
   describe('Post-login routing', () => {

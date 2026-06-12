@@ -280,13 +280,10 @@ export default function ServiceDeployPage() {
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
-              <i className="pi pi-arrow-left" style={{ fontSize: '11px' }}></i>
+              <i className="pi pi-arrow-left text-[11px]"></i>
               {parentLabel(service?.name)}
             </a>
-            <i
-              className="pi pi-angle-right"
-              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
-            ></i>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
             <span className="breadcrumb-current">New instance</span>
           </nav>
           <div className="header-row">
@@ -409,18 +406,8 @@ export default function ServiceDeployPage() {
               {currentStepKey === 'params' &&
                 (schemaLoading ? (
                   <div className="form-section">
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '8px 0 20px',
-                      }}
-                    >
-                      <i
-                        className="pi pi-spin pi-spinner"
-                        style={{ color: 'var(--db-primary)', fontSize: '18px' }}
-                      ></i>
+                    <div className="flex items-center gap-3 pt-2 pb-5">
+                      <i className="pi pi-spin pi-spinner text-[18px] text-primary"></i>
                       <div>
                         <strong>Loading parameter schema…</strong>
                         <div className="muted-text small">

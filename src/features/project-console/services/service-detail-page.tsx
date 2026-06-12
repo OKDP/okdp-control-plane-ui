@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
+import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 import { serviceApi } from '../../../core/api/service-api';
 import type { Pod, ServiceInstance, ServiceMetrics } from '../../../core/models/service.model';
 import { PodList } from './pod-list';
@@ -10,9 +10,11 @@ import {
   apiErrorMessage,
   areaBasePath,
   formatMediumDateTime,
+  isTransitioning,
   parentLabel,
-  tagClass,
+  statusTone,
 } from './service-utils';
+import { StatusTag } from '../../../shared/components/status-tag';
 
 type Tab = 'overview' | 'pods' | 'logs' | 'parameters';
 
@@ -110,6 +112,8 @@ export default function ServiceDetailPage() {
   const [selectedPod, setSelectedPod] = useState<Pod | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [metrics, setMetrics] = useState<ServiceMetrics | null>(null);
+  // Type-to-confirm deletion dialog visibility.
+  const [deleteVisible, setDeleteVisible] = useState(false);
 
   const runningPods = useMemo(
     () => pods.filter((p) => p.status === 'Running' || p.status === 'Ready').length,
@@ -175,7 +179,7 @@ export default function ServiceDetailPage() {
   }, [projectId, serviceName]);
 
   // Navigation stays inside the instance's own console area (e.g. a Trino
-  // instance edits/returns under /lakehouse/trino, not /services).
+  // instance edits/returns under /trino, not /services).
   const basePath = areaBasePath(instance?.service).join('/');
 
   const goBack = () => {
@@ -201,32 +205,29 @@ export default function ServiceDetailPage() {
   };
 
   const confirmDelete = () => {
+    if (instance) setDeleteVisible(true);
+  };
+
+  const deleteInstance = () => {
+    setDeleteVisible(false);
     if (!instance) return;
-    confirmDialog({
-      message: `This will remove "${instance.name}" and all its pods. This cannot be undone.`,
-      header: 'Delete this instance?',
-      icon: 'pi pi-exclamation-triangle',
-      acceptClassName: 'p-button-danger',
-      accept: () => {
-        serviceApi
-          .deleteService(projectId, instance.name)
-          .then(() => {
-            toast.current?.show({
-              severity: 'success',
-              summary: 'Instance deleted',
-              detail: `"${instance.name}" has been removed`,
-            });
-            goBack();
-          })
-          .catch((err) => {
-            toast.current?.show({
-              severity: 'error',
-              summary: 'Error',
-              detail: apiErrorMessage(err, 'Failed to delete instance'),
-            });
-          });
-      },
-    });
+    serviceApi
+      .deleteService(projectId, instance.name)
+      .then(() => {
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Instance deleted',
+          detail: `"${instance.name}" has been removed`,
+        });
+        goBack();
+      })
+      .catch((err) => {
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Error',
+          detail: apiErrorMessage(err, 'Failed to delete instance'),
+        });
+      });
   };
 
   const onViewLogs = (pod: Pod) => {
@@ -239,7 +240,20 @@ export default function ServiceDetailPage() {
   return (
     <>
       <Toast ref={toast} />
-      <ConfirmDialog />
+      <DeleteConfirmDialog
+        resourceName={deleteVisible ? (instance?.name ?? null) : null}
+        resourceKind="instance"
+        message={
+          instance && (
+            <>
+              This will remove <strong>{instance.name}</strong> and all its pods. This cannot be
+              undone.
+            </>
+          )
+        }
+        onHide={() => setDeleteVisible(false)}
+        onConfirm={deleteInstance}
+      />
 
       <div className="detail-page animate-in">
         <div className="page-header">
@@ -250,13 +264,10 @@ export default function ServiceDetailPage() {
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
-              <i className="pi pi-arrow-left" style={{ fontSize: '11px' }}></i>
+              <i className="pi pi-arrow-left text-[11px]"></i>
               {parentLabel(instance?.service)}
             </a>
-            <i
-              className="pi pi-angle-right"
-              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
-            ></i>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
             <span className="breadcrumb-current">{instance?.name || serviceName}</span>
           </nav>
 
@@ -268,12 +279,11 @@ export default function ServiceDetailPage() {
               <div className="header-text">
                 <div className="header-title-row">
                   <h2>{instance.name}</h2>
-                  <span className={`okdp-tag ${tagClass(instance.status)}`}>
-                    {(instance.status === 'Installing' || instance.status === 'Updating') && (
-                      <span className="okdp-tag-dot"></span>
-                    )}
-                    {instance.status}
-                  </span>
+                  <StatusTag
+                    value={instance.status}
+                    tone={statusTone(instance.status)}
+                    pulse={isTransitioning(instance.status)}
+                  />
                 </div>
                 <p className="page-desc">
                   {instance.service} · <span className="mono">{instance.serviceTag}</span>
@@ -409,7 +419,7 @@ export default function ServiceDetailPage() {
                           rel="noopener noreferrer"
                         >
                           {instance.url}
-                          <i className="pi pi-external-link" style={{ fontSize: '11px' }}></i>
+                          <i className="pi pi-external-link text-[11px]"></i>
                         </a>
                       </div>
                     )}

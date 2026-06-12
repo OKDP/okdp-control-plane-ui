@@ -6,12 +6,8 @@ import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
-import { Tag } from 'primereact/tag';
 import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
 import type { MenuItem } from 'primereact/menuitem';
 import {
   externalSecretApi,
@@ -22,13 +18,19 @@ import {
 } from '../../../core/api/external-secret-api';
 import { secretStoreApi, type SecretStore } from '../../../core/api/secret-store-api';
 import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils';
-import { statusSeverity } from './secret-status';
+import { statusTone } from './secret-status';
+import { StatusTag } from '../../../shared/components/status-tag';
 import { StatusDetailContent } from './status-detail';
+import SearchFilter from '../../../shared/components/search-filter';
+import { PageHeader } from '../../../shared/components/page-header';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { k8sNameError } from '../../../shared/utils/k8s-names';
+import { DialogFooter } from '../../../shared/components/dialog-footer';
+import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 
 const SECTION_TITLE_CLASS = 'm-0 mb-3 text-[14px] font-semibold text-fg';
 const DIVIDER_CLASS = 'my-4 border-0 border-t border-t-border';
 
-const NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 const POLL_INTERVAL_MS = 10_000;
 
 const REFRESH_OPTIONS = [
@@ -46,11 +48,11 @@ const EMPTY_MAPPING = (): ExternalSecretDataRef => ({
   remoteRef: { key: '', property: '' },
 });
 
-const getStatusSeverity = (status: string) => statusSeverity(status, 'Synced');
+const getStatusTone = (status: string) => statusTone(status, 'Synced');
 
 export function ExternalSecretList() {
   const { projectId = '' } = useParams<{ projectId: string }>();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
   const menuRef = useRef<Menu>(null);
   const selectedSecretRef = useRef<ExternalSecret | null>(null);
 
@@ -58,6 +60,7 @@ export function ExternalSecretList() {
   const [loading, setLoading] = useState(true);
   const [readyStores, setReadyStores] = useState<SecretStore[]>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<ExternalSecret | null>(null);
 
   // Dialog state
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -79,11 +82,6 @@ export function ExternalSecretList() {
   const [selectedSecretName, setSelectedSecretName] = useState('');
   const statusLoadingRef = useRef(false);
   statusLoadingRef.current = statusLoading;
-
-  const showSuccess = (detail: string) =>
-    toast.current?.show({ severity: 'success', summary: 'Success', detail, life: 3000 });
-  const showError = (detail: string) =>
-    toast.current?.show({ severity: 'error', summary: 'Error', detail, life: 5000 });
 
   const mergeSecrets = useCallback((incoming: ExternalSecret[]) => {
     setSecrets((current) => {
@@ -116,7 +114,7 @@ export function ExternalSecretList() {
         showError('Failed to load external secrets');
         setLoading(false);
       });
-  }, [projectId]);
+  }, [projectId, showError]);
 
   const loadReadyStores = useCallback(() => {
     if (!projectId) return;
@@ -141,14 +139,7 @@ export function ExternalSecretList() {
   }, [projectId, loadSecrets, loadReadyStores, mergeSecrets]);
 
   // --- Name validation ---
-  const nameError = (() => {
-    if (!secretName) return '';
-    if (secretName.length > 63) return 'Maximum 63 characters';
-    if (!NAME_PATTERN.test(secretName)) {
-      return 'Lowercase letters, numbers and hyphens only (must start/end with alphanumeric)';
-    }
-    return '';
-  })();
+  const nameError = k8sNameError(secretName);
 
   const formValid = (() => {
     if (!secretName || !selectedStoreRefName) return false;
@@ -247,30 +238,18 @@ export function ExternalSecretList() {
       });
   };
 
-  const confirmDelete = (es: ExternalSecret) => {
-    confirmDialog({
-      message: (
-        <span>
-          Are you sure you want to delete <strong>{es.name}</strong>? The associated Kubernetes
-          secret will also be removed.
-        </span>
-      ),
-      header: 'Delete external secret?',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        externalSecretApi
-          .delete(projectId, es.name)
-          .then(() => {
-            showSuccess(`External secret "${es.name}" deleted successfully`);
-            loadSecrets();
-          })
-          .catch((err) => {
-            showError(apiErrorMessage(err, 'Failed to delete external secret'));
-          });
-      },
-    });
+  const confirmDelete = (es: ExternalSecret) => setDeleteTarget(es);
+
+  const deleteSecret = (es: ExternalSecret) => {
+    externalSecretApi
+      .delete(projectId, es.name)
+      .then(() => {
+        showSuccess(`External secret "${es.name}" deleted successfully`);
+        loadSecrets();
+      })
+      .catch((err) => {
+        showError(apiErrorMessage(err, 'Failed to delete external secret'));
+      });
   };
 
   // --- Status detail ---
@@ -367,32 +346,17 @@ export function ExternalSecretList() {
   ];
 
   const dialogFooter = (
-    <div
-      className="dialog-actions"
-      style={{ display: 'flex', gap: 'var(--db-space-sm)', alignItems: 'center', width: '100%' }}
-    >
-      <div className="spacer" style={{ flex: 1 }}></div>
-      <Button
-        severity="secondary"
-        outlined
-        label="Cancel"
-        onClick={() => setDialogVisible(false)}
-        disabled={saving}
-      />
-      <Button
-        icon={saving ? 'pi pi-spin pi-spinner' : undefined}
-        label={editMode ? 'Save' : 'Create'}
-        disabled={saving || !formValid}
-        onClick={saveSecret}
-      />
-    </div>
+    <DialogFooter
+      onCancel={() => setDialogVisible(false)}
+      onConfirm={saveSecret}
+      confirmLabel={editMode ? 'Save' : 'Create'}
+      confirmDisabled={!formValid}
+      busy={saving}
+    />
   );
 
   const statusDialogFooter = (
-    <div
-      className="dialog-actions"
-      style={{ display: 'flex', gap: 'var(--db-space-sm)', alignItems: 'center', width: '100%' }}
-    >
+    <div className="dialog-actions items-center">
       <Button
         severity="secondary"
         outlined
@@ -401,7 +365,7 @@ export function ExternalSecretList() {
         onClick={refreshStatus}
         disabled={statusLoading}
       />
-      <div className="spacer" style={{ flex: 1 }}></div>
+      <div className="flex-1"></div>
       <Button
         severity="secondary"
         outlined
@@ -412,24 +376,23 @@ export function ExternalSecretList() {
   );
 
   return (
-    <div className="cluster-container">
+    <div>
       {/* Top Bar */}
-      <div className="top-bar">
-        <div className="left-group">
-          <h1>External Secrets</h1>
-          <IconField>
-            <InputIcon className="pi pi-search" />
-            <InputText
-              type="text"
-              placeholder="Filter secrets..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-            />
-          </IconField>
-        </div>
+      <PageHeader
+        title="External Secrets"
+        actions={
+          <button className="create-btn" onClick={showCreateDialog}>
+            <i className="pi pi-plus"></i>
+            <span>Add external secret</span>
+          </button>
+        }
+      />
 
-        <Button label="Add external secret" onClick={showCreateDialog} className="create-btn" />
-      </div>
+      <SearchFilter
+        value={globalFilter}
+        onChange={setGlobalFilter}
+        placeholder="Filter secrets..."
+      />
 
       {/* Data Table */}
       <div className="table-wrapper">
@@ -462,7 +425,7 @@ export function ExternalSecretList() {
             field="secretStoreRef"
             style={{ width: '16%' }}
             body={(es: ExternalSecret) => (
-              <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary">
+              <span className="inline-flex items-center gap-1.5 rounded-xs border border-border-light bg-surface-secondary px-2 py-[3px] text-[12px] font-medium text-fg-secondary">
                 <i className="pi pi-database text-[11px]"></i>
                 {es.secretStoreRef}
               </span>
@@ -472,9 +435,7 @@ export function ExternalSecretList() {
             header="Target Secret"
             style={{ width: '20%' }}
             body={(es: ExternalSecret) => (
-              <span className="text-[13px] text-fg-secondary [font-family:monospace]">
-                {es.target?.name || '-'}
-              </span>
+              <span className="text-[13px] text-fg-secondary mono">{es.target?.name || '-'}</span>
             )}
           />
           <Column
@@ -483,7 +444,11 @@ export function ExternalSecretList() {
             style={{ width: '10%' }}
             body={(es: ExternalSecret) => (
               <span title={es.lastError || ''}>
-                <Tag value={es.status} severity={getStatusSeverity(es.status)} />
+                <StatusTag
+                  value={es.status}
+                  tone={getStatusTone(es.status)}
+                  pulse={es.status === 'Pending'}
+                />
               </span>
             )}
           />
@@ -545,13 +510,11 @@ export function ExternalSecretList() {
               id="esName"
               value={secretName}
               onChange={(e) => setSecretName(e.target.value)}
-              className={`w-full dialog-input${nameError ? ' border-[#d32f2f]!' : ''}`}
+              className={`w-full dialog-input${nameError ? ' border-danger!' : ''}`}
               placeholder="e.g., db-credentials"
               disabled={editMode}
             />
-            {nameError && (
-              <small className="mt-1 block text-[12px] text-[#d32f2f]">{nameError}</small>
-            )}
+            {nameError && <small className="mt-1 block text-[12px] text-danger">{nameError}</small>}
           </div>
 
           <hr className={DIVIDER_CLASS} />
@@ -561,7 +524,7 @@ export function ExternalSecretList() {
           <div className="field">
             <label htmlFor="storeRef">Secret Store</label>
             {readyStores.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-[6px] border border-[#ffe0b2] bg-[#fff3e0] px-3 py-2.5 text-[13px] text-[#e65100]">
+              <div className="alert-warn flex items-center gap-2 rounded-md border px-3 py-2.5 text-[13px]">
                 <i className="pi pi-info-circle shrink-0 text-[14px]"></i>
                 <span>
                   No ready secret stores available. Create and connect a secret store first.
@@ -615,7 +578,7 @@ export function ExternalSecretList() {
             {dataMappings.map((mapping, index) => (
               <div
                 key={index}
-                className="rounded-[6px] border border-border-light bg-surface-secondary px-3 py-2.5"
+                className="rounded-md border border-border-light bg-surface-secondary px-3 py-2.5"
               >
                 <div className="flex items-end gap-2">
                   <div className="flex flex-1 flex-col gap-1">
@@ -728,17 +691,28 @@ export function ExternalSecretList() {
         <StatusDetailContent
           loading={statusLoading}
           detail={statusDetail}
-          severity={statusDetail ? getStatusSeverity(statusDetail.status) : 'info'}
+          tone={statusDetail ? getStatusTone(statusDetail.status) : 'info'}
           checkedLabel="Last synced"
           checkedAt={statusDetail?.lastSyncedAt}
         />
       </Dialog>
 
-      <ConfirmDialog
-        className="db-confirm-dialog"
-        style={{ width: '440px' }}
-        acceptClassName="p-button-danger"
-        rejectClassName="p-button-text"
+      <DeleteConfirmDialog
+        resourceName={deleteTarget?.name ?? null}
+        resourceKind="external secret"
+        message={
+          deleteTarget && (
+            <>
+              This will remove <strong>{deleteTarget.name}</strong>. The associated Kubernetes
+              secret will also be removed.
+            </>
+          )
+        }
+        onHide={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteSecret(deleteTarget);
+          setDeleteTarget(null);
+        }}
       />
 
       <Toast ref={toast} position="bottom-right" />

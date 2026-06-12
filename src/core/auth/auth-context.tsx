@@ -29,8 +29,6 @@ export interface AuthContextValue extends AuthState {
   forceLogout: () => void;
   token: () => Promise<string | undefined>;
   hasRole: (role: string) => boolean;
-  /** Account management is not supported in generic OIDC mode. */
-  accountManagement: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -207,7 +205,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       forceLogout,
       token,
       hasRole: (role: string) => state.roles.includes(role),
-      accountManagement: () => logger.warn('Account management not supported in generic OIDC mode'),
     }),
     [state, login, logout, forceLogout, token],
   );

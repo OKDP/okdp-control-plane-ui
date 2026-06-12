@@ -2,9 +2,9 @@
 // secret lists (their status models differ only in the "healthy" value:
 // 'Ready' for stores, 'Synced' for external secrets).
 
-export type StatusSeverity = 'success' | 'danger' | 'warning' | 'info';
+import type { StatusTone } from '../../../shared/components/status-tag';
 
-export function statusSeverity(status: string, successStatus: string): StatusSeverity {
+export function statusTone(status: string, successStatus: string): StatusTone {
   switch (status) {
     case successStatus:
       return 'success';
@@ -23,8 +23,4 @@ interface ConditionLike {
 
 export function getConditionIcon(condition: ConditionLike): string {
   return condition.status === 'True' ? 'pi pi-check-circle' : 'pi pi-times-circle';
-}
-
-export function getConditionClass(condition: ConditionLike): string {
-  return condition.status === 'True' ? 'condition-ok' : 'condition-error';
 }

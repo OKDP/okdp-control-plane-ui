@@ -11,10 +11,12 @@ import {
   apiErrorMessage,
   areaBasePath,
   hasProfileEditorWidget,
+  isTransitioning,
   parentLabel,
+  statusTone,
   stripProfileEditorFields,
-  tagClass,
 } from './service-utils';
+import { StatusTag } from '../../../shared/components/status-tag';
 
 export default function ServiceEditPage() {
   const navigate = useNavigate();
@@ -197,20 +199,14 @@ export default function ServiceEditPage() {
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
-              <i className="pi pi-arrow-left" style={{ fontSize: '11px' }}></i>
+              <i className="pi pi-arrow-left text-[11px]"></i>
               {parentLabel(instance?.service)}
             </a>
-            <i
-              className="pi pi-angle-right"
-              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
-            ></i>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
             <a className="breadcrumb-link" onClick={goBack} tabIndex={0}>
               {instance?.name}
             </a>
-            <i
-              className="pi pi-angle-right"
-              style={{ fontSize: '10px', color: 'var(--db-text-muted)' }}
-            ></i>
+            <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
             <span className="breadcrumb-current">Edit</span>
           </nav>
 
@@ -227,12 +223,11 @@ export default function ServiceEditPage() {
                       {instance.name}
                     </span>
                   </h2>
-                  <span className={`okdp-tag ${tagClass(instance.status)}`}>
-                    {(instance.status === 'Installing' || instance.status === 'Updating') && (
-                      <span className="okdp-tag-dot"></span>
-                    )}
-                    {instance.status}
-                  </span>
+                  <StatusTag
+                    value={instance.status}
+                    tone={statusTone(instance.status)}
+                    pulse={isTransitioning(instance.status)}
+                  />
                 </div>
                 <p className="page-desc">
                   Change version, parameters or profiles. Saving will trigger a rolling restart.
@@ -301,13 +296,8 @@ export default function ServiceEditPage() {
             <div className="form-card" style={{ marginTop: '14px' }}>
               {schemaLoading ? (
                 <div className="form-section">
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0' }}
-                  >
-                    <i
-                      className="pi pi-spin pi-spinner"
-                      style={{ color: 'var(--db-primary)', fontSize: '18px' }}
-                    ></i>
+                  <div className="flex items-center gap-3 py-2">
+                    <i className="pi pi-spin pi-spinner text-[18px] text-primary"></i>
                     <div>
                       <strong>Loading configuration schema…</strong>
                       <div className="muted-text small">

@@ -1,5 +1,9 @@
 /* Class lists for sidebar navigation entries, shared by the console shell
-   and the project console's nav sections. */
+   and the project console's nav sections.
+
+   Font, icon and padding metrics all multiply `--nav-item-scale`, set on
+   the sidebar from the user's menu-size preference (Settings → Lateral
+   menu). The `,1` fallback keeps every class inert outside the rail. */
 
 interface NavLinkClassOptions {
   active?: boolean;
@@ -12,11 +16,13 @@ interface NavLinkClassOptions {
 export function sideNavLinkClass({ active, collapsed, sub, disabled }: NavLinkClassOptions) {
   return [
     'group mb-px flex items-center no-underline transition-[color,background-color] duration-150 ease-smooth',
-    sub ? 'text-sm' : 'text-base',
+    sub
+      ? 'text-[length:calc(var(--db-font-size-sm)*var(--nav-item-scale,1))]'
+      : 'text-[length:calc(var(--db-font-size-base)*var(--nav-item-scale,1))]',
     collapsed
-      ? 'justify-center rounded-md p-2'
+      ? 'justify-center rounded-md p-[calc(0.5rem*var(--nav-item-scale,1))]'
       : [
-          'rounded-r-md border-l-2 px-2.5 py-1.5 max-lg:justify-center max-lg:rounded-md max-lg:border-l-0 max-lg:p-2',
+          'rounded-r-md border-l-2 px-2.5 py-[calc(0.375rem*var(--nav-item-scale,1))] max-lg:justify-center max-lg:rounded-md max-lg:border-l-0 max-lg:p-[calc(0.5rem*var(--nav-item-scale,1))]',
           sub && 'pl-[2.1rem] max-lg:pl-[2.1rem]',
           active ? 'border-l-primary' : 'border-l-transparent',
         ],
@@ -33,7 +39,7 @@ export function sideNavLinkClass({ active, collapsed, sub, disabled }: NavLinkCl
 
 /** Class list for the icon of a sidebar navigation entry. */
 export function sideNavIconClass(active: boolean) {
-  return `w-[18px] text-center text-[1rem] transition-colors duration-150 ease-smooth ${
+  return `w-[calc(18px*var(--nav-item-scale,1))] text-center text-[length:calc(1rem*var(--nav-item-scale,1))] transition-colors duration-150 ease-smooth ${
     active ? 'text-primary' : 'text-fg-muted group-hover:text-fg-secondary'
   }`;
 }

@@ -7,48 +7,90 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { Menu } from 'primereact/menu';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
-import type { MenuItem } from 'primereact/menuitem';
 import { projectApi, type Project, type ProjectEvent } from '../../../core/api/project-api';
 import { applyListEvent } from '../../../core/api/sse';
 import { logger } from '../../../core/services/logger';
 import { useAuth } from '../../../core/auth/auth-context';
+import { useProjectContext } from '../../../core/context/project-context';
 import {
   PROJECT_COLOR_PALETTE,
   clearProjectColor,
   getProjectColor,
   setProjectColor,
+  useProjectColorsVersion,
 } from '../../../core/services/project-colors';
 import EmptyState from '../../../shared/components/empty-state';
+import { PageHeader } from '../../../shared/components/page-header';
+import MetricCell from '../../../shared/components/metric-cell';
+import SearchFilter from '../../../shared/components/search-filter';
+import type { MetricValue } from '../../../core/models/service.model';
+import { formatCpuCores, formatMemoryBytes } from '../../project-console/services/service-utils';
+import { useProjectStats, type ProjectStats } from './use-project-stats';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { DialogFooter } from '../../../shared/components/dialog-footer';
+
+type ProjectRow = Project & { stats?: ProjectStats; color: string };
+
+/** KPI cell: pulse while loading, em dash when the metric is unreported. */
+function StatCell({
+  stats,
+  value,
+}: {
+  stats: ProjectStats | undefined;
+  value: (stats: ProjectStats) => string | number | null;
+}) {
+  if (!stats || !stats.metricsLoaded) {
+    return <div className="metric-bar h-[5px] w-[48px] animate-pulse"></div>;
+  }
+  const v = value(stats);
+  return v === null ? (
+    <span className="text-sm text-fg-muted">—</span>
+  ) : (
+    <span className="text-sm text-fg-secondary">{v}</span>
+  );
+}
+
+/** Project roll-up shaped as a MetricValue for the shared MetricCell:
+ *  null used = unreported (dash), null limit = unbounded ("no limit"). */
+function rollupMetric(
+  used: number | null,
+  limit: number | null,
+  format: (value: number) => string,
+): MetricValue {
+  if (used === null) {
+    return { available: false, usedRaw: 0, limitRaw: 0, used: '', limit: '', pct: 0 };
+  }
+  const limitRaw = limit ?? 0;
+  return {
+    available: true,
+    usedRaw: used,
+    limitRaw,
+    used: format(used),
+    limit: format(limitRaw),
+    pct: limitRaw > 0 ? used / limitRaw : 0,
+  };
+}
 
 export default function ProjectList() {
   const auth = useAuth();
   const isAdmin = auth.hasRole('admins');
-  const toast = useRef<Toast>(null);
-  const menuRef = useRef<Menu>(null);
-  const selectedProjectRef = useRef<Project | null>(null);
+  const { currentProjectId } = useProjectContext();
+  const { toast, showSuccess, showError } = useToastMessages();
+  // Row dots follow color edits live (other tab, or Project Settings).
+  const colorsVersion = useProjectColorsVersion();
 
   const [projects, setProjects] = useState<Project[]>([]);
   // Mirror of `projects` so the SSE handler can decide on toasts without
   // side effects inside the state updater (updaters must stay pure).
   const projectsRef = useRef<Project[]>([]);
-  // Deletion runs until the backend's DELETED event removes the row; these
-  // names render as "Deleting…" in the meantime.
-  const [deletingNames, setDeletingNames] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  // Bumped by the error panel's retry button to re-run the load effect.
+  const [reloadKey, setReloadKey] = useState(0);
   const [globalFilter, setGlobalFilter] = useState('');
   const [visible, setVisible] = useState(false);
   const [newProject, setNewProject] = useState<Project>({ name: '', description: '' });
   const [newColor, setNewColor] = useState<string>(PROJECT_COLOR_PALETTE[0]);
-
-  const showSuccess = (detail: string) =>
-    toast.current?.show({ severity: 'success', summary: 'Success', detail, life: 3000 });
-
-  const showError = (detail: string) =>
-    toast.current?.show({ severity: 'error', summary: 'Error', detail, life: 5000 });
 
   const applyProjects = (next: Project[]) => {
     projectsRef.current = next;
@@ -59,6 +101,10 @@ export default function ProjectList() {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
 
+    // Re-entry (retry): back to the loading state before fetching again.
+    setLoaded(false);
+    setLoadError(false);
+
     const handleProjectEvent = (event: ProjectEvent) => {
       const project = event.object;
       const exists = projectsRef.current.some((p) => p.name === project.name);
@@ -68,12 +114,6 @@ export default function ProjectList() {
       } else if (event.type === 'DELETED' && exists) {
         showSuccess(`Project ${project.name} deleted`);
         clearProjectColor(project.name);
-        setDeletingNames((names) => {
-          if (!names.has(project.name)) return names;
-          const next = new Set(names);
-          next.delete(project.name);
-          return next;
-        });
       }
 
       applyProjects(applyListEvent(projectsRef.current, event, (p) => p.name));
@@ -90,29 +130,20 @@ export default function ProjectList() {
           error: (err) => logger.error('Stream error', err),
         });
       })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-        showError('Failed to load projects');
+      .catch((err) => {
+        if (cancelled) return;
+        logger.error('Failed to load projects', err);
+        // Dedicated error panel below; an empty list here must not be
+        // mistaken for the "no projects yet" wizard state.
+        setLoadError(true);
+        setLoaded(true);
       });
 
     return () => {
       cancelled = true;
       unsubscribe?.();
     };
-  }, []);
-
-  const menuItems: MenuItem[] = [
-    {
-      label: 'Delete',
-      icon: 'pi pi-trash',
-      command: () => {
-        const project = selectedProjectRef.current;
-        if (project) {
-          confirmDelete(project);
-        }
-      },
-    },
-  ];
+  }, [reloadKey, showSuccess]);
 
   const showDialog = () => {
     setNewProject({ name: '', description: '' });
@@ -134,73 +165,70 @@ export default function ProjectList() {
       });
   };
 
-  const confirmDelete = (project: Project) => {
-    confirmDialog({
-      message: (
-        <span>
-          Are you sure you want to delete <strong>{project.name}</strong>? This action cannot be
-          undone.
-        </span>
-      ),
-      header: 'Delete project?',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        setDeletingNames((names) => new Set(names).add(project.name));
-        projectApi.deleteProject(project.name).catch(() => {
-          setDeletingNames((names) => {
-            const next = new Set(names);
-            next.delete(project.name);
-            return next;
-          });
-          showError('Failed to delete project');
-        });
-      },
-    });
-  };
-
   const dialogFooter = (
-    <div className="dialog-actions">
-      <Button severity="secondary" outlined label="Cancel" onClick={() => setVisible(false)} />
-      <Button disabled={!newProject.name} onClick={createProject} label="Create" />
-    </div>
+    <DialogFooter
+      onCancel={() => setVisible(false)}
+      onConfirm={createProject}
+      confirmLabel="Create"
+      confirmDisabled={!newProject.name}
+    />
   );
 
-  const empty = loaded && projects.length === 0;
+  // Four distinct states: loading (placeholder), error (panel + retry),
+  // empty (getting-started wizard), populated (filter + table). The wizard
+  // must never flash while the list is still loading or failed to load.
+  const empty = loaded && !loadError && projects.length === 0;
+  const populated = loaded && !loadError && projects.length > 0;
 
-  // DataTable memoizes its rows against `value`: the deleting flag must be
-  // part of the row objects for the cells to repaint when it flips.
-  const rows = useMemo<(Project & { deleting: boolean })[]>(
-    () => projects.map((p) => ({ ...p, deleting: deletingNames.has(p.name) })),
-    [projects, deletingNames],
+  const projectStats = useProjectStats(projects.map((p) => p.name));
+
+  // DataTable deep-compares `value` to decide whether to repaint: anything a
+  // cell renders (KPI aggregates, the color dot) must be part of the row
+  // objects, or edits to it are invisible to the table.
+  const rows = useMemo<ProjectRow[]>(
+    () =>
+      projects.map((p) => ({ ...p, stats: projectStats[p.name], color: getProjectColor(p.name) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- colorsVersion re-reads the colors
+    [projects, projectStats, colorsVersion],
   );
 
   return (
-    <div className="workspace-container">
-      {/* Top Bar: Title + Search (Left) | Create Button (Right) */}
-      <div className="top-bar">
-        <div className="left-group">
-          <h1>Projects</h1>
-          {!empty && (
-            <IconField>
-              <InputIcon className="pi pi-search" />
-              <InputText
-                type="text"
-                placeholder="Filter projects..."
-                value={globalFilter}
-                onChange={(e) => setGlobalFilter(e.target.value)}
-              />
-            </IconField>
-          )}
-        </div>
+    <div>
+      {/* Top Bar: Title (Left) | Create Button (Right), vertically aligned */}
+      <PageHeader
+        title="Projects"
+        actions={
+          isAdmin &&
+          populated && (
+            <button className="create-btn" onClick={showDialog}>
+              <i className="pi pi-plus"></i>
+              <span>Create project</span>
+            </button>
+          )
+        }
+      />
 
-        {isAdmin && !empty && (
-          <Button label="Create project" onClick={showDialog} className="create-btn" />
-        )}
-      </div>
-
-      {empty ? (
+      {!loaded ? (
+        /* Loading: same centered geometry as the wizard, so an empty result
+           settles into the wizard without layout shift. */
+        <EmptyState
+          icon="pi pi-spin pi-spinner"
+          title="Loading projects…"
+          description="Fetching the project list."
+        />
+      ) : loadError ? (
+        <EmptyState
+          icon="pi pi-exclamation-triangle"
+          title="Failed to load projects"
+          description="The project list could not be retrieved. Check your connection and try again."
+          action={
+            <button className="btn-secondary mt-3" onClick={() => setReloadKey((k) => k + 1)}>
+              <i className="pi pi-refresh"></i>
+              <span>Retry</span>
+            </button>
+          }
+        />
+      ) : empty ? (
         /* Getting started: the platform has no project yet. */
         <EmptyState
           icon="pi pi-sparkles"
@@ -222,78 +250,101 @@ export default function ProjectList() {
           }
         />
       ) : (
-        /* Data Table */
-        <div className="table-wrapper">
-          <DataTable
-            value={rows}
-            dataKey="name"
-            globalFilter={globalFilter}
-            globalFilterFields={['name', 'description']}
-            className="minimal-table"
-            emptyMessage="No projects found."
-            rowClassName={(row: Project & { deleting: boolean }) =>
-              row.deleting ? 'workspace-row opacity-50' : 'workspace-row'
-            }
-          >
-            <Column
-              header="Name"
-              field="name"
-              style={{ width: '30%' }}
-              body={(project: Project) => (
-                <span className="project-name flex items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: getProjectColor(project.name) }}
-                  ></span>
-                  {project.name}
-                </span>
-              )}
-            />
-            <Column
-              header="Description"
-              field="description"
-              style={{ width: '60%' }}
-              className="description-cell"
-              body={(project: Project) => project.description || '-'}
-            />
-            <Column
-              style={{ width: '10%', textAlign: 'right' }}
-              body={(project: Project & { deleting: boolean }) =>
-                project.deleting ? (
-                  <div className="actions">
-                    <span className="flex items-center gap-1.5 px-2 py-1 text-sm font-medium text-fg-secondary">
-                      <i className="pi pi-spin pi-spinner text-[0.85rem]"></i>
-                      Deleting…
-                    </span>
-                  </div>
-                ) : (
-                  <div className="actions">
+        <>
+          <SearchFilter
+            value={globalFilter}
+            onChange={setGlobalFilter}
+            placeholder="Filter projects..."
+          />
+
+          {/* Data Table */}
+          <div className="table-wrapper">
+            <DataTable
+              value={rows}
+              dataKey="name"
+              globalFilter={globalFilter}
+              globalFilterFields={['name', 'description']}
+              className="minimal-table"
+              emptyMessage="No projects found."
+              rowClassName={() => 'workspace-row'}
+            >
+              <Column
+                header="Name"
+                field="name"
+                style={{ width: '26%' }}
+                body={(project: ProjectRow) => (
+                  <span className="flex items-center gap-2">
                     <Link
                       to={`/projects/${project.name}`}
-                      className="action-link primary visible-btn"
-                      style={{ textDecoration: 'none' }}
+                      className="flex items-center gap-2 text-lg font-semibold text-fg no-underline transition-colors duration-150 ease-smooth hover:text-primary hover:underline"
                     >
-                      Open <i className="pi pi-external-link"></i>
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: project.color }}
+                      ></span>
+                      {project.name}
                     </Link>
-
-                    {isAdmin && (
-                      <Button
-                        icon="pi pi-ellipsis-v"
-                        text
-                        rounded
-                        onClick={(e) => {
-                          selectedProjectRef.current = project;
-                          menuRef.current?.toggle(e);
-                        }}
-                      />
+                    {project.name === currentProjectId && (
+                      <span
+                        className="rounded-full border border-(--db-primary-200) bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary"
+                        title="The project currently open in the console"
+                      >
+                        Current
+                      </span>
                     )}
-                  </div>
-                )
-              }
-            />
-          </DataTable>
-          <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
-        </div>
+                  </span>
+                )}
+              />
+              <Column
+                header="Description"
+                field="description"
+                style={{ width: '30%' }}
+                body={(project: Project) => project.description || '-'}
+              />
+              <Column
+                header="Instances"
+                style={{ width: '8%' }}
+                body={(project: ProjectRow) => (
+                  <StatCell stats={project.stats} value={(s) => s.instances} />
+                )}
+              />
+              <Column
+                header="CPU"
+                style={{ width: '18%' }}
+                body={(project: ProjectRow) => (
+                  <MetricCell
+                    metric={
+                      project.stats?.metricsLoaded
+                        ? rollupMetric(
+                            project.stats.cpuUsed,
+                            project.stats.cpuLimit,
+                            formatCpuCores,
+                          )
+                        : undefined
+                    }
+                  />
+                )}
+              />
+              <Column
+                header="Memory"
+                style={{ width: '18%' }}
+                body={(project: ProjectRow) => (
+                  <MetricCell
+                    metric={
+                      project.stats?.metricsLoaded
+                        ? rollupMetric(
+                            project.stats.memUsed,
+                            project.stats.memLimit,
+                            formatMemoryBytes,
+                          )
+                        : undefined
+                    }
+                  />
+                )}
+              />
+            </DataTable>
+          </div>
+        </>
       )}
 
       {/* Create Dialog */}
@@ -364,13 +415,6 @@ export default function ProjectList() {
           </div>
         </div>
       </Dialog>
-
-      <ConfirmDialog
-        className="db-confirm-dialog"
-        style={{ width: '400px' }}
-        acceptClassName="p-button-danger"
-        rejectClassName="p-button-text"
-      />
 
       <Toast ref={toast} position="bottom-right" />
     </div>

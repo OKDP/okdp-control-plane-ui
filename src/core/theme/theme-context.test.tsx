@@ -32,7 +32,9 @@ function mockLocalStorage() {
   });
 }
 
-const wrapper = ({ children }: { children: ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <ThemeProvider>{children}</ThemeProvider>
+);
 
 const bodyIsDark = () => document.body.classList.contains('dark-mode');
 

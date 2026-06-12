@@ -3,14 +3,30 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './core/auth/require-auth';
 import { RequireAdmin } from './core/auth/require-admin';
 import { ProjectRouteSync } from './core/guards/project-route';
+import { useProjectContext } from './core/context/project-context';
+
+/** /views convenience target: the views world lives under the project scope
+ *  (/projects/:projectId/views) so deep links and project switching keep it. */
+function ViewsRedirect() {
+  const { currentProjectId } = useProjectContext();
+  return (
+    <Navigate to={currentProjectId ? `/projects/${currentProjectId}/views` : '/projects'} replace />
+  );
+}
 
 const HomePage = lazy(() => import('./features/landing/home-page'));
 const StartPage = lazy(() => import('./features/start/start-page'));
 const ProjectList = lazy(() => import('./features/admin/projects/project-list'));
+const SettingsPage = lazy(() => import('./features/settings/settings-page'));
+const CustomViewsPage = lazy(() => import('./features/custom-views/custom-views-page'));
+const AdminPage = lazy(() => import('./features/admin/admin-page'));
 const IdentityPage = lazy(() => import('./features/admin/identity/identity-page'));
 const ProjectPage = lazy(() => import('./features/project-console/project-page'));
 const ProjectHome = lazy(() => import('./features/project-console/home/project-home'));
 const SecretsPage = lazy(() => import('./features/project-console/secret-stores/secrets-page'));
+const ProjectSettingsPage = lazy(
+  () => import('./features/project-console/settings/project-settings-page'),
+);
 const ServicesPage = lazy(() => import('./features/project-console/services/services-page'));
 const ServiceDeployPage = lazy(
   () => import('./features/project-console/services/service-deploy-page'),
@@ -74,6 +90,15 @@ export function AppRoutes() {
           }
         >
           <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <AdminPage />
+              </RequireAdmin>
+            }
+          />
+
+          <Route
             path="/identity"
             element={
               <RequireAdmin>
@@ -82,18 +107,36 @@ export function AppRoutes() {
             }
           />
 
+          <Route path="/settings" element={<SettingsPage />} />
+          {/* Convenience entry point (user dropdown, old links): the views
+              world is project-scoped — forward to the current project's. */}
+          <Route path="/views" element={<ViewsRedirect />} />
+
           {/* REST-style: /projects is the collection, /projects/:projectId a member. */}
           <Route path="/projects">
             <Route index element={<ProjectList />} />
             <Route path=":projectId" element={<ProjectRouteSync />}>
               <Route index element={<ProjectHome />} />
               <Route path="secret-stores" element={<SecretsPage />} />
+              <Route path="settings" element={<ProjectSettingsPage />} />
 
-              {serviceRoutes('services', {
-                title: 'Jupyter Instances',
-                deployLabel: 'New instance',
+              {/* Views world: the project's view launchers and the rich
+                  technology views (Spark pages). Lives beside the console
+                  pages under the same project scope, but renders the views
+                  sidebar instead of the project tree. */}
+              <Route path="views">
+                <Route index element={<CustomViewsPage />} />
+                <Route path="spark/applications/submit" element={<SparkSubmitPage />} />
+                <Route path="spark/applications/:appName/edit" element={<SparkEditPage />} />
+                <Route path="spark/applications/:appName" element={<SparkDetailPage />} />
+                <Route path="spark/applications" element={<SparkAppsPage />} />
+              </Route>
+
+              {serviceRoutes('jupyterhub', {
+                title: 'JupyterHub',
+                deployLabel: 'Deploy',
                 serviceFilter: 'jupyterhub',
-                emptyMessage: 'No Jupyter instances deployed yet.',
+                emptyMessage: 'No JupyterHub instances deployed yet.',
               })}
 
               {serviceRoutes('spark/history-server', {
@@ -103,14 +146,9 @@ export function AppRoutes() {
                 emptyMessage: 'No Spark History Server instances deployed yet.',
               })}
 
-              <Route path="spark/applications/submit" element={<SparkSubmitPage />} />
-              <Route path="spark/applications/:appName/edit" element={<SparkEditPage />} />
-              <Route path="spark/applications/:appName" element={<SparkDetailPage />} />
-              <Route path="spark/applications" element={<SparkAppsPage />} />
-
               {/* Services on the OKDP roadmap but not yet packaged. */}
               {/* Polaris (Lakehouse / data-catalog) — kubocd Package: polaris@0.1.0 */}
-              {serviceRoutes('lakehouse/polaris', {
+              {serviceRoutes('polaris', {
                 title: 'Polaris',
                 deployLabel: 'Deploy',
                 serviceFilter: 'polaris',
@@ -118,7 +156,7 @@ export function AppRoutes() {
               })}
 
               {/* Trino (Lakehouse / data-querying) — kubocd Package: trino@0.1.0 */}
-              {serviceRoutes('lakehouse/trino', {
+              {serviceRoutes('trino', {
                 title: 'Trino',
                 deployLabel: 'Deploy',
                 serviceFilter: 'trino',
@@ -126,7 +164,7 @@ export function AppRoutes() {
               })}
 
               {/* Airflow (Data Engineering / orchestration) — kubocd Package: airflow@0.1.0 */}
-              {serviceRoutes('data-engineering/airflow', {
+              {serviceRoutes('airflow', {
                 title: 'Airflow',
                 deployLabel: 'Deploy',
                 serviceFilter: 'airflow',
@@ -134,7 +172,7 @@ export function AppRoutes() {
               })}
 
               {/* Superset (SQL & BI / data-visualization) — kubocd Package: superset@0.1.0 */}
-              {serviceRoutes('bi/superset', {
+              {serviceRoutes('superset', {
                 title: 'Superset',
                 deployLabel: 'Deploy',
                 serviceFilter: 'superset',

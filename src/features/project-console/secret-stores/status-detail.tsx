@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react';
-import { Tag } from 'primereact/tag';
 import { formatMediumDateTime } from '../services/service-utils';
 import { getConditionIcon } from './secret-status';
-import type { StatusSeverity } from './secret-status';
-
-const MONO_FONT_CLASS = "[font-family:'SF_Mono',Menlo,Monaco,'Courier_New',monospace]";
+import { StatusTag, type StatusTone } from '../../../shared/components/status-tag';
 
 interface ConditionLike {
   type: string;
@@ -23,7 +20,7 @@ interface StatusDetailLike {
 interface StatusDetailContentProps {
   loading: boolean;
   detail: StatusDetailLike | null;
-  severity: StatusSeverity;
+  tone: StatusTone;
   /** Label for the timestamp row ("Last checked" / "Last synced"). */
   checkedLabel: string;
   /** Timestamp shown next to checkedLabel (lastCheckedAt / lastSyncedAt). */
@@ -48,7 +45,7 @@ function StatusRow({ label, children }: { label: string; children: ReactNode }) 
 export function StatusDetailContent({
   loading,
   detail,
-  severity,
+  tone,
   checkedLabel,
   checkedAt,
   extraRows,
@@ -65,7 +62,7 @@ export function StatusDetailContent({
           <>
             <div className="flex flex-col gap-3">
               <StatusRow label="Status">
-                <Tag value={detail.status} severity={severity} />
+                <StatusTag value={detail.status} tone={tone} />
               </StatusRow>
               {checkedAt && (
                 <StatusRow label={checkedLabel}>
@@ -78,14 +75,12 @@ export function StatusDetailContent({
             </div>
 
             {detail.lastError && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-[#f5c6cb] bg-[#fdf0f0]">
-                <div className="flex items-center gap-2 border-b border-[#f5c6cb] bg-[rgba(211,47,47,0.08)] px-3 py-2 text-[13px] font-semibold text-[#b71c1c]">
-                  <i className="pi pi-exclamation-triangle text-[14px] text-[#d32f2f]"></i>
+              <div className="alert-danger mt-4 overflow-hidden rounded-lg border">
+                <div className="flex items-center gap-2 border-b border-inherit bg-black/4 px-3 py-2 text-[13px] font-semibold">
+                  <i className="pi pi-exclamation-triangle text-[14px]"></i>
                   <span>Error details</span>
                 </div>
-                <pre
-                  className={`m-0 max-h-[150px] overflow-y-auto p-3 text-[12px] leading-[1.6] whitespace-pre-wrap text-[#c62828] [word-break:break-word] ${MONO_FONT_CLASS}`}
-                >
+                <pre className="mono m-0 max-h-[150px] overflow-y-auto p-3 text-[12px] leading-[1.6] whitespace-pre-wrap [word-break:break-word]">
                   {detail.lastError}
                 </pre>
               </div>
@@ -105,7 +100,7 @@ export function StatusDetailContent({
                         <div className="flex items-center gap-2">
                           <i
                             className={`${getConditionIcon(cond)} shrink-0 text-[16px] ${
-                              ok ? 'text-[#1e8e3e]' : 'text-[#d32f2f]'
+                              ok ? 'text-success' : 'text-danger'
                             }`}
                           ></i>
                           <span className="text-[13px] font-semibold text-fg">
@@ -113,20 +108,14 @@ export function StatusDetailContent({
                           </span>
                           {cond.reason && (
                             <span
-                              className={`rounded-[4px] px-2 py-0.5 text-[11px] font-medium ${
-                                ok
-                                  ? 'bg-[rgba(30,142,62,0.1)] text-[#1e8e3e]'
-                                  : 'bg-[rgba(211,47,47,0.1)] text-[#c62828]'
-                              }`}
+                              className={`okdp-tag ${ok ? 'okdp-tag-success' : 'okdp-tag-danger'}`}
                             >
                               {cond.reason}
                             </span>
                           )}
                         </div>
                         {cond.message && (
-                          <pre
-                            className={`m-0 max-h-[120px] overflow-y-auto rounded-[4px] border border-border-light bg-surface px-2.5 py-2 text-[12px] leading-normal whitespace-pre-wrap text-fg-secondary [word-break:break-word] ${MONO_FONT_CLASS}`}
-                          >
+                          <pre className="mono m-0 max-h-[120px] overflow-y-auto rounded-xs border border-border-light bg-surface px-2.5 py-2 text-[12px] leading-normal whitespace-pre-wrap text-fg-secondary [word-break:break-word]">
                             {cond.message}
                           </pre>
                         )}

@@ -23,6 +23,10 @@ export const projectApi = {
     return http.post<Project>(baseUrl, project);
   },
 
+  updateProject(project: Project): Promise<Project> {
+    return http.put<Project>(`${baseUrl}/${project.name}`, project);
+  },
+
   deleteProject(name: string): Promise<void> {
     return http.delete(`${baseUrl}/${name}`);
   },

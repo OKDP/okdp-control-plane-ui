@@ -9,14 +9,12 @@ function shouldRedirect(target: string): boolean {
   // Use window.location.pathname to get the absolute truth from the browser
   const current = window.location.pathname;
 
-  // Already inside a space: never clobber a deep link. This keeps the effect
-  // idempotent — it re-runs on every navigation because `navigate` changes
-  // identity with the location.
-  const spacePrefixes = ['/home', '/projects', '/identity'];
-  if (spacePrefixes.some((p) => current.startsWith(p))) {
-    return false;
-  }
-  return current !== target;
+  // Only the transitional routes get forwarded to the landing page; any
+  // other path (/settings, /admin, /projects/…) is a deep link that must
+  // never be clobbered. This keeps the effect idempotent — it re-runs on
+  // every navigation because `navigate` changes identity with the location.
+  const transitionalPaths = ['/', '/login'];
+  return transitionalPaths.includes(current) && current !== target;
 }
 
 /**

@@ -7,15 +7,15 @@ import { useProjectContext } from '../../core/context/project-context';
  * through getting started.
  */
 export default function StartPage() {
-  const { availableProjects, isLoading, getLastSelectedProjectId } = useProjectContext();
+  const { availableProjects, isLoading, currentProjectId } = useProjectContext();
 
   if (isLoading) {
     return null;
   }
 
   if (availableProjects.length > 0) {
-    const lastId = getLastSelectedProjectId();
-    const target = availableProjects.find((p) => p.name === lastId) ?? availableProjects[0];
+    const target =
+      availableProjects.find((p) => p.name === currentProjectId) ?? availableProjects[0];
     return <Navigate to={`/projects/${target.name}`} replace />;
   }
 

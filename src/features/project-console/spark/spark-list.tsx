@@ -3,17 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
-import { Tag } from 'primereact/tag';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
-import { InputText } from 'primereact/inputtext';
 import { sparkApi } from '../../../core/api/spark-api';
 import { applyListEvent } from '../../../core/api/sse';
 import type { SparkAppInstance, SparkUIInfo } from '../../../core/models/spark.model';
 import { apiErrorMessage, formatMediumDate } from '../services/service-utils';
-import { getStatusSeverity, isTerminalStatus } from './spark-utils';
+import { StatusTag } from '../../../shared/components/status-tag';
+import { getStatusTone, isTerminalStatus } from './spark-utils';
+import SearchFilter from '../../../shared/components/search-filter';
+import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 
 function shortenImage(image: string): string {
   if (!image) return '';
@@ -29,6 +27,7 @@ export function SparkList() {
   const [apps, setApps] = useState<SparkAppInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<SparkAppInstance | null>(null);
 
   useEffect(() => {
     if (!projectName) return;
@@ -64,37 +63,31 @@ export function SparkList() {
 
   const viewDetail = (app: SparkAppInstance) => {
     if (projectName) {
-      navigate(`/projects/${projectName}/spark/applications/${app.name}`);
+      navigate(`/projects/${projectName}/views/spark/applications/${app.name}`);
     }
   };
 
-  const confirmDelete = (app: SparkAppInstance) => {
-    confirmDialog({
-      message: `Are you sure you want to delete Spark job "${app.name}"?`,
-      header: 'Confirm Delete',
-      icon: 'pi pi-exclamation-triangle',
-      acceptClassName: 'p-button-danger',
-      accept: () => {
-        if (!projectName) return;
-        sparkApi
-          .deleteApp(projectName, app.name)
-          .then(() => {
-            toast.current?.show({
-              severity: 'success',
-              summary: 'Deleted',
-              detail: `Spark job "${app.name}" has been removed`,
-            });
-            setApps((current) => current.filter((a) => a.name !== app.name));
-          })
-          .catch((err) => {
-            toast.current?.show({
-              severity: 'error',
-              summary: 'Error',
-              detail: apiErrorMessage(err, 'Failed to delete Spark job'),
-            });
-          });
-      },
-    });
+  const confirmDelete = (app: SparkAppInstance) => setDeleteTarget(app);
+
+  const deleteApp = (app: SparkAppInstance) => {
+    if (!projectName) return;
+    sparkApi
+      .deleteApp(projectName, app.name)
+      .then(() => {
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Deleted',
+          detail: `Spark job "${app.name}" has been removed`,
+        });
+        setApps((current) => current.filter((a) => a.name !== app.name));
+      })
+      .catch((err) => {
+        toast.current?.show({
+          severity: 'error',
+          summary: 'Error',
+          detail: apiErrorMessage(err, 'Failed to delete Spark job'),
+        });
+      });
   };
 
   const openSparkLink = (app: SparkAppInstance, field: keyof SparkUIInfo, warnTitle: string) => {
@@ -125,19 +118,17 @@ export function SparkList() {
   return (
     <div>
       <Toast ref={toast} />
-      <ConfirmDialog />
+      <DeleteConfirmDialog
+        resourceName={deleteTarget?.name ?? null}
+        resourceKind="Spark job"
+        onHide={() => setDeleteTarget(null)}
+        onConfirm={(name) => {
+          if (deleteTarget?.name === name) deleteApp(deleteTarget);
+          setDeleteTarget(null);
+        }}
+      />
 
-      <div className="mb-3">
-        <IconField>
-          <InputIcon className="pi pi-search" />
-          <InputText
-            type="text"
-            placeholder="Filter jobs..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-          />
-        </IconField>
-      </div>
+      <SearchFilter value={globalFilter} onChange={setGlobalFilter} placeholder="Filter jobs..." />
 
       <div className="table-wrapper">
         <DataTable
@@ -183,7 +174,7 @@ export function SparkList() {
             header="Image"
             style={{ width: '15%' }}
             body={(app: SparkAppInstance) => (
-              <span className="text-[12px] text-fg-secondary [font-family:monospace]" title={app.image}>
+              <span className="text-[12px] text-fg-secondary mono" title={app.image}>
                 {shortenImage(app.image)}
               </span>
             )}
@@ -193,14 +184,20 @@ export function SparkList() {
             field="status"
             style={{ width: '12%' }}
             body={(app: SparkAppInstance) => (
-              <Tag value={app.status} severity={getStatusSeverity(app.status)} />
+              <StatusTag
+                value={app.status}
+                tone={getStatusTone(app.status)}
+                pulse={app.status === 'RUNNING'}
+              />
             )}
           />
           <Column
             header="Created"
             style={{ width: '15%' }}
             body={(app: SparkAppInstance) => (
-              <span className="text-[13px] text-fg-secondary">{formatMediumDate(app.createdAt)}</span>
+              <span className="text-[13px] text-fg-secondary">
+                {formatMediumDate(app.createdAt)}
+              </span>
             )}
           />
           <Column

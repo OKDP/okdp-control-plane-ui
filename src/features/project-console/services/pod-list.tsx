@@ -1,11 +1,9 @@
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
-import { Tag } from 'primereact/tag';
 import type { Pod } from '../../../core/models/service.model';
+import { StatusTag, type StatusTone } from '../../../shared/components/status-tag';
 
-function getStatusSeverity(
-  status: string,
-): 'success' | 'info' | 'warning' | 'danger' | 'secondary' | undefined {
+function getStatusTone(status: string): StatusTone {
   switch (status) {
     case 'Running':
       return 'success';
@@ -17,7 +15,7 @@ function getStatusSeverity(
     case 'Error':
       return 'danger';
     default:
-      return 'secondary';
+      return 'neutral';
   }
 }
 
@@ -43,14 +41,12 @@ export function PodList({ pods, onViewLogs }: PodListProps) {
       <Column
         header="Pod"
         style={{ width: '35%' }}
-        body={(pod: Pod) => (
-          <span className="text-[13px] font-medium [font-family:monospace]">{pod.name}</span>
-        )}
+        body={(pod: Pod) => <span className="text-[13px] font-medium mono">{pod.name}</span>}
       />
       <Column
         header="Status"
         style={{ width: '15%' }}
-        body={(pod: Pod) => <Tag value={pod.status} severity={getStatusSeverity(pod.status)} />}
+        body={(pod: Pod) => <StatusTag value={pod.status} tone={getStatusTone(pod.status)} />}
       />
       <Column header="Ready" field="ready" style={{ width: '10%' }} />
       <Column header="Restarts" field="restarts" style={{ width: '10%' }} />

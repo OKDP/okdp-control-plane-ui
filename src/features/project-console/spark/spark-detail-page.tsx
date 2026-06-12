@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
-import { Tag } from 'primereact/tag';
 import { Toast } from 'primereact/toast';
 import { InputSwitch } from 'primereact/inputswitch';
 import { sparkApi } from '../../../core/api/spark-api';
 import type { SparkAppInstance } from '../../../core/models/spark.model';
 import { formatMediumDateTime } from '../services/service-utils';
-import { getExecutorSeverity, getStatusSeverity, isTerminalStatus } from './spark-utils';
+import { StatusTag } from '../../../shared/components/status-tag';
+import { getExecutorTone, getStatusTone, isTerminalStatus } from './spark-utils';
 
 export default function SparkDetailPage() {
   const navigate = useNavigate();
@@ -106,7 +106,7 @@ export default function SparkDetailPage() {
 
   const goBack = () => {
     if (projectId) {
-      navigate(`/projects/${projectId}/spark/applications`);
+      navigate(`/projects/${projectId}/views/spark/applications`);
     }
   };
 
@@ -118,10 +118,10 @@ export default function SparkDetailPage() {
       <Toast ref={toast} />
 
       <div className="mx-auto max-w-[960px] pt-3">
-        <div className="mb-7 animate-in">
-          <nav className="mb-5 flex items-center gap-2 text-[13px]">
+        <div className="mb-5 animate-in">
+          <nav className="breadcrumb">
             <a
-              className="flex cursor-pointer items-center gap-1.5 rounded-full py-1 pr-2.5 pl-2 font-medium text-fg-secondary no-underline transition-all duration-250 ease-smooth hover:bg-surface-tertiary hover:text-fg"
+              className="breadcrumb-link"
               onClick={goBack}
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
@@ -130,24 +130,28 @@ export default function SparkDetailPage() {
               Spark Jobs
             </a>
             <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
-            <span className="text-[13px] font-medium text-fg-muted">{app?.name}</span>
+            <span className="breadcrumb-current">{app?.name}</span>
           </nav>
-          <div className="flex flex-wrap items-center gap-3.5">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl shadow-[0_6px_16px_rgba(245,158,11,0.25)] [background:linear-gradient(135deg,#f59e0b,#d97706)]">
-              <i className="pi pi-bolt text-[1.4rem] text-white"></i>
+          <div className="header-row">
+            <div className="header-badge amber">
+              <i className="pi pi-bolt"></i>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="m-0 text-[28px] leading-[1.2] font-extrabold tracking-[-0.03em] text-fg">
-                  {app?.name}
-                </h2>
-                {app && <Tag value={app.status} severity={getStatusSeverity(app.status)} />}
+            <div className="header-text">
+              <div className="header-title-row">
+                <h2>{app?.name}</h2>
+                {app && (
+                  <StatusTag
+                    value={app.status}
+                    tone={getStatusTone(app.status)}
+                    pulse={app.status === 'RUNNING'}
+                  />
+                )}
               </div>
-              <p className="mt-1.5 mb-0 text-[15px] text-fg-secondary">
+              <p className="page-desc">
                 {app?.type} · {app?.mode}
               </p>
             </div>
-            <div className="ml-auto flex flex-wrap gap-2">
+            <div className="header-actions">
               {app?.status === 'RUNNING' ? (
                 <Button
                   icon="pi pi-external-link"
@@ -215,9 +219,7 @@ export default function SparkDetailPage() {
                   <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
                     Image
                   </span>
-                  <span className="text-[13px] font-medium text-fg [font-family:monospace]">
-                    {app.image}
-                  </span>
+                  <span className="text-[13px] font-medium text-fg mono">{app.image}</span>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
@@ -232,7 +234,7 @@ export default function SparkDetailPage() {
                     <span className="text-[12px] font-medium tracking-[0.05em] text-fg-muted uppercase">
                       Driver Pod
                     </span>
-                    <span className="text-[13px] font-medium text-fg [font-family:monospace]">
+                    <span className="text-[13px] font-medium text-fg mono">
                       {app.driverPodName}
                     </span>
                   </div>
@@ -266,10 +268,12 @@ export default function SparkDetailPage() {
                       key={key}
                       className="flex items-center justify-between border-b border-b-border-light py-2 last:border-b-0"
                     >
-                      <span className="text-[13px] font-medium text-fg [font-family:monospace]">
-                        {key}
-                      </span>
-                      <Tag value={executors[key]} severity={getExecutorSeverity(executors[key])} />
+                      <span className="text-[13px] font-medium text-fg mono">{key}</span>
+                      <StatusTag
+                        value={executors[key]}
+                        tone={getExecutorTone(executors[key])}
+                        pulse={executors[key] === 'RUNNING'}
+                      />
                     </div>
                   ))}
                 </div>
@@ -298,8 +302,8 @@ export default function SparkDetailPage() {
                   />
                 </div>
               </div>
-              <div className="max-h-[500px] overflow-auto rounded-md bg-[#1e1e1e] p-3">
-                <pre className="m-0 text-[12px] leading-[1.6] break-all whitespace-pre-wrap text-[#d4d4d4] [font-family:monospace]">
+              <div className="log-block max-h-[500px] overflow-auto rounded-md p-3">
+                <pre className="m-0 font-[inherit] break-all whitespace-pre-wrap">
                   {logContent || 'No logs available.'}
                 </pre>
               </div>

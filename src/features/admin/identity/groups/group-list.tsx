@@ -7,15 +7,17 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
 import type { MenuItem } from 'primereact/menuitem';
 import { identityApi, type Group } from '../../../../core/api/identity-api';
 import { useIdentityGroups } from '../use-identity';
+import SearchFilter from '../../../../shared/components/search-filter';
+import { PageHeader } from '../../../../shared/components/page-header';
+import { useToastMessages } from '../../../../shared/hooks/use-toast-messages';
+import { DialogFooter } from '../../../../shared/components/dialog-footer';
+import DeleteConfirmDialog from '../../../../shared/components/delete-confirm-dialog';
 
 export function GroupList() {
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
   const menuRef = useRef<Menu>(null);
   const selectedGroupRef = useRef<Group | null>(null);
 
@@ -25,11 +27,7 @@ export function GroupList() {
   const [groupDialog, setGroupDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [group, setGroup] = useState<Group>({ name: '' });
-
-  const showSuccess = (detail: string) =>
-    toast.current?.show({ severity: 'success', summary: 'Success', detail });
-  const showError = (detail: string) =>
-    toast.current?.show({ severity: 'error', summary: 'Error', detail });
+  const [deleteTarget, setDeleteTarget] = useState<Group | null>(null);
 
   const openNew = () => {
     setGroup({ name: '' });
@@ -44,26 +42,13 @@ export function GroupList() {
   };
 
   const deleteGroup = (g: Group) => {
-    confirmDialog({
-      message: (
-        <span>
-          Are you sure you want to delete <strong>{g.name}</strong>? This action cannot be undone.
-        </span>
-      ),
-      header: 'Delete group?',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        identityApi
-          .deleteGroup(g.name)
-          .then(() => {
-            showSuccess('Group deleted');
-            refreshGroups();
-          })
-          .catch(() => showError('Failed to delete group'));
-      },
-    });
+    identityApi
+      .deleteGroup(g.name)
+      .then(() => {
+        showSuccess('Group deleted');
+        refreshGroups();
+      })
+      .catch(() => showError('Failed to delete group'));
   };
 
   const hideDialog = () => setGroupDialog(false);
@@ -99,45 +84,57 @@ export function GroupList() {
       label: 'Delete',
       icon: 'pi pi-trash',
       command: () => {
-        if (selectedGroupRef.current) deleteGroup(selectedGroupRef.current);
+        if (selectedGroupRef.current) setDeleteTarget(selectedGroupRef.current);
       },
     },
   ];
 
   const dialogFooter = (
-    <div className="dialog-actions">
-      <Button severity="secondary" outlined label="Cancel" onClick={hideDialog} />
-      <Button disabled={!group.name} onClick={saveGroup} label={isEditMode ? 'Save' : 'Create'} />
-    </div>
+    <DialogFooter
+      onCancel={hideDialog}
+      onConfirm={saveGroup}
+      confirmLabel={isEditMode ? 'Save' : 'Create'}
+      confirmDisabled={!group.name}
+    />
   );
 
   return (
-    <div className="group-container">
+    <div>
       <Toast ref={toast} />
-      <ConfirmDialog
-        className="db-confirm-dialog"
-        style={{ width: '400px' }}
-        acceptClassName="p-button-danger"
-        rejectClassName="p-button-text"
+      <DeleteConfirmDialog
+        resourceName={deleteTarget?.name ?? null}
+        resourceKind="group"
+        message={
+          deleteTarget && (
+            <>
+              This will permanently remove <strong>{deleteTarget.name}</strong>. This action cannot
+              be undone.
+            </>
+          )
+        }
+        onHide={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteGroup(deleteTarget);
+          setDeleteTarget(null);
+        }}
       />
 
       {/* Top Bar */}
-      <div className="top-bar">
-        <div className="left-group">
-          <h1>Groups</h1>
-          <IconField>
-            <InputIcon className="pi pi-search" />
-            <InputText
-              type="text"
-              placeholder="Filter groups..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-            />
-          </IconField>
-        </div>
+      <PageHeader
+        title="Groups"
+        actions={
+          <button className="create-btn" onClick={openNew}>
+            <i className="pi pi-plus"></i>
+            <span>Create group</span>
+          </button>
+        }
+      />
 
-        <Button label="Create group" onClick={openNew} className="create-btn" />
-      </div>
+      <SearchFilter
+        value={globalFilter}
+        onChange={setGlobalFilter}
+        placeholder="Filter groups..."
+      />
 
       {/* Data Table */}
       <div className="table-wrapper">
@@ -154,13 +151,12 @@ export function GroupList() {
             header="Name"
             field="name"
             style={{ width: '30%' }}
-            body={(g: Group) => <span className="group-name">{g.name}</span>}
+            body={(g: Group) => <span className="font-medium">{g.name}</span>}
           />
           <Column
             header="Description"
             field="description"
             style={{ width: '55%' }}
-            className="description-cell"
             body={(g: Group) => g.description || '-'}
           />
           <Column
