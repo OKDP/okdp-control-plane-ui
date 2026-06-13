@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { serviceApi } from '../../../core/api/service-api';
-import { applyListEvent } from '../../../core/api/sse';
 import { readUiCache, writeUiCache } from '../../../core/api/ui-cache';
+import { useLiveServices } from '../../../core/hooks/use-live-services';
 import type { ServiceInstance, ServiceMetrics } from '../../../core/models/service.model';
 
 export interface ProjectServicesSummary {
@@ -14,54 +14,27 @@ export interface ProjectServicesSummary {
  *  merged with SSE updates, plus one metrics request per instance. Shared
  *  by the overview KPI strip and the deployed-services table. */
 export function useProjectServicesSummary(projectId: string | undefined): ProjectServicesSummary {
-  const [instances, setInstances] = useState<ServiceInstance[]>([]);
+  const { instances, loaded } = useLiveServices(projectId);
   const [metrics, setMetrics] = useState<Record<string, ServiceMetrics>>({});
-  const [loaded, setLoaded] = useState(false);
   // Metrics are fetched once per instance — SSE status churn must not
   // re-trigger the per-row requests.
   const fetchedMetricsRef = useRef<Set<string>>(new Set());
 
+  // Per-project reset, declared before the metrics effect so the fetch set
+  // is replaced before requests are keyed against the new project.
   useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
     setMetrics({});
     fetchedMetricsRef.current = new Set();
-
-    // Recent snapshot: paint immediately; the fetch below still runs (and
-    // the metrics effect re-fetches every instance regardless).
-    const cached = readUiCache<ServiceInstance[]>(`services:${projectId}`);
-    setInstances(cached ?? []);
-    setLoaded(!!cached);
-
-    serviceApi
-      .getServices(projectId)
-      .then((data) => {
-        if (cancelled) return;
-        writeUiCache(`services:${projectId}`, data);
-        setInstances(data);
-        setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
-
-    const unsubscribe = serviceApi.subscribeServices(projectId, {
-      next: (event) => setInstances((list) => applyListEvent(list, event, (s) => s.name)),
-      error: () => undefined,
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
   }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
-    // SSE events churn the `instances` array identity, re-running this
-    // effect while requests are in flight; staleness is therefore keyed on
-    // the per-project fetch set (replaced when projectId changes), not on a
-    // per-run cancelled flag.
+    // useLiveServices keys its state on the project, so `instances` always
+    // belongs to `projectId` (empty while the new project's list loads) —
+    // no requests fire for the previous project's instances. SSE events
+    // churn the array identity, re-running this effect while requests are
+    // in flight; staleness is therefore keyed on the per-project fetch set
+    // (replaced when projectId changes), not on a per-run cancelled flag.
     const fetched = fetchedMetricsRef.current;
     for (const svc of instances) {
       if (fetched.has(svc.name)) continue;

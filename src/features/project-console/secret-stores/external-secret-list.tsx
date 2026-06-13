@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -6,9 +6,7 @@ import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
-import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import type { MenuItem } from 'primereact/menuitem';
 import {
   externalSecretApi,
   type ExternalSecret,
@@ -20,18 +18,17 @@ import { secretStoreApi, type SecretStore } from '../../../core/api/secret-store
 import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils';
 import { statusTone } from './secret-status';
 import { StatusTag } from '../../../shared/components/status-tag';
-import { StatusDetailContent } from './status-detail';
+import { StatusDialog } from './status-dialog';
+import { usePolledResources } from './use-polled-resources';
+import { useStatusDialog } from './use-status-dialog';
+import { SECTION_TITLE_CLASS, DIVIDER_CLASS } from './constants';
 import SearchFilter from '../../../shared/components/search-filter';
 import { PageHeader } from '../../../shared/components/page-header';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { useRowActionsMenu } from '../../../shared/hooks/use-row-actions-menu';
 import { k8sNameError } from '../../../shared/utils/k8s-names';
 import { DialogFooter } from '../../../shared/components/dialog-footer';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
-
-const SECTION_TITLE_CLASS = 'm-0 mb-3 text-[14px] font-semibold text-fg';
-const DIVIDER_CLASS = 'my-4 border-0 border-t border-t-border';
-
-const POLL_INTERVAL_MS = 10_000;
 
 const REFRESH_OPTIONS = [
   { label: '1 minute', value: '1m' },
@@ -50,14 +47,23 @@ const EMPTY_MAPPING = (): ExternalSecretDataRef => ({
 
 const getStatusTone = (status: string) => statusTone(status, 'Synced');
 
+const isSecretChanged = (s: ExternalSecret, c: ExternalSecret) =>
+  s.name !== c.name ||
+  s.status !== c.status ||
+  s.lastSyncedAt !== c.lastSyncedAt ||
+  s.lastError !== c.lastError;
+
+const toSecretFallbackDetail = (es: ExternalSecret): ExternalSecretStatusDetail => ({
+  status: es.status,
+  conditions: [],
+  lastSyncedAt: es.lastSyncedAt,
+  lastError: es.lastError,
+});
+
 export function ExternalSecretList() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const { toast, showSuccess, showError } = useToastMessages();
-  const menuRef = useRef<Menu>(null);
-  const selectedSecretRef = useRef<ExternalSecret | null>(null);
 
-  const [secrets, setSecrets] = useState<ExternalSecret[]>([]);
-  const [loading, setLoading] = useState(true);
   const [readyStores, setReadyStores] = useState<SecretStore[]>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ExternalSecret | null>(null);
@@ -75,46 +81,31 @@ export function ExternalSecretList() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [dataMappings, setDataMappings] = useState<ExternalSecretDataRef[]>([EMPTY_MAPPING()]);
 
-  // Status detail state
-  const [statusDialogVisible, setStatusDialogVisible] = useState(false);
-  const [statusDetail, setStatusDetail] = useState<ExternalSecretStatusDetail | null>(null);
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [selectedSecretName, setSelectedSecretName] = useState('');
-  const statusLoadingRef = useRef(false);
-  statusLoadingRef.current = statusLoading;
+  const {
+    items: secrets,
+    loading,
+    reload: loadSecrets,
+    merge: mergeSecrets,
+  } = usePolledResources(projectId, externalSecretApi.list, isSecretChanged, () =>
+    showError('Failed to load external secrets'),
+  );
 
-  const mergeSecrets = useCallback((incoming: ExternalSecret[]) => {
-    setSecrets((current) => {
-      if (current.length !== incoming.length) {
-        return incoming;
-      }
-      const changed = incoming.some((s, i) => {
-        const c = current[i];
-        return (
-          s.name !== c.name ||
-          s.status !== c.status ||
-          s.lastSyncedAt !== c.lastSyncedAt ||
-          s.lastError !== c.lastError
-        );
-      });
-      return changed ? incoming : current;
-    });
-  }, []);
+  const listAndMerge = useCallback(
+    () =>
+      externalSecretApi.list(projectId).then((data) => {
+        mergeSecrets(data);
+        return data;
+      }),
+    [projectId, mergeSecrets],
+  );
 
-  const loadSecrets = useCallback(() => {
-    if (!projectId) return;
-    setLoading(true);
-    externalSecretApi
-      .list(projectId)
-      .then((data) => {
-        setSecrets(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        showError('Failed to load external secrets');
-        setLoading(false);
-      });
-  }, [projectId, showError]);
+  const statusDialog = useStatusDialog({
+    projectId,
+    getStatus: externalSecretApi.getStatus,
+    listAndMerge,
+    toFallbackDetail: toSecretFallbackDetail,
+    showError,
+  });
 
   const loadReadyStores = useCallback(() => {
     if (!projectId) return;
@@ -124,19 +115,9 @@ export function ExternalSecretList() {
       .catch(() => undefined);
   }, [projectId]);
 
-  // Initial load + 10s polling while a project is selected
   useEffect(() => {
-    if (!projectId) return;
-    loadSecrets();
     loadReadyStores();
-    const timer = setInterval(() => {
-      externalSecretApi
-        .list(projectId)
-        .then(mergeSecrets)
-        .catch(() => undefined);
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [projectId, loadSecrets, loadReadyStores, mergeSecrets]);
+  }, [loadReadyStores]);
 
   // --- Name validation ---
   const nameError = k8sNameError(secretName);
@@ -252,98 +233,11 @@ export function ExternalSecretList() {
       });
   };
 
-  // --- Status detail ---
-  const fetchStatusDetail = useCallback(
-    (name: string, fallback?: ExternalSecret) => {
-      externalSecretApi
-        .getStatus(projectId, name)
-        .then((detail) => {
-          setStatusDetail(detail);
-          setStatusLoading(false);
-        })
-        .catch(() => {
-          if (fallback) {
-            setStatusDetail({
-              status: fallback.status,
-              conditions: [],
-              lastSyncedAt: fallback.lastSyncedAt,
-              lastError: fallback.lastError,
-            });
-          }
-          setStatusLoading(false);
-        });
-    },
-    [projectId],
-  );
-
-  const showStatusDetail = (es: ExternalSecret) => {
-    setSelectedSecretName(es.name);
-    setStatusLoading(true);
-    setStatusDetail(null);
-    setStatusDialogVisible(true);
-    fetchStatusDetail(es.name, es);
-  };
-
-  // Poll the status detail while the dialog is open
-  useEffect(() => {
-    if (!statusDialogVisible || !selectedSecretName || !projectId) return;
-    const timer = setInterval(() => {
-      if (statusLoadingRef.current) return;
-      fetchStatusDetail(selectedSecretName);
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [statusDialogVisible, selectedSecretName, projectId, fetchStatusDetail]);
-
-  const refreshStatus = () => {
-    if (!selectedSecretName || !projectId) return;
-    setStatusLoading(true);
-
-    externalSecretApi
-      .list(projectId)
-      .then((data) => {
-        mergeSecrets(data);
-        const fresh = data.find((s) => s.name === selectedSecretName);
-        if (fresh) {
-          setStatusDetail({
-            status: fresh.status,
-            conditions: [],
-            lastSyncedAt: fresh.lastSyncedAt,
-            lastError: fresh.lastError,
-          });
-          fetchStatusDetail(fresh.name);
-        } else {
-          setStatusLoading(false);
-        }
-      })
-      .catch(() => {
-        showError('Failed to refresh status');
-        setStatusLoading(false);
-      });
-  };
-
-  const menuItems: MenuItem[] = [
-    {
-      label: 'View Status',
-      icon: 'pi pi-info-circle',
-      command: () => {
-        if (selectedSecretRef.current) showStatusDetail(selectedSecretRef.current);
-      },
-    },
-    {
-      label: 'Edit',
-      icon: 'pi pi-pencil',
-      command: () => {
-        if (selectedSecretRef.current) showEditDialog(selectedSecretRef.current);
-      },
-    },
-    {
-      label: 'Delete',
-      icon: 'pi pi-trash',
-      command: () => {
-        if (selectedSecretRef.current) confirmDelete(selectedSecretRef.current);
-      },
-    },
-  ];
+  const { menuElement, openMenu } = useRowActionsMenu<ExternalSecret>([
+    { label: 'View Status', icon: 'pi pi-info-circle', command: statusDialog.open },
+    { label: 'Edit', icon: 'pi pi-pencil', command: showEditDialog },
+    { label: 'Delete', icon: 'pi pi-trash', command: confirmDelete },
+  ]);
 
   const dialogFooter = (
     <DialogFooter
@@ -353,26 +247,6 @@ export function ExternalSecretList() {
       confirmDisabled={!formValid}
       busy={saving}
     />
-  );
-
-  const statusDialogFooter = (
-    <div className="dialog-actions items-center">
-      <Button
-        severity="secondary"
-        outlined
-        icon="pi pi-refresh"
-        label="Refresh"
-        onClick={refreshStatus}
-        disabled={statusLoading}
-      />
-      <div className="flex-1"></div>
-      <Button
-        severity="secondary"
-        outlined
-        label="Close"
-        onClick={() => setStatusDialogVisible(false)}
-      />
-    </div>
   );
 
   return (
@@ -468,7 +342,7 @@ export function ExternalSecretList() {
                   icon="pi pi-info-circle"
                   text
                   rounded
-                  onClick={() => showStatusDetail(es)}
+                  onClick={() => statusDialog.open(es)}
                   title="View status"
                   aria-label={`View status for ${es.name}`}
                 />
@@ -477,16 +351,13 @@ export function ExternalSecretList() {
                   text
                   rounded
                   aria-label={`Actions for ${es.name}`}
-                  onClick={(e) => {
-                    selectedSecretRef.current = es;
-                    menuRef.current?.toggle(e);
-                  }}
+                  onClick={(e) => openMenu(es, e)}
                 />
               </div>
             )}
           />
         </DataTable>
-        <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
+        {menuElement}
       </div>
 
       {/* Create / Edit Dialog */}
@@ -675,27 +546,17 @@ export function ExternalSecretList() {
         </div>
       </Dialog>
 
-      {/* Status Detail Dialog */}
-      <Dialog
-        header={`Status: ${selectedSecretName}`}
-        visible={statusDialogVisible}
-        modal
-        draggable={false}
-        resizable={false}
-        style={{ width: '600px' }}
-        className="db-dialog"
-        closable
-        onHide={() => setStatusDialogVisible(false)}
-        footer={statusDialogFooter}
-      >
-        <StatusDetailContent
-          loading={statusLoading}
-          detail={statusDetail}
-          tone={statusDetail ? getStatusTone(statusDetail.status) : 'info'}
-          checkedLabel="Last synced"
-          checkedAt={statusDetail?.lastSyncedAt}
-        />
-      </Dialog>
+      <StatusDialog
+        visible={statusDialog.visible}
+        selectedName={statusDialog.selectedName}
+        loading={statusDialog.loading}
+        detail={statusDialog.detail}
+        tone={statusDialog.detail ? getStatusTone(statusDialog.detail.status) : 'info'}
+        checkedLabel="Last synced"
+        checkedAt={statusDialog.detail?.lastSyncedAt}
+        onHide={statusDialog.close}
+        onRefresh={statusDialog.refresh}
+      />
 
       <DeleteConfirmDialog
         resourceName={deleteTarget?.name ?? null}

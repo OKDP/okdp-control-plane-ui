@@ -43,6 +43,14 @@ const PROFILE_TYPE_OPTIONS = [
 // parent render and needlessly re-run the adoption effect.
 const NO_PROFILES: Profile[] = [];
 
+/* Each row carries a stable id so React keys survive removals — keying by
+   index would shift the uncontrolled Panel collapse state to the wrong card.
+   The id is stripped before onProfilesChange. */
+interface ProfileRow {
+  id: string;
+  profile: Profile;
+}
+
 export interface ProfileListEditorProps {
   profileImages: Record<string, { label: string; image: string }[]>;
   initialProfiles?: Profile[];
@@ -85,7 +93,7 @@ export function ProfileListEditor({
   initialProfiles = NO_PROFILES,
   onProfilesChange,
 }: ProfileListEditorProps) {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [rows, setRows] = useState<ProfileRow[]>([]);
 
   const onProfilesChangeRef = useRef(onProfilesChange);
   onProfilesChangeRef.current = onProfilesChange;
@@ -93,30 +101,37 @@ export function ProfileListEditor({
   // Adopt incoming profiles (legacy ngOnChanges behavior)
   useEffect(() => {
     if (initialProfiles.length > 0) {
-      setProfiles(initialProfiles.map((p) => ({ ...DEFAULT_PROFILE, ...p })));
+      setRows(
+        initialProfiles.map((p) => ({
+          id: crypto.randomUUID(),
+          profile: { ...DEFAULT_PROFILE, ...p },
+        })),
+      );
     }
   }, [initialProfiles]);
 
   useEffect(() => {
-    onProfilesChangeRef.current(profiles);
-  }, [profiles]);
+    onProfilesChangeRef.current(rows.map((r) => r.profile));
+  }, [rows]);
 
   const getImagesForType = (type: string) => profileImages[type] || [];
 
   const updateProfile = (index: number, patch: Partial<Profile>) => {
-    setProfiles((list) => list.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+    setRows((list) =>
+      list.map((r, i) => (i === index ? { ...r, profile: { ...r.profile, ...patch } } : r)),
+    );
   };
 
-  const addProfile = () => setProfiles((list) => [...list, { ...DEFAULT_PROFILE }]);
+  const addProfile = () =>
+    setRows((list) => [...list, { id: crypto.randomUUID(), profile: { ...DEFAULT_PROFILE } }]);
 
-  const removeProfile = (index: number) =>
-    setProfiles((list) => list.filter((_, i) => i !== index));
+  const removeProfile = (index: number) => setRows((list) => list.filter((_, i) => i !== index));
 
   return (
     <div className="flex flex-col gap-3">
-      {profiles.map((profile, index) => (
+      {rows.map(({ id, profile }, index) => (
         <div
-          key={index}
+          key={id}
           className="animate-[fadeInUp_var(--db-transition-spring)_backwards] overflow-hidden rounded-xl border border-border-light bg-surface shadow-[0_2px_8px_rgba(0,0,0,0.02)] [transition:box-shadow_0.3s_ease,border-color_0.3s_ease,transform_var(--db-transition-spring)] hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
         >
           <div className="flex items-center justify-between border-b border-border-light bg-surface-secondary px-4 py-3">

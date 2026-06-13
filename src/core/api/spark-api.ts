@@ -12,6 +12,7 @@ import type {
 } from '../models/spark.model';
 
 const baseUrl = environment.apiBaseUrl;
+const seg = encodeURIComponent;
 
 export const sparkApi = {
   getSparkConfig(): Promise<SparkConfig> {
@@ -24,21 +25,24 @@ export const sparkApi = {
   },
 
   submitApp(projectId: string, req: SparkAppRequest): Promise<SparkAppInstance> {
-    return http.post<SparkAppInstance>(`${baseUrl}/api/projects/${projectId}/spark-apps`, req);
+    return http.post<SparkAppInstance>(`${baseUrl}/api/projects/${seg(projectId)}/spark-apps`, req);
   },
 
   submitAppYAML(projectId: string, req: SparkAppYAMLRequest): Promise<SparkAppInstance> {
-    return http.post<SparkAppInstance>(`${baseUrl}/api/projects/${projectId}/spark-apps/yaml`, req);
-  },
-
-  async listApps(projectId: string): Promise<SparkAppInstance[]> {
-    return (
-      (await http.get<SparkAppInstance[]>(`${baseUrl}/api/projects/${projectId}/spark-apps`)) || []
+    return http.post<SparkAppInstance>(
+      `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/yaml`,
+      req,
     );
   },
 
+  listApps(projectId: string): Promise<SparkAppInstance[]> {
+    return http.getList<SparkAppInstance>(`${baseUrl}/api/projects/${seg(projectId)}/spark-apps`);
+  },
+
   getApp(projectId: string, appName: string): Promise<SparkAppInstance> {
-    return http.get<SparkAppInstance>(`${baseUrl}/api/projects/${projectId}/spark-apps/${appName}`);
+    return http.get<SparkAppInstance>(
+      `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/${seg(appName)}`,
+    );
   },
 
   updateApp(
@@ -47,22 +51,24 @@ export const sparkApi = {
     req: SparkAppUpdateRequest,
   ): Promise<SparkAppInstance> {
     return http.put<SparkAppInstance>(
-      `${baseUrl}/api/projects/${projectId}/spark-apps/${appName}`,
+      `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/${seg(appName)}`,
       req,
     );
   },
 
   getSparkUI(projectId: string, appName: string): Promise<SparkUIInfo> {
-    return http.get<SparkUIInfo>(`${baseUrl}/api/projects/${projectId}/spark-apps/${appName}/ui`);
+    return http.get<SparkUIInfo>(
+      `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/${seg(appName)}/ui`,
+    );
   },
 
   deleteApp(projectId: string, appName: string): Promise<void> {
-    return http.delete(`${baseUrl}/api/projects/${projectId}/spark-apps/${appName}`);
+    return http.delete(`${baseUrl}/api/projects/${seg(projectId)}/spark-apps/${seg(appName)}`);
   },
 
   subscribeApps(projectId: string, subscriber: StreamSubscriber<SparkAppEvent>): () => void {
     return subscribeJsonStream(
-      `${baseUrl}/api/projects/${projectId}/spark-apps/stream`,
+      `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/stream`,
       subscriber,
       'Spark SSE',
     );
@@ -74,7 +80,7 @@ export const sparkApi = {
     tailLines = 100,
     container?: string,
   ): Promise<string> {
-    let url = `${baseUrl}/api/projects/${projectId}/spark-apps/${appName}/logs?tailLines=${tailLines}`;
+    let url = `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/${seg(appName)}/logs?tailLines=${tailLines}`;
     if (container) {
       url += `&container=${encodeURIComponent(container)}`;
     }
@@ -87,7 +93,7 @@ export const sparkApi = {
     subscriber: StreamSubscriber<string>,
     tailLines = 100,
   ): () => void {
-    const url = `${baseUrl}/api/projects/${projectId}/spark-apps/${appName}/logs?follow=true&tailLines=${tailLines}`;
+    const url = `${baseUrl}/api/projects/${seg(projectId)}/spark-apps/${seg(appName)}/logs?follow=true&tailLines=${tailLines}`;
     return subscribeTextStream(url, subscriber);
   },
 };

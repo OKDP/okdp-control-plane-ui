@@ -41,16 +41,20 @@ function LocationProbe() {
   return null;
 }
 
-function wrapper({ children }: { children: ReactNode }) {
-  return (
-    <MemoryRouter>
-      <ProjectContextProvider>
-        <LocationProbe />
-        {children}
-      </ProjectContextProvider>
-    </MemoryRouter>
-  );
+function makeWrapper(initialEntries: string[] = ['/']) {
+  return function wrapper({ children }: { children: ReactNode }) {
+    return (
+      <MemoryRouter initialEntries={initialEntries}>
+        <ProjectContextProvider>
+          <LocationProbe />
+          {children}
+        </ProjectContextProvider>
+      </MemoryRouter>
+    );
+  };
 }
+
+const wrapper = makeWrapper();
 
 function emitSse(event: ProjectEvent) {
   act(() => {
@@ -121,11 +125,12 @@ describe('ProjectContextProvider', () => {
   });
 
   describe('Consistency effect', () => {
-    it('should redirect to admin projects if selected project is deleted and list empty', async () => {
-      const { result } = renderHook(() => useProjectContext(), { wrapper });
+    it('should redirect to /projects if selected project is deleted and list empty', async () => {
+      sessionStorage.setItem('okdp-selected-projectId', 'proj-a');
+      const { result } = renderHook(() => useProjectContext(), {
+        wrapper: makeWrapper(['/projects/proj-a/views']),
+      });
       await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-      act(() => result.current.selectProject('proj-a'));
 
       emitSse({ type: 'DELETED', object: { name: 'proj-b' } as Project });
       emitSse({ type: 'DELETED', object: { name: 'proj-a' } as Project });
@@ -144,6 +149,42 @@ describe('ProjectContextProvider', () => {
 
       await waitFor(() => expect(result.current.currentProjectId).toBe('proj-b'));
       await waitFor(() => expect(currentPath).toBe('/projects/proj-b'));
+    });
+
+    it('should update the selection without navigating away from non-project pages', async () => {
+      sessionStorage.setItem('okdp-selected-projectId', 'proj-a');
+      const { result } = renderHook(() => useProjectContext(), {
+        wrapper: makeWrapper(['/settings']),
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      emitSse({ type: 'DELETED', object: { name: 'proj-a' } as Project });
+
+      await waitFor(() => expect(result.current.currentProjectId).toBe('proj-b'));
+      expect(currentPath).toBe('/settings');
+    });
+  });
+
+  describe('Load failure', () => {
+    it('should keep the stored selection when the fetch fails, until reload() succeeds', async () => {
+      sessionStorage.setItem('okdp-selected-projectId', 'proj-a');
+      mocks.getProjects.mockRejectedValueOnce(new Error('network down'));
+
+      const { result } = renderHook(() => useProjectContext(), {
+        wrapper: makeWrapper(['/projects/proj-a/views']),
+      });
+
+      await waitFor(() => expect(result.current.loadError).toBe(true));
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.currentProjectId).toBe('proj-a');
+      expect(sessionStorage.getItem('okdp-selected-projectId')).toBe('proj-a');
+      expect(currentPath).toBe('/projects/proj-a/views');
+
+      act(() => result.current.reload());
+
+      await waitFor(() => expect(result.current.loadError).toBe(false));
+      expect(result.current.availableProjects).toEqual(mockProjects);
+      expect(result.current.currentProjectId).toBe('proj-a');
     });
   });
 });

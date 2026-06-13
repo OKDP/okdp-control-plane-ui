@@ -6,10 +6,32 @@ interface EmptyStateProps {
   description?: ReactNode;
   /** Optional call to action rendered below the description (e.g. a CtaButton). */
   action?: ReactNode;
+  /** 'plain' (default) is the chrome-less centered layout — its geometry
+   *  matches the project wizard, so don't add panel chrome to it. 'panel'
+   *  renders the okdp empty-state-panel card. */
+  variant?: 'plain' | 'panel';
 }
 
 /** Centered placeholder shown when a page or list has no content. */
-export default function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export default function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  variant = 'plain',
+}: EmptyStateProps) {
+  if (variant === 'panel') {
+    return (
+      <div className="empty-state-panel">
+        <div className="empty-icon-wrapper">
+          <i className={icon}></i>
+        </div>
+        <h3>{title}</h3>
+        {description && <p>{description}</p>}
+        {action}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center justify-center px-5 py-12 text-center">
       {/* 52px circle — the same size as the okdp empty-icon-wrapper. */}

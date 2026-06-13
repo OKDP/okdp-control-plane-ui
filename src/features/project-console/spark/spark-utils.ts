@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { StatusTone } from '../../../shared/components/status-tag';
+import type { SparkAppUpdateRequest } from '../../../core/models/spark.model';
 
 export function getStatusTone(status: string): StatusTone {
   switch (status) {
@@ -75,16 +76,12 @@ export interface SchemaSection {
  * {@link SchemaSection.iconClass}: badge background + icon colour.
  */
 export const SECTION_BADGE_TONES: Record<string, { badge: string; icon: string }> = {
-  basics: { badge: 'bg-primary-50', icon: 'text-[1rem] text-primary' },
-  core: { badge: 'bg-[#fef3c7]', icon: 'text-[1rem] text-[#d97706]' },
+  core: { badge: 'bg-accent-amber-light', icon: 'text-[1rem] text-warning' },
   resources: { badge: 'bg-accent-purple-light', icon: 'text-[1rem] text-accent-purple' },
   config: { badge: 'bg-accent-blue-light', icon: 'text-[1rem] text-accent-blue' },
-  advanced: { badge: 'bg-[#f1f5f9]', icon: 'text-[1rem] text-[#64748b]' },
-  executors: { badge: 'bg-accent-purple-light', icon: 'text-[1rem] text-accent-purple' },
-  logs: { badge: 'bg-primary-50', icon: 'text-[1rem] text-primary' },
 };
 
-export function toSchemaProperty(key: string, spec: any): SchemaProperty {
+function toSchemaProperty(key: string, spec: any): SchemaProperty {
   const type = spec.type || 'string';
   const isObject = type === 'object';
   const isArray = type === 'array';
@@ -108,41 +105,19 @@ export const CORE_KEYS_SUBMIT = [
   'arguments',
   'sparkVersion',
 ];
-export const CORE_KEYS_EDIT = [
-  'mode',
-  'image',
-  'mainClass',
-  'mainApplicationFile',
-  'arguments',
-  'sparkVersion',
-];
-export const RESOURCE_KEYS = ['driver', 'executor', 'dynamicAllocation', 'memoryOverheadFactor'];
-export const CONFIG_KEYS = [
-  'sparkConf',
-  'hadoopConf',
-  'sparkConfigMap',
-  'hadoopConfigMap',
-  'deps',
-  'volumes',
-];
+export const CORE_KEYS_EDIT = ['image', 'mainClass', 'mainApplicationFile', 'arguments'];
+// Only the keys SparkAppRequest/SparkAppUpdateRequest can carry are rendered —
+// anything else would be silently dropped on submit/save.
+export const RESOURCE_KEYS = ['driver', 'executor'];
+export const CONFIG_KEYS = ['sparkConf'];
 
 /**
- * Group CRD schema properties into Core / Resources / Configuration /
- * Advanced sections. `extraKnownKeys` lists keys deliberately excluded from
- * the Advanced bucket (e.g. 'type' on the edit page where it is read-only).
+ * Group CRD schema properties into Core / Resources / Configuration sections,
+ * restricted to the keys the submit/update request models actually map.
  */
-export function buildSections(
-  schema: Record<string, any>,
-  coreKeys: string[],
-  extraKnownKeys: string[] = [],
-): SchemaSection[] {
+export function buildSections(schema: Record<string, any>, coreKeys: string[]): SchemaSection[] {
   const toProps = (keys: string[]): SchemaProperty[] =>
     keys.filter((k) => schema[k]).map((k) => toSchemaProperty(k, schema[k]));
-
-  const knownKeys = new Set([...coreKeys, ...RESOURCE_KEYS, ...CONFIG_KEYS, ...extraKnownKeys]);
-  const advancedKeys = Object.keys(schema)
-    .filter((k) => !knownKeys.has(k))
-    .sort();
 
   const sections: SchemaSection[] = [
     { title: 'Core', icon: 'pi-cog', iconClass: 'core', properties: toProps(coreKeys) },
@@ -160,14 +135,157 @@ export function buildSections(
     },
   ];
 
-  if (advancedKeys.length > 0) {
-    sections.push({
-      title: 'Advanced',
-      icon: 'pi-wrench',
-      iconClass: 'advanced',
-      properties: toProps(advancedKeys),
-    });
+  return sections.filter((s) => s.properties.length > 0);
+}
+
+/**
+ * Sections rendered when the CRD schema cannot be fetched. The edit page
+ * filters the read-only 'type'/'mode' keys out of Core.
+ */
+export const FALLBACK_SECTIONS: SchemaSection[] = [
+  {
+    title: 'Core',
+    icon: 'pi-cog',
+    iconClass: 'core',
+    properties: [
+      {
+        key: 'type',
+        type: 'string',
+        description: 'Application language type',
+        enumValues: ['Java', 'Scala', 'Python', 'R'],
+        isObject: false,
+        isArray: false,
+      },
+      {
+        key: 'mode',
+        type: 'string',
+        description: 'Deploy mode',
+        enumValues: ['cluster', 'client'],
+        isObject: false,
+        isArray: false,
+      },
+      { key: 'image', type: 'string', description: 'Spark image', isObject: false, isArray: false },
+      {
+        key: 'mainClass',
+        type: 'string',
+        description: 'Main class',
+        isObject: false,
+        isArray: false,
+      },
+      {
+        key: 'mainApplicationFile',
+        type: 'string',
+        description: 'Main application file',
+        isObject: false,
+        isArray: false,
+      },
+      {
+        key: 'arguments',
+        type: 'array',
+        description: 'Application arguments',
+        isObject: false,
+        isArray: true,
+        itemType: 'string',
+      },
+    ],
+  },
+  {
+    title: 'Resources',
+    icon: 'pi-server',
+    iconClass: 'resources',
+    properties: [
+      {
+        key: 'driver',
+        type: 'object',
+        description: 'Driver pod resources',
+        isObject: true,
+        isArray: false,
+      },
+      {
+        key: 'executor',
+        type: 'object',
+        description: 'Executor pod resources',
+        isObject: true,
+        isArray: false,
+      },
+    ],
+  },
+  {
+    title: 'Configuration',
+    icon: 'pi-sliders-h',
+    iconClass: 'config',
+    properties: [
+      {
+        key: 'sparkConf',
+        type: 'object',
+        description: 'Spark configuration (key=value)',
+        isObject: true,
+        isArray: false,
+      },
+    ],
+  },
+];
+
+type SparkResourceFields = Pick<
+  SparkAppUpdateRequest,
+  | 'arguments'
+  | 'driverCores'
+  | 'driverMemory'
+  | 'executorInstances'
+  | 'executorCores'
+  | 'executorMemory'
+  | 'sparkConf'
+>;
+
+export interface SparkNumericDefaults {
+  driverCores?: number;
+  executorInstances?: number;
+  executorCores?: number;
+}
+
+/**
+ * Map the free-form arguments/driver/executor/sparkConf form values onto a
+ * submit or update request. Without `numericDefaults` (edit page) unparseable
+ * integers stay undefined and are omitted from the PATCH; the submit page
+ * passes its platform defaults instead.
+ */
+export function applyResourceFormValues(
+  req: SparkResourceFields,
+  formValues: Record<string, any>,
+  numericDefaults: SparkNumericDefaults = {},
+): void {
+  const argsStr = formValues['arguments'];
+  if (argsStr && typeof argsStr === 'string') {
+    req.arguments = argsStr
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
   }
 
-  return sections.filter((s) => s.properties.length > 0);
+  const driverStr = formValues['driver'];
+  if (driverStr && typeof driverStr === 'string') {
+    const parsed = parseKeyValue(driverStr);
+    if (parsed['cores']) {
+      req.driverCores = parseInt(parsed['cores'], 10) || numericDefaults.driverCores;
+    }
+    if (parsed['memory']) req.driverMemory = parsed['memory'];
+  }
+
+  const executorStr = formValues['executor'];
+  if (executorStr && typeof executorStr === 'string') {
+    const parsed = parseKeyValue(executorStr);
+    if (parsed['instances']) {
+      req.executorInstances =
+        parseInt(parsed['instances'], 10) || numericDefaults.executorInstances;
+    }
+    if (parsed['cores']) {
+      req.executorCores = parseInt(parsed['cores'], 10) || numericDefaults.executorCores;
+    }
+    if (parsed['memory']) req.executorMemory = parsed['memory'];
+  }
+
+  const sparkConfStr = formValues['sparkConf'];
+  if (sparkConfStr && typeof sparkConfStr === 'string' && sparkConfStr.trim()) {
+    req.sparkConf = parseKeyValue(sparkConfStr);
+  }
 }

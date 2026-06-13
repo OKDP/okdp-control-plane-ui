@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { DynamicSchemaForm } from './dynamic-schema-form';
 
 const schema = {
@@ -34,5 +34,71 @@ describe('DynamicSchemaForm', () => {
     );
 
     expect(onParametersChange).toHaveBeenLastCalledWith({ name: 'custom', replicas: 2 });
+  });
+
+  // Regression: fields hidden by x-ui-condition were still validated (an
+  // invisible error blocked submission) and their stale values were emitted.
+  it('skips hidden conditional fields in validation and emission', () => {
+    const onParametersChange = vi.fn();
+    const onValidityChange = vi.fn();
+    render(
+      <DynamicSchemaForm
+        schema={{
+          properties: {
+            mode: { type: 'string', enum: ['on', 'off'], default: 'off' },
+            extraMemory: {
+              type: 'string',
+              default: '',
+              'x-ui-condition': { field: 'mode', value: 'on' },
+            },
+          },
+        }}
+        initialValues={{ extraMemory: 'not-a-quantity' }}
+        onParametersChange={onParametersChange}
+        onValidityChange={onValidityChange}
+      />,
+    );
+
+    expect(onValidityChange).toHaveBeenLastCalledWith(true);
+    expect(onParametersChange).toHaveBeenLastCalledWith({ mode: 'off' });
+  });
+
+  // Regression: an enum field matching the quantity heuristic ("rateLimitPolicy")
+  // failed K8S_QUANTITY_RE on its enum values and invisibly invalidated the form.
+  it('does not quantity-validate enum (select) fields', () => {
+    const onValidityChange = vi.fn();
+    render(
+      <DynamicSchemaForm
+        schema={{
+          properties: {
+            rateLimitPolicy: { type: 'string', enum: ['burst', 'steady'], default: 'burst' },
+          },
+        }}
+        onParametersChange={vi.fn()}
+        onValidityChange={onValidityChange}
+      />,
+    );
+
+    expect(onValidityChange).toHaveBeenLastCalledWith(true);
+  });
+
+  // Regression: the error message only rendered for the plain-text widget, and
+  // the camelCase haystack never matched \bmemory\b ("driverMemory").
+  it('renders the quantity error for non-text widgets and camelCase names', () => {
+    const onValidityChange = vi.fn();
+    render(
+      <DynamicSchemaForm
+        schema={{
+          properties: {
+            driverMemory: { type: 'string', default: 'bogus', 'x-ui-widget': 'textarea' },
+          },
+        }}
+        onParametersChange={vi.fn()}
+        onValidityChange={onValidityChange}
+      />,
+    );
+
+    expect(onValidityChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByText(/Invalid Kubernetes quantity/)).toBeTruthy();
   });
 });

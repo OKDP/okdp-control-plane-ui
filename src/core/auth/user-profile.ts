@@ -1,7 +1,6 @@
 export interface UserProfile {
   sub: string;
   email?: string;
-  variable_email?: string;
   email_verified?: boolean;
   name?: string;
   username?: string;

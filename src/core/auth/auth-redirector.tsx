@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import { setUnauthorizedHandler } from '../api/http';
 import { AUTH_RETURN_URL_KEY } from '../storage-keys';
@@ -30,8 +30,21 @@ export function AuthRedirector() {
 
   useEffect(() => {
     setUnauthorizedHandler((status) => {
+      // Parallel requests fail together when the session dies, so the handler
+      // fires once per 401. Only the first may act: a second forceLogout
+      // (after navigate() has put us on /login) would wipe the return URL
+      // re-saved below and the user would lose their place.
+      if (window.location.pathname.includes('login')) {
+        return;
+      }
       logger.warn(`Caught ${status} error. Session may have expired.`);
       auth.forceLogout();
+      // forceLogout clears the saved return URL — re-save the interrupted
+      // page so re-login lands back on it (same guard as auth-context).
+      const { pathname, search } = window.location;
+      if (pathname !== '/' && pathname !== '/index.html') {
+        sessionStorage.setItem(AUTH_RETURN_URL_KEY, pathname + search);
+      }
       navigate('/login?sessionExpired=true');
     });
     return () => setUnauthorizedHandler(null);
@@ -42,18 +55,39 @@ export function AuthRedirector() {
       return;
     }
 
-    // Check for saved return URL
+    // Check for saved return URL. Replace (not push) in both branches, and
+    // skip the no-op navigation: pushing the current URL or stacking /home
+    // entries on every effect re-run creates a back-button trap.
     const returnUrl = sessionStorage.getItem(AUTH_RETURN_URL_KEY);
     if (returnUrl) {
       sessionStorage.removeItem(AUTH_RETURN_URL_KEY);
-      navigate(returnUrl);
+      if (returnUrl !== window.location.pathname + window.location.search) {
+        navigate(returnUrl, { replace: true });
+      }
       return;
     }
 
     if (shouldRedirect('/home')) {
-      navigate('/home');
+      navigate('/home', { replace: true });
     }
   }, [auth.ready, auth.isAuthenticated, navigate]);
 
   return null;
+}
+
+/**
+ * '/' index target: consume a pending saved deep link, falling back to /home.
+ * Must be the route element itself — a plain <Navigate to="/home"> at '/'
+ * flushes its effect in the same commit as AuthRedirector's restore and would
+ * clobber the freshly restored deep link. Anonymous visits still end at
+ * /login via /home's RequireAuth (which re-saves the link).
+ */
+export function RootRedirect() {
+  // Read during render, consume in an effect: StrictMode double-invokes
+  // render, and a removeItem there would lose the URL on the second pass.
+  const returnUrl = sessionStorage.getItem(AUTH_RETURN_URL_KEY);
+  useEffect(() => {
+    sessionStorage.removeItem(AUTH_RETURN_URL_KEY);
+  }, []);
+  return <Navigate to={returnUrl || '/home'} replace />;
 }

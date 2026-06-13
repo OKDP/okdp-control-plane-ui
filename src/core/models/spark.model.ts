@@ -1,3 +1,5 @@
+import type { ListEvent } from '../api/sse';
+
 export interface SparkAppRequest {
   name: string;
   type: 'Java' | 'Scala' | 'Python' | 'R';
@@ -52,10 +54,7 @@ export interface SparkUIInfo {
   available: boolean;
 }
 
-export interface SparkAppEvent {
-  type: 'ADDED' | 'MODIFIED' | 'DELETED';
-  object: SparkAppInstance;
-}
+export type SparkAppEvent = ListEvent<SparkAppInstance>;
 
 export interface SparkConfig {
   image: SparkConfigImage;

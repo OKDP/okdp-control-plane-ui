@@ -52,13 +52,15 @@ export interface ExternalSecretRequest {
   data: ExternalSecretDataRef[];
 }
 
+const seg = encodeURIComponent;
+
 function baseUrl(projectId: string): string {
-  return `${environment.apiBaseUrl}/api/projects/${projectId}/external-secrets`;
+  return `${environment.apiBaseUrl}/api/projects/${seg(projectId)}/external-secrets`;
 }
 
 export const externalSecretApi = {
-  async list(projectId: string): Promise<ExternalSecret[]> {
-    return (await http.get<ExternalSecret[]>(baseUrl(projectId))) || [];
+  list(projectId: string): Promise<ExternalSecret[]> {
+    return http.getList<ExternalSecret>(baseUrl(projectId));
   },
 
   create(projectId: string, request: ExternalSecretRequest): Promise<ExternalSecret> {
@@ -66,14 +68,14 @@ export const externalSecretApi = {
   },
 
   update(projectId: string, name: string, request: ExternalSecretRequest): Promise<ExternalSecret> {
-    return http.put<ExternalSecret>(`${baseUrl(projectId)}/${name}`, request);
+    return http.put<ExternalSecret>(`${baseUrl(projectId)}/${seg(name)}`, request);
   },
 
   delete(projectId: string, name: string): Promise<void> {
-    return http.delete(`${baseUrl(projectId)}/${name}`);
+    return http.delete(`${baseUrl(projectId)}/${seg(name)}`);
   },
 
   getStatus(projectId: string, name: string): Promise<ExternalSecretStatusDetail> {
-    return http.get<ExternalSecretStatusDetail>(`${baseUrl(projectId)}/${name}/status`);
+    return http.get<ExternalSecretStatusDetail>(`${baseUrl(projectId)}/${seg(name)}/status`);
   },
 };

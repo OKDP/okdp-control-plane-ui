@@ -5,8 +5,6 @@ import { readUiCache, writeUiCache } from '../../../core/api/ui-cache';
 export interface ProjectStats {
   /** Total deployed service instances in the project. */
   instances: number;
-  /** Distinct service types among those instances. */
-  services: number;
   /** False until the per-instance metric requests have settled. */
   metricsLoaded: boolean;
   /** Summed CPU usage in cores; null when no instance reports it. */
@@ -35,20 +33,18 @@ export function useProjectStats(projectNames: string[]): Record<string, ProjectS
 
   useEffect(() => {
     const names = namesKey ? namesKey.split('|') : [];
-    let cancelled = false;
 
+    // No cancellation: fetchedRef marks every name as fetched up front, so a
+    // namesKey change mid-flight (SSE ADDED/DELETED) must let in-flight
+    // results land — they would otherwise be dropped and never retried.
     const mergeStats = (name: string, value: ProjectStats) => {
-      if (!cancelled) {
-        setStats((prev) => ({ ...prev, [name]: value }));
-      }
+      setStats((prev) => ({ ...prev, [name]: value }));
     };
 
     // A partial result must not blank out a painted snapshot (no pulse
     // regression); the final aggregate below always overwrites.
     const mergeIfAbsent = (name: string, value: ProjectStats) => {
-      if (!cancelled) {
-        setStats((prev) => (prev[name] ? prev : { ...prev, [name]: value }));
-      }
+      setStats((prev) => (prev[name] ? prev : { ...prev, [name]: value }));
     };
 
     for (const name of names) {
@@ -65,7 +61,6 @@ export function useProjectStats(projectNames: string[]): Record<string, ProjectS
           const instances = await serviceApi.getServices(name);
           base = {
             instances: instances.length,
-            services: new Set(instances.map((i) => i.service)).size,
             metricsLoaded: instances.length === 0,
             cpuUsed: null,
             memUsed: null,
@@ -121,7 +116,6 @@ export function useProjectStats(projectNames: string[]): Record<string, ProjectS
           // Failures are not cached, and must not replace a painted snapshot.
           mergeIfAbsent(name, {
             instances: 0,
-            services: 0,
             metricsLoaded: true,
             cpuUsed: null,
             memUsed: null,
@@ -131,10 +125,6 @@ export function useProjectStats(projectNames: string[]): Record<string, ProjectS
         }
       })();
     }
-
-    return () => {
-      cancelled = true;
-    };
   }, [namesKey]);
 
   return stats;

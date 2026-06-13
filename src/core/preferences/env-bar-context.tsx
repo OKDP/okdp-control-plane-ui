@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { ENV_BAR_STORAGE_KEY } from '../storage-keys';
 
 export interface EnvBarContextValue {
@@ -22,11 +22,12 @@ export function EnvBarProvider({ children }: { children: ReactNode }) {
     setEnabled(enabled);
   }, []);
 
-  return (
-    <EnvBarContext.Provider value={{ envBarEnabled, setEnvBarEnabled }}>
-      {children}
-    </EnvBarContext.Provider>
+  const value = useMemo(
+    () => ({ envBarEnabled, setEnvBarEnabled }),
+    [envBarEnabled, setEnvBarEnabled],
   );
+
+  return <EnvBarContext.Provider value={value}>{children}</EnvBarContext.Provider>;
 }
 
 export function useEnvBar(): EnvBarContextValue {

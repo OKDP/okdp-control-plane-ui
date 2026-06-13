@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useLayoutEffect } from 'react';
 import { render, waitFor, act } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AUTH_RETURN_URL_KEY } from '../storage-keys';
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./auth-context', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../api/http', () => ({ setUnauthorizedHandler: mocks.setUnauthorizedHandler }));
 
-import { AuthRedirector } from './auth-redirector';
+import { AuthRedirector, RootRedirect } from './auth-redirector';
 
 let currentPath = '';
 
@@ -37,6 +37,22 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <AuthRedirector />
       <LocationProbe />
+    </MemoryRouter>,
+  );
+}
+
+// Mirrors the app tree at '/': AuthRedirector plus the index RootRedirect,
+// whose <Navigate> effect flushes in the same commit as the restore.
+function renderAtRoot() {
+  window.history.replaceState({}, '', '/');
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <AuthRedirector />
+      <LocationProbe />
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="*" element={null} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -99,6 +115,81 @@ describe('AuthRedirector', () => {
 
       await waitFor(() => expect(currentPath).toBe('/projects/test/services'));
       expect(sessionStorage.getItem(AUTH_RETURN_URL_KEY)).toBeNull();
+    });
+
+    it('should consume the return URL without navigating when already there', async () => {
+      sessionStorage.setItem(AUTH_RETURN_URL_KEY, '/projects/test');
+
+      renderAt('/projects/test');
+      await flushEffects();
+
+      expect(currentPath).toBe('/projects/test');
+      expect(sessionStorage.getItem(AUTH_RETURN_URL_KEY)).toBeNull();
+    });
+
+    it('should let a restored deep link win over the index /home redirect', async () => {
+      sessionStorage.setItem(AUTH_RETURN_URL_KEY, '/projects/test/services');
+
+      renderAtRoot();
+
+      await waitFor(() => expect(currentPath).toBe('/projects/test/services'));
+      await flushEffects();
+      expect(currentPath).toBe('/projects/test/services');
+      expect(sessionStorage.getItem(AUTH_RETURN_URL_KEY)).toBeNull();
+    });
+
+    it('should fall back to /home from the index route when no return URL is saved', async () => {
+      renderAtRoot();
+
+      await waitFor(() => expect(currentPath).toBe('/home'));
+    });
+  });
+
+  describe('Unauthorized handler', () => {
+    it('should re-save the interrupted page after the 401 forced logout cleared it', async () => {
+      const forceLogout = vi.fn(() => sessionStorage.removeItem(AUTH_RETURN_URL_KEY));
+      mocks.useAuth.mockReturnValue({
+        ready: true,
+        isAuthenticated: false,
+        profile: null,
+        roles: [],
+        forceLogout,
+      });
+
+      renderAt('/projects/test/services');
+      await flushEffects();
+
+      const handler = mocks.setUnauthorizedHandler.mock.calls.at(-1)![0];
+      act(() => handler(401));
+
+      expect(forceLogout).toHaveBeenCalled();
+      expect(sessionStorage.getItem(AUTH_RETURN_URL_KEY)).toBe('/projects/test/services');
+      await waitFor(() => expect(currentPath).toBe('/login'));
+    });
+
+    it('should keep the re-saved return URL when parallel 401s fire in a burst', async () => {
+      const forceLogout = vi.fn(() => sessionStorage.removeItem(AUTH_RETURN_URL_KEY));
+      mocks.useAuth.mockReturnValue({
+        ready: true,
+        isAuthenticated: false,
+        profile: null,
+        roles: [],
+        forceLogout,
+      });
+
+      renderAt('/projects/test/services');
+      await flushEffects();
+
+      const handler = mocks.setUnauthorizedHandler.mock.calls.at(-1)![0];
+      act(() => handler(401));
+      await waitFor(() => expect(currentPath).toBe('/login'));
+
+      // The remaining 401s of the same burst arrive once we are already on
+      // /login — they must not force-logout again and wipe the saved link.
+      act(() => handler(401));
+
+      expect(forceLogout).toHaveBeenCalledTimes(1);
+      expect(sessionStorage.getItem(AUTH_RETURN_URL_KEY)).toBe('/projects/test/services');
     });
   });
 

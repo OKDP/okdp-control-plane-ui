@@ -1,6 +1,6 @@
 {
   "name": "okdp-control-plane-ui",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,8 +15,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "js-yaml": "^4.1.1",
-    "jwt-decode": "^4.0.0",
     "oidc-client-ts": "^3.1.0",
     "primeicons": "^7.0.0",
     "primereact": "^10.9.7",
@@ -29,7 +27,6 @@
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.0",
-    "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",

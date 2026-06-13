@@ -1,22 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { InputSwitch } from 'primereact/inputswitch';
 import { sparkApi } from '../../../core/api/spark-api';
 import type { SparkAppInstance } from '../../../core/models/spark.model';
-import { formatMediumDateTime } from '../services/service-utils';
+import { formatMediumDateTime, openInNewTab } from '../services/service-utils';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import EmptyState from '../../../shared/components/empty-state';
 import { StatusTag } from '../../../shared/components/status-tag';
 import { getExecutorTone, getStatusTone, isTerminalStatus } from './spark-utils';
+
+const MAX_LOG_LINES = 10000;
 
 export default function SparkDetailPage() {
   const navigate = useNavigate();
   const { projectId = '', appName = '' } = useParams<{ projectId: string; appName: string }>();
-  const toast = useRef<Toast>(null);
+  const { toast, showError, showWarn } = useToastMessages();
 
   const [app, setApp] = useState<SparkAppInstance | null>(null);
   const [loading, setLoading] = useState(true);
-  const [logContent, setLogContent] = useState('');
+  const [logLines, setLogLines] = useState<string[]>([]);
   const [followMode, setFollowMode] = useState(false);
   const [sparkUILoading, setSparkUILoading] = useState(false);
 
@@ -35,17 +39,13 @@ export default function SparkDetailPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load Spark job details',
-        });
+        showError('Failed to load Spark job details');
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [projectId, appName]);
+  }, [projectId, appName, showError]);
 
   // Driver logs: snapshot fetch or follow-mode stream (starts once the app
   // details have loaded)
@@ -56,9 +56,16 @@ export default function SparkDetailPage() {
     if (!app || !projectId || !appName) return;
 
     if (followMode) {
-      setLogContent('');
+      setLogLines([]);
       return sparkApi.streamDriverLogs(projectId, appName, {
-        next: (line) => setLogContent((current) => current + line + '\n'),
+        next: (line) =>
+          setLogLines((prev) => {
+            const next = [...prev, line];
+            if (next.length > MAX_LOG_LINES) {
+              next.splice(0, next.length - MAX_LOG_LINES);
+            }
+            return next;
+          }),
       });
     }
 
@@ -66,10 +73,10 @@ export default function SparkDetailPage() {
     sparkApi
       .getDriverLogs(projectId, appName, 200)
       .then((logs) => {
-        if (!cancelled) setLogContent(logs);
+        if (!cancelled) setLogLines(logs ? [logs] : []);
       })
       .catch(() => {
-        if (!cancelled) setLogContent('Failed to load logs.');
+        if (!cancelled) setLogLines(['Failed to load logs.']);
       });
     return () => {
       cancelled = true;
@@ -89,18 +96,14 @@ export default function SparkDetailPage() {
         setSparkUILoading(false);
         const url = info[field];
         if (url) {
-          window.open(url, '_blank');
+          openInNewTab(url);
         } else {
-          toast.current?.show({ severity: 'warn', summary: warnTitle, detail: warnDetail });
+          showWarn(warnDetail, warnTitle);
         }
       })
       .catch(() => {
         setSparkUILoading(false);
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to retrieve Spark UI info',
-        });
+        showError('Failed to retrieve Spark UI info');
       });
   };
 
@@ -193,12 +196,7 @@ export default function SparkDetailPage() {
         </div>
 
         {loading ? (
-          <div className="flex animate-in flex-col items-center justify-center gap-3 p-16 text-fg-muted">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
-              <i className="pi pi-spin pi-spinner text-[1.3rem] text-primary"></i>
-            </div>
-            <p>Loading job details...</p>
-          </div>
+          <EmptyState variant="panel" icon="pi pi-spin pi-spinner" title="Loading job details..." />
         ) : app ? (
           <div className="flex animate-[fadeInUp_0.45s_cubic-bezier(0.22,1,0.36,1)_0.08s_backwards] flex-col gap-5">
             <div className="rounded-xl border border-border-light bg-surface p-5">
@@ -304,28 +302,27 @@ export default function SparkDetailPage() {
               </div>
               <div className="log-block max-h-[500px] overflow-auto rounded-md p-3">
                 <pre className="m-0 font-[inherit] break-all whitespace-pre-wrap">
-                  {logContent || 'No logs available.'}
+                  {logLines.join('\n') || 'No logs available.'}
                 </pre>
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex animate-in flex-col items-center justify-center gap-3 rounded-xl border border-border-light bg-surface p-16 text-center">
-            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-surface-tertiary">
-              <i className="pi pi-exclamation-triangle text-[1.5rem] text-fg-muted"></i>
-            </div>
-            <h3 className="m-0 text-[16px] font-semibold">Job not found</h3>
-            <p className="m-0 max-w-[340px] text-[14px] text-fg-secondary">
-              The Spark application could not be loaded.
-            </p>
-            <Button
-              icon="pi pi-arrow-left"
-              severity="secondary"
-              outlined
-              label="Back to jobs"
-              onClick={goBack}
-            />
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-exclamation-triangle"
+            title="Job not found"
+            description="The Spark application could not be loaded."
+            action={
+              <Button
+                icon="pi pi-arrow-left"
+                severity="secondary"
+                outlined
+                label="Back to jobs"
+                onClick={goBack}
+              />
+            }
+          />
         )}
       </div>
     </>

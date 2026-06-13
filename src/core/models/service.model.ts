@@ -1,3 +1,5 @@
+import type { ListEvent } from '../api/sse';
+
 // --- Platform Services (core OKDP, full lifecycle management) ---
 
 export interface PlatformService {
@@ -13,7 +15,7 @@ export interface DeployServiceRequest {
   service: string;
   tag?: string;
   instanceName?: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 }
 
 export interface ServiceInstance {
@@ -30,14 +32,11 @@ export interface ServiceInstance {
   statusMessage?: string;
   targetNamespace: string;
   url?: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   createdAt?: string;
 }
 
-export interface ServiceEvent {
-  type: 'ADDED' | 'MODIFIED' | 'DELETED';
-  object: ServiceInstance;
-}
+export type ServiceEvent = ListEvent<ServiceInstance>;
 
 export interface Pod {
   name: string;
@@ -66,18 +65,4 @@ export interface MetricValue {
 export interface ServiceMetrics {
   cpu: MetricValue;
   memory: MetricValue;
-}
-
-// --- Catalog (client self-service, no OKDP management) ---
-
-export interface CatalogCategory {
-  id: string;
-  name: string;
-  description: string;
-  packages: CatalogPackage[];
-}
-
-export interface CatalogPackage {
-  name: string;
-  tag: string;
 }

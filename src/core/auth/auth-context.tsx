@@ -13,7 +13,7 @@ import { Log, User, UserManager, WebStorageStateStore } from 'oidc-client-ts';
 import { environment } from '../../config/environment';
 import { logger } from '../services/logger';
 import { setAuthTokenProvider } from '../api/http';
-import { AUTH_RETURN_URL_KEY, PROJECT_STORAGE_KEY } from '../storage-keys';
+import { AUTH_RETURN_URL_KEY, PROJECT_STORAGE_KEY, SQL_QUERY_KEY } from '../storage-keys';
 import type { UserProfile } from './user-profile';
 
 export interface AuthState {
@@ -89,6 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, isAuthenticated: false, profile: null, roles: [] }));
     sessionStorage.removeItem(AUTH_RETURN_URL_KEY);
     sessionStorage.removeItem(PROJECT_STORAGE_KEY);
+    // SQL drafts are keyed per project under this prefix and may embed
+    // sensitive literals — sweep them all so they don't outlive the session.
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith(SQL_QUERY_KEY)) {
+        sessionStorage.removeItem(key);
+      }
+    }
   }, []);
 
   const login = useCallback(() => {
@@ -115,11 +122,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const token = useCallback(async (): Promise<string | undefined> => {
     const user = await userManager.getUser();
-    return user?.access_token ?? undefined;
+    // An expired token would only buy a 401 round-trip — send none instead.
+    return user && !user.expired ? user.access_token : undefined;
   }, [userManager]);
 
   useEffect(() => {
     const currentUrl = new URL(window.location.href);
+
+    // Strip the one-shot autoLogin param before the deep-link save below, so
+    // the restored URL doesn't re-trigger auto-login on the next full reload.
+    const autoLoginRequested = currentUrl.searchParams.has('autoLogin');
+    if (autoLoginRequested) {
+      currentUrl.searchParams.delete('autoLogin');
+      window.history.replaceState(
+        {},
+        '',
+        `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+      );
+    }
 
     // Save current URL for restoration after the login redirect, if it's a
     // deep link (and not the landing/login page or an OIDC callback).
@@ -130,16 +150,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       !currentUrl.pathname.includes('login')
     ) {
       sessionStorage.setItem(AUTH_RETURN_URL_KEY, currentUrl.pathname + currentUrl.search);
-    }
-
-    const autoLoginRequested = currentUrl.searchParams.has('autoLogin');
-    if (autoLoginRequested) {
-      currentUrl.searchParams.delete('autoLogin');
-      window.history.replaceState(
-        {},
-        '',
-        `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
-      );
     }
 
     const applyUser = (user: User | null) => {
@@ -179,15 +189,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Keep state in sync with silent renew / session changes
+    // Keep state in sync with silent renew / session changes. A silent-renew
+    // failure may be transient (it fires well before expiry and only timeouts
+    // are retried), so it is only logged — the session is dropped when the
+    // access token actually expires.
     const onUserLoaded = (user: User) => applyUser(user);
     const onUserUnloaded = () => applyUser(null);
+    const onSilentRenewError = (err: Error) => logger.error('OIDC silent renew failed', err);
+    const onAccessTokenExpired = () => applyUser(null);
     userManager.events.addUserLoaded(onUserLoaded);
     userManager.events.addUserUnloaded(onUserUnloaded);
+    userManager.events.addSilentRenewError(onSilentRenewError);
+    userManager.events.addAccessTokenExpired(onAccessTokenExpired);
 
     return () => {
       userManager.events.removeUserLoaded(onUserLoaded);
       userManager.events.removeUserUnloaded(onUserUnloaded);
+      userManager.events.removeSilentRenewError(onSilentRenewError);
+      userManager.events.removeAccessTokenExpired(onAccessTokenExpired);
     };
   }, [userManager, login]);
 

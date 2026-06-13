@@ -1,13 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Toast } from 'primereact/toast';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
+import EmptyState from '../../../shared/components/empty-state';
 import SearchFilter from '../../../shared/components/search-filter';
 import { serviceApi } from '../../../core/api/service-api';
 import { applyListEvent } from '../../../core/api/sse';
 import { readUiCache, writeUiCache } from '../../../core/api/ui-cache';
 import type { ServiceInstance } from '../../../core/models/service.model';
-import { apiErrorMessage, formatMediumDate, isTransitioning, statusTone } from './service-utils';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import {
+  apiErrorMessage,
+  formatMediumDate,
+  isTransitioning,
+  openInNewTab,
+  statusTone,
+} from './service-utils';
 import { StatusTag } from '../../../shared/components/status-tag';
 
 type StatusFilter = 'All' | 'Ready' | 'Installing' | 'Updating' | 'Error';
@@ -35,7 +43,7 @@ export function ServiceList({
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: projectName } = useParams<{ projectId: string }>();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
 
   const [services, setServices] = useState<ServiceInstance[]>([]);
   // Deletion runs until the backend confirms (slow helm uninstall); these
@@ -68,11 +76,7 @@ export function ServiceList({
       })
       .catch(() => {
         if (cancelled) return;
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load services',
-        });
+        showError('Failed to load services');
         setLoading(false);
       });
 
@@ -95,7 +99,7 @@ export function ServiceList({
       cancelled = true;
       unsubscribe();
     };
-  }, [projectName, serviceFilter]);
+  }, [projectName, serviceFilter, showError]);
 
   const statChips = useMemo(
     () => [
@@ -157,7 +161,7 @@ export function ServiceList({
 
   const openService = (svc: ServiceInstance) => {
     if (svc.url) {
-      window.open(svc.url, '_blank');
+      openInNewTab(svc.url);
     }
   };
 
@@ -176,21 +180,13 @@ export function ServiceList({
     serviceApi
       .deleteService(projectName, svc.name)
       .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Instance deleted',
-          detail: `"${svc.name}" has been removed`,
-        });
+        showSuccess(`"${svc.name}" has been removed`, 'Instance deleted');
         clearDeleting();
         setServices((current) => current.filter((s) => s.name !== svc.name));
       })
       .catch((err) => {
         clearDeleting();
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Failed to delete instance'),
-        });
+        showError(apiErrorMessage(err, 'Failed to delete instance'));
       });
   };
 
@@ -240,28 +236,24 @@ export function ServiceList({
       />
 
       {loading ? (
-        <div className="empty-state-panel">
-          <div className="empty-icon-wrapper">
-            <i className="pi pi-spin pi-spinner"></i>
-          </div>
-          <h3>Loading instances…</h3>
-        </div>
+        <EmptyState variant="panel" icon="pi pi-spin pi-spinner" title="Loading instances…" />
       ) : filtered.length === 0 ? (
-        <div className="empty-state-panel">
-          <div className="empty-icon-wrapper">
-            <i className={hasFilter ? 'pi pi-search' : 'pi pi-server'}></i>
-          </div>
-          <h3>{hasFilter ? 'No instances match' : emptyTitle}</h3>
-          <p>
-            {hasFilter ? 'Try clearing the filter or searching by a different term.' : emptyMessage}
-          </p>
-          {!hasFilter && (
-            <button className="create-btn" onClick={onDeploy}>
-              <i className="pi pi-plus"></i>
-              <span>New instance</span>
-            </button>
-          )}
-        </div>
+        <EmptyState
+          variant="panel"
+          icon={hasFilter ? 'pi pi-search' : 'pi pi-server'}
+          title={hasFilter ? 'No instances match' : emptyTitle}
+          description={
+            hasFilter ? 'Try clearing the filter or searching by a different term.' : emptyMessage
+          }
+          action={
+            !hasFilter && (
+              <button className="create-btn" onClick={onDeploy}>
+                <i className="pi pi-plus"></i>
+                <span>New instance</span>
+              </button>
+            )
+          }
+        />
       ) : (
         <div className="okdp-table-wrapper">
           <table className="okdp-table">
@@ -295,10 +287,11 @@ export function ServiceList({
                     </td>
                     <td>
                       {deleting ? (
-                        <span className="okdp-tag okdp-tag-warn">
-                          <i className="pi pi-spin pi-spinner text-[0.7rem]"></i>
-                          Deleting…
-                        </span>
+                        <StatusTag
+                          value="Deleting…"
+                          tone="warning"
+                          icon={<i className="pi pi-spin pi-spinner text-[0.7rem]" />}
+                        />
                       ) : (
                         <StatusTag
                           value={svc.status}

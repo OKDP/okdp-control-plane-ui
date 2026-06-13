@@ -1,5 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { NAV_HIDDEN_KEY, NAV_SIZE_KEY } from '../storage-keys';
 
 export type NavMenuSize = 'compact' | 'default' | 'large' | 'xl';
@@ -77,23 +85,25 @@ export function NavPrefsProvider({ children }: { children: ReactNode }) {
   );
 
   const setNavItemHidden = useCallback((label: string, hidden: boolean) => {
-    setOverrides((prev) => {
-      const next = { ...prev, [label]: hidden };
-      localStorage.setItem(NAV_HIDDEN_KEY, JSON.stringify(next));
-      return next;
-    });
+    setOverrides((prev) => ({ ...prev, [label]: hidden }));
   }, []);
+
+  // Persist outside the state updater — StrictMode double-invokes updaters.
+  useEffect(() => {
+    localStorage.setItem(NAV_HIDDEN_KEY, JSON.stringify(overrides));
+  }, [overrides]);
 
   const setMenuSize = useCallback((size: NavMenuSize) => {
     localStorage.setItem(NAV_SIZE_KEY, size);
     setMenuSizeState(size);
   }, []);
 
-  return (
-    <NavPrefsContext.Provider value={{ isNavItemHidden, setNavItemHidden, menuSize, setMenuSize }}>
-      {children}
-    </NavPrefsContext.Provider>
+  const value = useMemo(
+    () => ({ isNavItemHidden, setNavItemHidden, menuSize, setMenuSize }),
+    [isNavItemHidden, setNavItemHidden, menuSize, setMenuSize],
   );
+
+  return <NavPrefsContext.Provider value={value}>{children}</NavPrefsContext.Provider>;
 }
 
 export function useNavPrefs(): NavPrefsContextValue {

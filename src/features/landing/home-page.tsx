@@ -1,8 +1,12 @@
 import { Button } from 'primereact/button';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../core/auth/auth-context';
 
 export default function HomePage() {
   const auth = useAuth();
+  // Set by the 401/403 unauthorized handler (see AuthRedirector).
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('sessionExpired') === 'true';
 
   return (
     <section className="flex min-h-screen flex-col items-center justify-center bg-surface-secondary p-8">
@@ -28,12 +32,7 @@ export default function HomePage() {
         </div>
 
         {/* Auth States */}
-        {!auth.ready ? (
-          <div className="flex items-center gap-3 text-fg-secondary">
-            <i className="pi pi-spin pi-spinner text-[1.25rem] text-primary"></i>
-            <span>Initializing...</span>
-          </div>
-        ) : auth.isAuthenticated ? (
+        {auth.isAuthenticated ? (
           <div className="flex w-full flex-col gap-5">
             <div className="flex items-center justify-center gap-2 rounded-md border border-primary-100 bg-primary-50 p-4 text-primary-700">
               <i className="pi pi-user-check text-[1.25rem] text-primary"></i>
@@ -56,7 +55,13 @@ export default function HomePage() {
             </div>
           </div>
         ) : (
-          <div className="w-full">
+          <div className="flex w-full flex-col gap-4">
+            {sessionExpired && (
+              <div className="flex items-center justify-center gap-2 rounded-md bg-accent-amber-light p-3 text-warning">
+                <i className="pi pi-exclamation-triangle"></i>
+                <span>Your session has expired. Please sign in again.</span>
+              </div>
+            )}
             <Button
               type="button"
               label="Sign in"
@@ -70,7 +75,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="mt-6 text-xs text-fg-muted">
-        <span>© 2026 OKDP</span>
+        <span>© {new Date().getFullYear()} OKDP</span>
       </footer>
     </section>
   );

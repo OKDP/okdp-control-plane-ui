@@ -29,7 +29,7 @@ export default function ProjectHome() {
           <SectionHeading>Quick Actions</SectionHeading>
           <QuickActions>
             <ActionCard
-              to={`/projects/${project.name}/jupyterhub/deploy`}
+              to={`/projects/${project.name}/jupyterhub/deploy?service=jupyterhub`}
               icon="pi pi-play"
               tone="primary"
               title="Deploy Notebook"

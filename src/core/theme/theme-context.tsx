@@ -1,5 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { THEME_STORAGE_KEY } from '../storage-keys';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -51,7 +59,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(mode);
   }, []);
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
+  const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {

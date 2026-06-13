@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -7,9 +7,7 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Checkbox } from 'primereact/checkbox';
-import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import type { MenuItem } from 'primereact/menuitem';
 import {
   secretStoreApi,
   type SecretStore,
@@ -20,16 +18,18 @@ import {
 import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils';
 import { statusTone } from './secret-status';
 import { StatusTag } from '../../../shared/components/status-tag';
-import { StatusDetailContent } from './status-detail';
+import { StatusDialog } from './status-dialog';
+import { usePolledResources } from './use-polled-resources';
+import { useStatusDialog } from './use-status-dialog';
+import { SECTION_TITLE_CLASS, DIVIDER_CLASS } from './constants';
 import SearchFilter from '../../../shared/components/search-filter';
 import { PageHeader } from '../../../shared/components/page-header';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { useRowActionsMenu } from '../../../shared/hooks/use-row-actions-menu';
 import { k8sNameError } from '../../../shared/utils/k8s-names';
 import { DialogFooter } from '../../../shared/components/dialog-footer';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 
-const SECTION_TITLE_CLASS = 'm-0 mb-3 text-[14px] font-semibold text-fg';
-const DIVIDER_CLASS = 'my-4 border-0 border-t border-t-border';
 const MODE_SWITCH_CLASS =
   'mb-4 flex rounded-sm border border-border-light bg-surface-secondary p-1';
 const MODE_BTN_CLASS =
@@ -39,8 +39,6 @@ const MODE_BTN_IDLE_CLASS = 'bg-transparent font-medium text-fg-secondary';
 
 const modeBtnClass = (active: boolean) =>
   `${MODE_BTN_CLASS} ${active ? MODE_BTN_ACTIVE_CLASS : MODE_BTN_IDLE_CLASS}`;
-
-const POLL_INTERVAL_MS = 10_000;
 
 const AUTH_TYPE_OPTIONS: { label: string; value: VaultAuthType }[] = [
   { label: 'Token', value: 'token' },
@@ -75,14 +73,24 @@ const EMPTY_FORM: StoreForm = {
 
 const getStatusTone = (status: string) => statusTone(status, 'Ready');
 
+const isStoreChanged = (s: SecretStore, c: SecretStore) =>
+  s.name !== c.name ||
+  s.status !== c.status ||
+  s.lastCheckedAt !== c.lastCheckedAt ||
+  s.lastError !== c.lastError ||
+  s.isDefault !== c.isDefault;
+
+const toStoreFallbackDetail = (store: SecretStore): SecretStoreStatusDetail => ({
+  status: store.status,
+  conditions: [],
+  lastCheckedAt: store.lastCheckedAt,
+  lastError: store.lastError,
+});
+
 export function SecretStoreList() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const { toast, showSuccess, showError } = useToastMessages();
-  const menuRef = useRef<Menu>(null);
-  const selectedStoreRef = useRef<SecretStore | null>(null);
 
-  const [stores, setStores] = useState<SecretStore[]>([]);
-  const [loading, setLoading] = useState(true);
   const [globalFilter, setGlobalFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<SecretStore | null>(null);
 
@@ -93,62 +101,33 @@ export function SecretStoreList() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<StoreForm>(EMPTY_FORM);
 
-  // Status detail state
-  const [statusDialogVisible, setStatusDialogVisible] = useState(false);
-  const [statusDetail, setStatusDetail] = useState<SecretStoreStatusDetail | null>(null);
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [selectedStoreName, setSelectedStoreName] = useState('');
-  const statusLoadingRef = useRef(false);
-  statusLoadingRef.current = statusLoading;
-
   const patchForm = (patch: Partial<StoreForm>) => setForm((f) => ({ ...f, ...patch }));
 
-  const mergeStores = useCallback((incoming: SecretStore[]) => {
-    setStores((current) => {
-      if (current.length !== incoming.length) {
-        return incoming;
-      }
-      const changed = incoming.some((s, i) => {
-        const c = current[i];
-        return (
-          s.name !== c.name ||
-          s.status !== c.status ||
-          s.lastCheckedAt !== c.lastCheckedAt ||
-          s.lastError !== c.lastError ||
-          s.isDefault !== c.isDefault
-        );
-      });
-      return changed ? incoming : current;
-    });
-  }, []);
+  const {
+    items: stores,
+    loading,
+    reload: loadStores,
+    merge: mergeStores,
+  } = usePolledResources(projectId, secretStoreApi.list, isStoreChanged, () =>
+    showError('Failed to load secret stores'),
+  );
 
-  const loadStores = useCallback(() => {
-    if (!projectId) return;
-    setLoading(true);
-    secretStoreApi
-      .list(projectId)
-      .then((data) => {
-        setStores(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        showError('Failed to load secret stores');
-        setLoading(false);
-      });
-  }, [projectId, showError]);
+  const listAndMerge = useCallback(
+    () =>
+      secretStoreApi.list(projectId).then((data) => {
+        mergeStores(data);
+        return data;
+      }),
+    [projectId, mergeStores],
+  );
 
-  // Initial load + 10s polling while a project is selected
-  useEffect(() => {
-    if (!projectId) return;
-    loadStores();
-    const timer = setInterval(() => {
-      secretStoreApi
-        .list(projectId)
-        .then(mergeStores)
-        .catch(() => undefined);
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [projectId, loadStores, mergeStores]);
+  const statusDialog = useStatusDialog({
+    projectId,
+    getStatus: secretStoreApi.getStatus,
+    listAndMerge,
+    toFallbackDetail: toStoreFallbackDetail,
+    showError,
+  });
 
   // --- Name validation ---
   const nameError = k8sNameError(form.storeName);
@@ -255,98 +234,11 @@ export function SecretStoreList() {
       });
   };
 
-  // --- Status detail ---
-  const fetchStatusDetail = useCallback(
-    (storeName: string, fallback?: SecretStore) => {
-      secretStoreApi
-        .getStatus(projectId, storeName)
-        .then((detail) => {
-          setStatusDetail(detail);
-          setStatusLoading(false);
-        })
-        .catch(() => {
-          if (fallback) {
-            setStatusDetail({
-              status: fallback.status,
-              conditions: [],
-              lastCheckedAt: fallback.lastCheckedAt,
-              lastError: fallback.lastError,
-            });
-          }
-          setStatusLoading(false);
-        });
-    },
-    [projectId],
-  );
-
-  const showStatusDetail = (store: SecretStore) => {
-    setSelectedStoreName(store.name);
-    setStatusLoading(true);
-    setStatusDetail(null);
-    setStatusDialogVisible(true);
-    fetchStatusDetail(store.name, store);
-  };
-
-  // Poll the status detail while the dialog is open
-  useEffect(() => {
-    if (!statusDialogVisible || !selectedStoreName || !projectId) return;
-    const timer = setInterval(() => {
-      if (statusLoadingRef.current) return;
-      fetchStatusDetail(selectedStoreName);
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [statusDialogVisible, selectedStoreName, projectId, fetchStatusDetail]);
-
-  const refreshStatus = () => {
-    if (!selectedStoreName || !projectId) return;
-    setStatusLoading(true);
-
-    secretStoreApi
-      .list(projectId)
-      .then((data) => {
-        mergeStores(data);
-        const freshStore = data.find((s) => s.name === selectedStoreName);
-        if (freshStore) {
-          setStatusDetail({
-            status: freshStore.status,
-            conditions: [],
-            lastCheckedAt: freshStore.lastCheckedAt,
-            lastError: freshStore.lastError,
-          });
-          fetchStatusDetail(freshStore.name);
-        } else {
-          setStatusLoading(false);
-        }
-      })
-      .catch(() => {
-        showError('Failed to refresh status');
-        setStatusLoading(false);
-      });
-  };
-
-  const menuItems: MenuItem[] = [
-    {
-      label: 'View Status',
-      icon: 'pi pi-info-circle',
-      command: () => {
-        if (selectedStoreRef.current) showStatusDetail(selectedStoreRef.current);
-      },
-    },
-    {
-      label: 'Edit',
-      icon: 'pi pi-pencil',
-      command: () => {
-        if (selectedStoreRef.current) showEditDialog(selectedStoreRef.current);
-      },
-    },
-    {
-      label: 'Delete',
-      icon: 'pi pi-trash',
-      command: () => {
-        if (selectedStoreRef.current) confirmDelete(selectedStoreRef.current);
-      },
-    },
-  ];
+  const { menuElement, openMenu } = useRowActionsMenu<SecretStore>([
+    { label: 'View Status', icon: 'pi pi-info-circle', command: statusDialog.open },
+    { label: 'Edit', icon: 'pi pi-pencil', command: showEditDialog },
+    { label: 'Delete', icon: 'pi pi-trash', command: confirmDelete },
+  ]);
 
   const dialogFooter = (
     <DialogFooter
@@ -367,26 +259,6 @@ export function SecretStoreList() {
         />
       }
     />
-  );
-
-  const statusDialogFooter = (
-    <div className="dialog-actions items-center">
-      <Button
-        severity="secondary"
-        outlined
-        icon="pi pi-refresh"
-        label="Refresh"
-        onClick={refreshStatus}
-        disabled={statusLoading}
-      />
-      <div className="flex-1"></div>
-      <Button
-        severity="secondary"
-        outlined
-        label="Close"
-        onClick={() => setStatusDialogVisible(false)}
-      />
-    </div>
   );
 
   return (
@@ -434,7 +306,7 @@ export function SecretStoreList() {
             body={(store: SecretStore) => (
               <>
                 <span className="font-medium">{store.name}</span>
-                {store.isDefault && <span className="okdp-tag okdp-tag-info ml-2">default</span>}
+                {store.isDefault && <StatusTag value="default" tone="info" className="ml-2" />}
               </>
             )}
           />
@@ -487,7 +359,7 @@ export function SecretStoreList() {
                   icon="pi pi-info-circle"
                   text
                   rounded
-                  onClick={() => showStatusDetail(store)}
+                  onClick={() => statusDialog.open(store)}
                   title="View status"
                   aria-label={`View status for ${store.name}`}
                 />
@@ -496,16 +368,13 @@ export function SecretStoreList() {
                   text
                   rounded
                   aria-label={`Actions for ${store.name}`}
-                  onClick={(e) => {
-                    selectedStoreRef.current = store;
-                    menuRef.current?.toggle(e);
-                  }}
+                  onClick={(e) => openMenu(store, e)}
                 />
               </div>
             )}
           />
         </DataTable>
-        <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
+        {menuElement}
       </div>
 
       {/* Create / Edit Dialog */}
@@ -565,8 +434,12 @@ export function SecretStoreList() {
 
           {/* Version */}
           <div className="field">
-            <label htmlFor="vaultVersion">KV version</label>
-            <div className={MODE_SWITCH_CLASS} role="radiogroup" aria-label="KV version">
+            <label id="vaultVersion-label">KV version</label>
+            <div
+              className={MODE_SWITCH_CLASS}
+              role="radiogroup"
+              aria-labelledby="vaultVersion-label"
+            >
               <button
                 className={modeBtnClass(form.vaultVersion === 'v2')}
                 onClick={() => patchForm({ vaultVersion: 'v2' })}
@@ -682,27 +555,17 @@ export function SecretStoreList() {
         </div>
       </Dialog>
 
-      {/* Status Detail Dialog */}
-      <Dialog
-        header={`Status: ${selectedStoreName}`}
-        visible={statusDialogVisible}
-        modal
-        draggable={false}
-        resizable={false}
-        style={{ width: '600px' }}
-        className="db-dialog"
-        closable
-        onHide={() => setStatusDialogVisible(false)}
-        footer={statusDialogFooter}
-      >
-        <StatusDetailContent
-          loading={statusLoading}
-          detail={statusDetail}
-          tone={statusDetail ? getStatusTone(statusDetail.status) : 'info'}
-          checkedLabel="Last checked"
-          checkedAt={statusDetail?.lastCheckedAt}
-        />
-      </Dialog>
+      <StatusDialog
+        visible={statusDialog.visible}
+        selectedName={statusDialog.selectedName}
+        loading={statusDialog.loading}
+        detail={statusDialog.detail}
+        tone={statusDialog.detail ? getStatusTone(statusDialog.detail.status) : 'info'}
+        checkedLabel="Last checked"
+        checkedAt={statusDialog.detail?.lastCheckedAt}
+        onHide={statusDialog.close}
+        onRefresh={statusDialog.refresh}
+      />
 
       <DeleteConfirmDialog
         resourceName={deleteTarget?.name ?? null}

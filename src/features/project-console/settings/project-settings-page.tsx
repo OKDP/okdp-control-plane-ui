@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
 import { projectApi } from '../../../core/api/project-api';
 import { useProjectContext } from '../../../core/context/project-context';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import {
   PROJECT_COLOR_PALETTE,
   getProjectColor,
@@ -25,7 +26,7 @@ export default function ProjectSettingsPage() {
   // param — keying on the not-yet-loaded record stored them under "".
   const { projectId } = useParams<{ projectId: string }>();
   const { currentProject } = useProjectContext();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
 
   const projectName = projectId ?? '';
   const savedDescription = currentProject?.description ?? '';
@@ -56,22 +57,8 @@ export default function ProjectSettingsPage() {
     setSaving(true);
     projectApi
       .updateProject({ name: currentProject.name, description: draft.trim() })
-      .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Project description updated',
-          life: 3000,
-        });
-      })
-      .catch(() => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update the project description',
-          life: 5000,
-        });
-      })
+      .then(() => showSuccess('Project description updated'))
+      .catch(() => showError('Failed to update the project description'))
       .finally(() => setSaving(false));
   };
 
@@ -83,12 +70,7 @@ export default function ProjectSettingsPage() {
     // context list; the context then navigates away from the dead project.
     projectApi.deleteProject(currentProject.name).catch(() => {
       setDeleting(false);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'Failed to delete the project',
-        life: 5000,
-      });
+      showError('Failed to delete the project');
     });
   };
 
@@ -106,6 +88,9 @@ export default function ProjectSettingsPage() {
         <div className="form-card">
           <div className="form-field">
             <label htmlFor="project-description">Project description</label>
+            {/* Disabled until the project record loads — typing into the
+                not-yet-seeded draft would be clobbered by the re-seed
+                effect, and Save would silently no-op. */}
             <InputTextarea
               id="project-description"
               value={draft}
@@ -114,13 +99,14 @@ export default function ProjectSettingsPage() {
               autoResize
               placeholder="Describe the purpose of this project"
               className="w-full"
+              disabled={!currentProject}
             />
             <div className="flex justify-end">
               <Button
                 label="Save"
                 icon="pi pi-check"
                 size="small"
-                disabled={!dirty}
+                disabled={!dirty || !currentProject}
                 loading={saving}
                 onClick={saveDescription}
               />
@@ -188,6 +174,7 @@ export default function ProjectSettingsPage() {
                 outlined
                 size="small"
                 className="shrink-0"
+                disabled={!currentProject}
                 onClick={() => setConfirmDelete(true)}
               />
             )}

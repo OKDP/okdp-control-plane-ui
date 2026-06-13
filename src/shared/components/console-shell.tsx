@@ -145,17 +145,11 @@ export function ConsoleShell({
         <div className="flex flex-1 items-center justify-start gap-2 pl-3">{headerLeft}</div>
 
         <div className="flex items-center gap-2">
-          <div
+          <button
+            type="button"
+            aria-label="User menu"
             className="flex items-center gap-2 rounded-md border-none bg-transparent py-1 pr-2 pl-1 transition-[background-color] duration-150 ease-smooth hover:bg-surface-tertiary"
             onClick={(e) => menuRef.current?.toggle(e)}
-            tabIndex={0}
-            aria-label="User menu"
-            role="button"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                menuRef.current?.toggle(e);
-              }
-            }}
           >
             <Avatar
               label={initials}
@@ -174,7 +168,7 @@ export function ConsoleShell({
               <span className="text-base leading-none font-medium text-fg">{displayName}</span>
             </div>
             <i className="pi pi-angle-down text-[0.7rem] text-fg-muted"></i>
-          </div>
+          </button>
           <Menu ref={menuRef} model={profileMenu} popup />
         </div>
       </header>
@@ -243,7 +237,7 @@ export function ConsoleShell({
         <footer className="flex min-h-7 w-full shrink-0 items-center justify-between border-t border-border-light bg-transparent px-7 py-1.5">
           <div className="flex items-center gap-3">
             <span className="text-xs font-normal text-fg-muted">
-              © 2026 OKDP. All rights reserved.
+              © {new Date().getFullYear()} OKDP. All rights reserved.
             </span>
             <a
               href={environment.githubUrl}
@@ -256,7 +250,7 @@ export function ConsoleShell({
             </a>
           </div>
           <div>
-            <span className="text-xs font-normal text-fg-muted">v1.0.0</span>
+            <span className="text-xs font-normal text-fg-muted">{`v${__APP_VERSION__}`}</span>
           </div>
         </footer>
       </div>

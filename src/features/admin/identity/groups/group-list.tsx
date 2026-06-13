@@ -1,27 +1,25 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
-import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import type { MenuItem } from 'primereact/menuitem';
 import { identityApi, type Group } from '../../../../core/api/identity-api';
 import { useIdentityGroups } from '../use-identity';
+import EmptyState from '../../../../shared/components/empty-state';
 import SearchFilter from '../../../../shared/components/search-filter';
 import { PageHeader } from '../../../../shared/components/page-header';
 import { useToastMessages } from '../../../../shared/hooks/use-toast-messages';
+import { useRowActionsMenu } from '../../../../shared/hooks/use-row-actions-menu';
 import { DialogFooter } from '../../../../shared/components/dialog-footer';
 import DeleteConfirmDialog from '../../../../shared/components/delete-confirm-dialog';
 
 export function GroupList() {
   const { toast, showSuccess, showError } = useToastMessages();
-  const menuRef = useRef<Menu>(null);
-  const selectedGroupRef = useRef<Group | null>(null);
 
-  const { groups, loading, refresh: refreshGroups } = useIdentityGroups();
+  const { groups, loading, error, refresh: refreshGroups } = useIdentityGroups();
 
   const [globalFilter, setGlobalFilter] = useState('');
   const [groupDialog, setGroupDialog] = useState(false);
@@ -71,23 +69,11 @@ export function GroupList() {
       .catch(() => showError(isEditMode ? 'Failed to update group' : 'Failed to create group'));
   };
 
-  const menuItems: MenuItem[] = [
-    {
-      label: 'Edit',
-      icon: 'pi pi-pencil',
-      command: () => {
-        if (selectedGroupRef.current) editGroup(selectedGroupRef.current);
-      },
-    },
+  const { menuElement, openMenu } = useRowActionsMenu<Group>([
+    { label: 'Edit', icon: 'pi pi-pencil', command: editGroup },
     { separator: true },
-    {
-      label: 'Delete',
-      icon: 'pi pi-trash',
-      command: () => {
-        if (selectedGroupRef.current) setDeleteTarget(selectedGroupRef.current);
-      },
-    },
-  ];
+    { label: 'Delete', icon: 'pi pi-trash', command: setDeleteTarget },
+  ]);
 
   const dialogFooter = (
     <DialogFooter
@@ -130,54 +116,62 @@ export function GroupList() {
         }
       />
 
-      <SearchFilter
-        value={globalFilter}
-        onChange={setGlobalFilter}
-        placeholder="Filter groups..."
-      />
+      {error && groups.length === 0 ? (
+        <EmptyState
+          icon="pi pi-exclamation-triangle"
+          title="Failed to load groups"
+          description="The group list could not be retrieved. Check your connection and try again."
+          action={
+            <button className="btn-secondary mt-3" onClick={refreshGroups}>
+              <i className="pi pi-refresh"></i>
+              <span>Retry</span>
+            </button>
+          }
+        />
+      ) : (
+        <>
+          <SearchFilter
+            value={globalFilter}
+            onChange={setGlobalFilter}
+            placeholder="Filter groups..."
+          />
 
-      {/* Data Table */}
-      <div className="table-wrapper">
-        <DataTable
-          value={groups}
-          loading={loading}
-          globalFilter={globalFilter}
-          globalFilterFields={['name', 'description']}
-          className="minimal-table"
-          emptyMessage="No groups found."
-          rowClassName={() => 'group-row'}
-        >
-          <Column
-            header="Name"
-            field="name"
-            style={{ width: '30%' }}
-            body={(g: Group) => <span className="font-medium">{g.name}</span>}
-          />
-          <Column
-            header="Description"
-            field="description"
-            style={{ width: '55%' }}
-            body={(g: Group) => g.description || '-'}
-          />
-          <Column
-            style={{ width: '15%', textAlign: 'right' }}
-            body={(g: Group) => (
-              <div className="actions">
-                <Button
-                  icon="pi pi-ellipsis-v"
-                  text
-                  rounded
-                  onClick={(e) => {
-                    selectedGroupRef.current = g;
-                    menuRef.current?.toggle(e);
-                  }}
-                />
-              </div>
-            )}
-          />
-        </DataTable>
-        <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
-      </div>
+          {/* Data Table */}
+          <div className="table-wrapper">
+            <DataTable
+              value={groups}
+              loading={loading}
+              globalFilter={globalFilter}
+              globalFilterFields={['name', 'description']}
+              className="minimal-table"
+              emptyMessage="No groups found."
+              rowClassName={() => 'group-row'}
+            >
+              <Column
+                header="Name"
+                field="name"
+                style={{ width: '30%' }}
+                body={(g: Group) => <span className="font-medium">{g.name}</span>}
+              />
+              <Column
+                header="Description"
+                field="description"
+                style={{ width: '55%' }}
+                body={(g: Group) => g.description || '-'}
+              />
+              <Column
+                style={{ width: '15%', textAlign: 'right' }}
+                body={(g: Group) => (
+                  <div className="actions">
+                    <Button icon="pi pi-ellipsis-v" text rounded onClick={(e) => openMenu(g, e)} />
+                  </div>
+                )}
+              />
+            </DataTable>
+            {menuElement}
+          </div>
+        </>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog

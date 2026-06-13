@@ -8,6 +8,16 @@ const mocks = vi.hoisted(() => ({
   signoutRedirect: vi.fn(),
   removeUser: vi.fn(),
   signinRedirectCallback: vi.fn(),
+  events: {
+    addUserLoaded: vi.fn(),
+    addUserUnloaded: vi.fn(),
+    removeUserLoaded: vi.fn(),
+    removeUserUnloaded: vi.fn(),
+    addSilentRenewError: vi.fn(),
+    removeSilentRenewError: vi.fn(),
+    addAccessTokenExpired: vi.fn(),
+    removeAccessTokenExpired: vi.fn(),
+  },
 }));
 
 vi.mock('oidc-client-ts', () => {
@@ -17,12 +27,7 @@ vi.mock('oidc-client-ts', () => {
     signoutRedirect = mocks.signoutRedirect;
     removeUser = mocks.removeUser;
     signinRedirectCallback = mocks.signinRedirectCallback;
-    events = {
-      addUserLoaded: vi.fn(),
-      addUserUnloaded: vi.fn(),
-      removeUserLoaded: vi.fn(),
-      removeUserUnloaded: vi.fn(),
-    };
+    events = mocks.events;
   }
   class WebStorageStateStore {}
   const Log = { setLogger: vi.fn(), setLevel: vi.fn(), DEBUG: 4 };
@@ -105,6 +110,7 @@ describe('AuthProvider', () => {
     it('should clear local storage keys on forceLogout', async () => {
       sessionStorage.setItem('auth_return_url', '/somewhere');
       sessionStorage.setItem('okdp-selected-projectId', 'proj-a');
+      sessionStorage.setItem('okdp-sql-query:proj-a', 'SELECT secret FROM t');
 
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.ready).toBe(true));
@@ -113,6 +119,36 @@ describe('AuthProvider', () => {
 
       expect(sessionStorage.getItem('auth_return_url')).toBeNull();
       expect(sessionStorage.getItem('okdp-selected-projectId')).toBeNull();
+      expect(sessionStorage.getItem('okdp-sql-query:proj-a')).toBeNull();
+    });
+  });
+
+  describe('Session expiry events', () => {
+    it('should drop the session when the access token expires', async () => {
+      mocks.getUser.mockResolvedValue(mockUser({ sub: '123' }));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+      const onExpired = mocks.events.addAccessTokenExpired.mock.calls[0][0];
+      act(() => onExpired());
+
+      expect(result.current.isAuthenticated).toBe(false);
+    });
+
+    it('should keep the session on a silent renew error (log only)', async () => {
+      mocks.getUser.mockResolvedValue(mockUser({ sub: '123' }));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+      const onRenewError = mocks.events.addSilentRenewError.mock.calls[0][0];
+      act(() => onRenewError(new Error('renew failed')));
+
+      expect(result.current.isAuthenticated).toBe(true);
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
   });
 
@@ -140,6 +176,20 @@ describe('AuthProvider', () => {
     });
 
     it('should return undefined when no user session exists', async () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.ready).toBe(true));
+
+      const token = await result.current.token();
+      expect(token).toBeUndefined();
+    });
+
+    it('should return undefined when the stored token is expired', async () => {
+      mocks.getUser.mockResolvedValue({
+        expired: true,
+        profile: { sub: '123' },
+        access_token: 'dead-token',
+      });
+
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.ready).toBe(true));
 

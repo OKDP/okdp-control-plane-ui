@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
@@ -8,24 +8,22 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { Password } from 'primereact/password';
 import { MultiSelect } from 'primereact/multiselect';
 import { Checkbox } from 'primereact/checkbox';
-import { Menu } from 'primereact/menu';
 import { Toast } from 'primereact/toast';
-import type { MenuItem } from 'primereact/menuitem';
 import { identityApi, type User } from '../../../../core/api/identity-api';
 import { useIdentityGroups, useIdentityUsers } from '../use-identity';
+import EmptyState from '../../../../shared/components/empty-state';
 import SearchFilter from '../../../../shared/components/search-filter';
 import { PageHeader } from '../../../../shared/components/page-header';
 import { useToastMessages } from '../../../../shared/hooks/use-toast-messages';
+import { useRowActionsMenu } from '../../../../shared/hooks/use-row-actions-menu';
 import { DialogFooter } from '../../../../shared/components/dialog-footer';
 import DeleteConfirmDialog from '../../../../shared/components/delete-confirm-dialog';
 import { StatusTag } from '../../../../shared/components/status-tag';
 
 export function UserList() {
   const { toast, showSuccess, showError } = useToastMessages();
-  const menuRef = useRef<Menu>(null);
-  const selectedUserRef = useRef<User | null>(null);
 
-  const { users, loading, refresh: refreshUsers } = useIdentityUsers();
+  const { users, loading, error, refresh: refreshUsers } = useIdentityUsers();
   const { groups: availableGroups } = useIdentityGroups();
 
   const [globalFilter, setGlobalFilter] = useState('');
@@ -88,23 +86,11 @@ export function UserList() {
       .catch(() => showError(isEditMode ? 'Failed to update user' : 'Failed to create user'));
   };
 
-  const menuItems: MenuItem[] = [
-    {
-      label: 'Edit',
-      icon: 'pi pi-pencil',
-      command: () => {
-        if (selectedUserRef.current) editUser(selectedUserRef.current);
-      },
-    },
+  const { menuElement, openMenu } = useRowActionsMenu<User>([
+    { label: 'Edit', icon: 'pi pi-pencil', command: editUser },
     { separator: true },
-    {
-      label: 'Delete',
-      icon: 'pi pi-trash',
-      command: () => {
-        if (selectedUserRef.current) setDeleteTarget(selectedUserRef.current);
-      },
-    },
-  ];
+    { label: 'Delete', icon: 'pi pi-trash', command: setDeleteTarget },
+  ]);
 
   const dialogFooter = (
     <DialogFooter
@@ -147,75 +133,87 @@ export function UserList() {
         }
       />
 
-      <SearchFilter value={globalFilter} onChange={setGlobalFilter} placeholder="Filter users..." />
+      {error && users.length === 0 ? (
+        <EmptyState
+          icon="pi pi-exclamation-triangle"
+          title="Failed to load users"
+          description="The user list could not be retrieved. Check your connection and try again."
+          action={
+            <button className="btn-secondary mt-3" onClick={refreshUsers}>
+              <i className="pi pi-refresh"></i>
+              <span>Retry</span>
+            </button>
+          }
+        />
+      ) : (
+        <>
+          <SearchFilter
+            value={globalFilter}
+            onChange={setGlobalFilter}
+            placeholder="Filter users..."
+          />
 
-      {/* Data Table */}
-      <div className="table-wrapper">
-        <DataTable
-          value={users}
-          loading={loading}
-          globalFilter={globalFilter}
-          globalFilterFields={['name', 'email']}
-          className="minimal-table"
-          emptyMessage="No users found."
-        >
-          <Column
-            header="Name"
-            field="name"
-            style={{ width: '20%' }}
-            body={(u: User) => <span className="font-medium">{u.name}</span>}
-          />
-          <Column
-            header="Email"
-            style={{ width: '25%' }}
-            body={(u: User) => u.email?.join(', ') || '-'}
-          />
-          <Column
-            header="Groups"
-            style={{ width: '25%' }}
-            body={(u: User) => (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {u.groups?.slice(0, 3).map((group) => (
-                  <span key={group} className="okdp-tag">
-                    {group}
-                  </span>
-                ))}
-                {(u.groups?.length ?? 0) > 3 && (
-                  <span className="text-xs text-fg-muted">+{u.groups!.length - 3}</span>
+          {/* Data Table */}
+          <div className="table-wrapper">
+            <DataTable
+              value={users}
+              loading={loading}
+              globalFilter={globalFilter}
+              globalFilterFields={['name', 'email']}
+              className="minimal-table"
+              emptyMessage="No users found."
+            >
+              <Column
+                header="Name"
+                field="name"
+                style={{ width: '20%' }}
+                body={(u: User) => <span className="font-medium">{u.name}</span>}
+              />
+              <Column
+                header="Email"
+                style={{ width: '25%' }}
+                body={(u: User) => u.email?.join(', ') || '-'}
+              />
+              <Column
+                header="Groups"
+                style={{ width: '25%' }}
+                body={(u: User) => (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {u.groups?.slice(0, 3).map((group) => (
+                      <span key={group} className="okdp-tag">
+                        {group}
+                      </span>
+                    ))}
+                    {(u.groups?.length ?? 0) > 3 && (
+                      <span className="text-xs text-fg-muted">+{u.groups!.length - 3}</span>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
-          />
-          <Column
-            header="Status"
-            style={{ width: '15%' }}
-            body={(u: User) =>
-              u.disabled ? (
-                <StatusTag value="Disabled" tone="neutral" />
-              ) : (
-                <StatusTag value="Active" tone="success" />
-              )
-            }
-          />
-          <Column
-            style={{ width: '15%', textAlign: 'right' }}
-            body={(u: User) => (
-              <div className="actions">
-                <Button
-                  icon="pi pi-ellipsis-v"
-                  text
-                  rounded
-                  onClick={(e) => {
-                    selectedUserRef.current = u;
-                    menuRef.current?.toggle(e);
-                  }}
-                />
-              </div>
-            )}
-          />
-        </DataTable>
-        <Menu ref={menuRef} model={menuItems} popup appendTo={document.body} />
-      </div>
+              />
+              <Column
+                header="Status"
+                style={{ width: '15%' }}
+                body={(u: User) =>
+                  u.disabled ? (
+                    <StatusTag value="Disabled" tone="neutral" />
+                  ) : (
+                    <StatusTag value="Active" tone="success" />
+                  )
+                }
+              />
+              <Column
+                style={{ width: '15%', textAlign: 'right' }}
+                body={(u: User) => (
+                  <div className="actions">
+                    <Button icon="pi pi-ellipsis-v" text rounded onClick={(e) => openMenu(u, e)} />
+                  </div>
+                )}
+              />
+            </DataTable>
+            {menuElement}
+          </div>
+        </>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog

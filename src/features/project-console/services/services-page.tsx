@@ -4,14 +4,10 @@ import { ServiceList } from './service-list';
 import { PageHeader } from '../../../shared/components/page-header';
 
 export interface ServicesPageProps {
-  title?: string;
-  subtitle?: string;
-  deployLabel?: string;
-  serviceFilter?: string;
-  emptyMessage?: string;
-  emptyTitle?: string;
-  breadcrumbParent?: string;
-  breadcrumbCurrent?: string;
+  title: string;
+  deployLabel: string;
+  serviceFilter: string;
+  emptyMessage: string;
 }
 
 interface ServiceAreaCopy {
@@ -74,23 +70,19 @@ function areaCopy(serviceFilter: string): ServiceAreaCopy {
   }
 }
 
-export default function ServicesPage(props: ServicesPageProps) {
+export default function ServicesPage({
+  title,
+  deployLabel,
+  serviceFilter,
+  emptyMessage,
+}: ServicesPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams<{ projectId: string }>();
 
-  const serviceFilter = props.serviceFilter || '';
   const copy = areaCopy(serviceFilter);
   const basePath = areaBasePath(serviceFilter);
-
-  const title = props.title || 'Service instances';
-  const deployLabel = props.deployLabel || 'New instance';
-  const emptyMessage = props.emptyMessage || 'No instances deployed yet.';
-  const subtitle = props.subtitle || copy.subtitle;
-  const emptyTitle = props.emptyTitle || copy.emptyTitle;
-  const breadcrumbParent = props.breadcrumbParent || copy.breadcrumbParent;
-  const breadcrumbCurrent =
-    props.breadcrumbCurrent || (serviceFilter ? parentLabel(serviceFilter) : 'Instances');
+  const breadcrumbCurrent = serviceFilter ? parentLabel(serviceFilter) : 'Instances';
 
   const goToDeploy = () => {
     if (!projectId) return;
@@ -105,9 +97,9 @@ export default function ServicesPage(props: ServicesPageProps) {
   return (
     <div className="services-list animate-in">
       <PageHeader
-        breadcrumb={{ parent: breadcrumbParent, current: breadcrumbCurrent }}
+        breadcrumb={{ parent: copy.breadcrumbParent, current: breadcrumbCurrent }}
         title={title}
-        subtitle={subtitle}
+        subtitle={copy.subtitle}
         actions={
           <button className="create-btn" onClick={goToDeploy}>
             <i className="pi pi-plus"></i>
@@ -119,7 +111,7 @@ export default function ServicesPage(props: ServicesPageProps) {
       <ServiceList
         serviceFilter={serviceFilter}
         emptyMessage={emptyMessage}
-        emptyTitle={emptyTitle}
+        emptyTitle={copy.emptyTitle}
         basePath={basePath}
         onDeploy={goToDeploy}
       />

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Toast } from 'primereact/toast';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
+import EmptyState from '../../../shared/components/empty-state';
 import { serviceApi } from '../../../core/api/service-api';
 import type { Pod, ServiceInstance, ServiceMetrics } from '../../../core/models/service.model';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { PodList } from './pod-list';
 import { PodLogViewer } from './pod-log-viewer';
 import {
@@ -11,6 +13,7 @@ import {
   areaBasePath,
   formatMediumDateTime,
   isTransitioning,
+  openInNewTab,
   parentLabel,
   statusTone,
 } from './service-utils';
@@ -104,7 +107,10 @@ export default function ServiceDetailPage() {
     serviceName: string;
   }>();
   const [searchParams] = useSearchParams();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
+  // Stale-response guard: only the latest loadAll call may commit state
+  // (params can change mid-flight when navigating between instances).
+  const reqIdRef = useRef(0);
 
   const [instance, setInstance] = useState<ServiceInstance | null>(null);
   const [pods, setPods] = useState<Pod[]>([]);
@@ -134,6 +140,7 @@ export default function ServiceDetailPage() {
   const memUsage = resourceUsage(metrics, 'memory');
 
   const loadAll = useCallback(() => {
+    const reqId = ++reqIdRef.current;
     if (!projectId || !serviceName) {
       setLoading(false);
       return;
@@ -144,19 +151,17 @@ export default function ServiceDetailPage() {
       serviceApi.getPods(projectId, serviceName),
     ])
       .then(([inst, podList]) => {
+        if (reqId !== reqIdRef.current) return;
         setInstance(inst);
         setPods(podList);
         setLoading(false);
       })
       .catch(() => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load instance details',
-        });
+        if (reqId !== reqIdRef.current) return;
+        showError('Failed to load instance details');
         setLoading(false);
       });
-  }, [projectId, serviceName]);
+  }, [projectId, serviceName, showError]);
 
   useEffect(() => {
     loadAll();
@@ -165,17 +170,23 @@ export default function ServiceDetailPage() {
   // Metrics: fetch immediately then every 10s.
   useEffect(() => {
     if (!projectId || !serviceName) return;
+    let cancelled = false;
     const fetchMetrics = () => {
       serviceApi
         .getServiceMetrics(projectId, serviceName)
-        .then(setMetrics)
+        .then((m) => {
+          if (!cancelled) setMetrics(m);
+        })
         .catch(() => {
           // Leave metrics as null; UI falls back to "—".
         });
     };
     fetchMetrics();
     const id = setInterval(fetchMetrics, 10_000);
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [projectId, serviceName]);
 
   // Navigation stays inside the instance's own console area (e.g. a Trino
@@ -194,7 +205,7 @@ export default function ServiceDetailPage() {
 
   const openExternal = () => {
     const url = instance?.url;
-    if (url) window.open(url, '_blank');
+    if (url) openInNewTab(url);
   };
 
   const editInstance = () => {
@@ -214,19 +225,11 @@ export default function ServiceDetailPage() {
     serviceApi
       .deleteService(projectId, instance.name)
       .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Instance deleted',
-          detail: `"${instance.name}" has been removed`,
-        });
+        showSuccess(`"${instance.name}" has been removed`, 'Instance deleted');
         goBack();
       })
       .catch((err) => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Failed to delete instance'),
-        });
+        showError(apiErrorMessage(err, 'Failed to delete instance'));
       });
   };
 
@@ -318,12 +321,11 @@ export default function ServiceDetailPage() {
         </div>
 
         {loading ? (
-          <div className="empty-state-panel">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-spin pi-spinner"></i>
-            </div>
-            <h3>Loading instance details…</h3>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-spin pi-spinner"
+            title="Loading instance details…"
+          />
         ) : instance ? (
           <>
             <div className="okdp-tabs">
@@ -501,17 +503,18 @@ export default function ServiceDetailPage() {
             )}
           </>
         ) : (
-          <div className="empty-state-panel">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-exclamation-triangle"></i>
-            </div>
-            <h3>Instance not found</h3>
-            <p>The service instance could not be loaded.</p>
-            <button className="btn-secondary" onClick={goBack}>
-              <i className="pi pi-arrow-left"></i>
-              Back to instances
-            </button>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-exclamation-triangle"
+            title="Instance not found"
+            description="The service instance could not be loaded."
+            action={
+              <button className="btn-secondary" onClick={goBack}>
+                <i className="pi pi-arrow-left"></i>
+                Back to instances
+              </button>
+            }
+          />
         )}
       </div>
     </>

@@ -9,7 +9,6 @@ interface OidcConfig {
   scope: string;
   responseType: string;
   silentRenew: boolean;
-  useRefreshToken: boolean;
   logLevel: string;
 }
 
@@ -34,7 +33,6 @@ const development: Environment = {
     scope: 'openid profile email groups offline_access',
     responseType: 'code',
     silentRenew: true,
-    useRefreshToken: true,
     logLevel: 'Debug',
   },
 

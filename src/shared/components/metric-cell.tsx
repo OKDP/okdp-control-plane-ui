@@ -24,7 +24,7 @@ export default function MetricCell({ metric }: { metric: MetricValue | undefined
       <span className="text-sm text-fg-secondary">
         {metric.used} <span className="text-fg-muted">/ {metric.limit}</span>
       </span>
-      <div className="metric-bar h-[5px]!">
+      <div className="metric-bar h-[5px]">
         <div
           className={`metric-fill ${tone}`}
           // Keep a sliver of fill visible for tiny-but-nonzero usage.

@@ -6,6 +6,13 @@ import { InputSwitch } from 'primereact/inputswitch';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { toOptions, type SchemaProperty } from './spark-utils';
 
+// Only these keys are parsed into the submit/update request (see
+// applyResourceFormValues) — other key=value lines are dropped.
+const OBJECT_PLACEHOLDERS: Record<string, string> = {
+  driver: 'cores=… / memory=… (one per line; other keys are ignored)',
+  executor: 'instances=… / cores=… / memory=… (one per line; other keys are ignored)',
+};
+
 export interface SparkPropertyFieldProps {
   prop: SchemaProperty;
   value: any;
@@ -76,7 +83,7 @@ export function SparkPropertyField({
         value={value ?? ''}
         rows={3}
         className="w-full text-[13px]! mono!"
-        placeholder="key=value (one per line)"
+        placeholder={OBJECT_PLACEHOLDERS[prop.key] ?? 'key=value (one per line)'}
         onChange={(e) => onChange(e.target.value)}
       />
     );

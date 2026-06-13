@@ -1,4 +1,7 @@
+import { useCallback, useState } from 'react';
 import { HttpError } from '../../../core/api/http';
+import { serviceApi } from '../../../core/api/service-api';
+import type { PlatformService } from '../../../core/models/service.model';
 import type { StatusTone } from '../../../shared/components/status-tag';
 
 /** Map an instance status to its StatusTag tone. */
@@ -55,6 +58,19 @@ export function areaBasePath(service: string | undefined | null): string[] {
   return SERVICE_AREAS[service ?? '']?.basePath ?? ['jupyterhub'];
 }
 
+/** Open an external (cluster-workload) URL without handing it window.opener. */
+export function openInNewTab(url: string): void {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** Version dropdown options for a platform service, flagging the default. */
+export function versionOptionsFor(svc: PlatformService): { label: string; value: string }[] {
+  return (svc.versions ?? []).map((v) => ({
+    label: v === svc.defaultVersion ? `${v} (recommended)` : v,
+    value: v,
+  }));
+}
+
 /**
  * Extract the backend `error` (or `message`) field from a failed request,
  * with fallback — mirrors the legacy `err?.error?.error || err?.error?.message`.
@@ -86,16 +102,34 @@ export function hasProfileEditorWidget(schema: any): boolean {
   );
 }
 
-/** Remove profile-editor fields from a schema (rendered by ProfileListEditor instead). */
-export function stripProfileEditorFields(schema: any): any {
-  if (!schema?.properties) return schema;
-  const filtered = { ...schema, properties: { ...schema.properties } };
-  for (const [key, def] of Object.entries<any>(filtered.properties)) {
-    if (def['x-ui-widget'] === 'profile-editor') {
-      delete filtered.properties[key];
-    }
-  }
-  return filtered;
+/**
+ * Schema loading shared by the deploy and edit pages: holds the schema and
+ * its loading flag, and warns (via the page's showWarn) on fetch failure —
+ * `unavailableDetail` carries the page-specific copy.
+ */
+export function useServiceSchema(
+  showWarn: (detail: string, summary: string) => void,
+  unavailableDetail: string,
+) {
+  const [schema, setSchema] = useState<any>(null);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const loadSchema = useCallback(
+    (service: string, tag: string) => {
+      setSchemaLoading(true);
+      serviceApi
+        .getServiceSchema(service, tag)
+        .then((loaded) => {
+          setSchema(loaded);
+          setSchemaLoading(false);
+        })
+        .catch(() => {
+          showWarn(unavailableDetail, 'Schema unavailable');
+          setSchemaLoading(false);
+        });
+    },
+    [showWarn, unavailableDetail],
+  );
+  return { schema, setSchema, schemaLoading, loadSchema };
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */

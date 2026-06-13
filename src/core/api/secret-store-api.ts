@@ -65,13 +65,15 @@ export interface SecretStoreRequest {
   isDefault?: boolean;
 }
 
+const seg = encodeURIComponent;
+
 function storeUrl(projectId: string): string {
-  return `${environment.apiBaseUrl}/api/projects/${projectId}/secret-stores`;
+  return `${environment.apiBaseUrl}/api/projects/${seg(projectId)}/secret-stores`;
 }
 
 export const secretStoreApi = {
-  async list(projectId: string): Promise<SecretStore[]> {
-    return (await http.get<SecretStore[]>(storeUrl(projectId))) || [];
+  list(projectId: string): Promise<SecretStore[]> {
+    return http.getList<SecretStore>(storeUrl(projectId));
   },
 
   create(projectId: string, request: SecretStoreRequest): Promise<SecretStore> {
@@ -79,11 +81,11 @@ export const secretStoreApi = {
   },
 
   update(projectId: string, storeName: string, request: SecretStoreRequest): Promise<SecretStore> {
-    return http.put<SecretStore>(`${storeUrl(projectId)}/${storeName}`, request);
+    return http.put<SecretStore>(`${storeUrl(projectId)}/${seg(storeName)}`, request);
   },
 
   delete(projectId: string, storeName: string): Promise<void> {
-    return http.delete(`${storeUrl(projectId)}/${storeName}`);
+    return http.delete(`${storeUrl(projectId)}/${seg(storeName)}`);
   },
 
   testConnection(projectId: string, request: SecretStoreRequest): Promise<{ message: string }> {
@@ -91,6 +93,6 @@ export const secretStoreApi = {
   },
 
   getStatus(projectId: string, storeName: string): Promise<SecretStoreStatusDetail> {
-    return http.get<SecretStoreStatusDetail>(`${storeUrl(projectId)}/${storeName}/status`);
+    return http.get<SecretStoreStatusDetail>(`${storeUrl(projectId)}/${seg(storeName)}/status`);
   },
 };

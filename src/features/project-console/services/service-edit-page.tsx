@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Dropdown } from 'primereact/dropdown';
 import { Toast } from 'primereact/toast';
 import { serviceApi } from '../../../core/api/service-api';
 import type { ServiceInstance } from '../../../core/models/service.model';
 import { DynamicSchemaForm } from '../../../shared/components/dynamic-schema-form';
+import EmptyState from '../../../shared/components/empty-state';
 import { ProfileListEditor, type Profile } from '../../../shared/components/profile-list-editor';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import {
   apiErrorMessage,
   areaBasePath,
@@ -14,7 +16,8 @@ import {
   isTransitioning,
   parentLabel,
   statusTone,
-  stripProfileEditorFields,
+  useServiceSchema,
+  versionOptionsFor,
 } from './service-utils';
 import { StatusTag } from '../../../shared/components/status-tag';
 
@@ -25,7 +28,7 @@ export default function ServiceEditPage() {
     serviceName: string;
   }>();
   const [searchParams] = useSearchParams();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError, showWarn } = useToastMessages();
 
   const [instance, setInstance] = useState<ServiceInstance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,8 +37,12 @@ export default function ServiceEditPage() {
   // disabled when a CPU/memory quantity is malformed (e.g. "1" instead of
   // "1Gi"). Starts true so an untouched form with valid defaults is saveable.
   const [paramsValid, setParamsValid] = useState(true);
-  const [schemaLoading, setSchemaLoading] = useState(false);
-  const [rawSchema, setRawSchema] = useState<any>(null);
+  const {
+    schema: rawSchema,
+    setSchema: setRawSchema,
+    schemaLoading,
+    loadSchema,
+  } = useServiceSchema(showWarn, 'Could not load configuration schema.');
   const [profileImages, setProfileImages] = useState<
     Record<string, { label: string; image: string }[]>
   >({});
@@ -49,28 +56,6 @@ export default function ServiceEditPage() {
   const profilesRef = useRef<Profile[]>([]);
 
   const hasPendingChanges = selectedTag !== originalTagRef.current;
-  const filteredSchema = useMemo(
-    () => (rawSchema ? stripProfileEditorFields(rawSchema) : null),
-    [rawSchema],
-  );
-
-  const loadSchema = useCallback((service: string, tag: string) => {
-    setSchemaLoading(true);
-    serviceApi
-      .getServiceSchema(service, tag)
-      .then((schema) => {
-        setRawSchema(schema);
-        setSchemaLoading(false);
-      })
-      .catch(() => {
-        toast.current?.show({
-          severity: 'warn',
-          summary: 'Schema unavailable',
-          detail: 'Could not load configuration schema.',
-        });
-        setSchemaLoading(false);
-      });
-  }, []);
 
   useEffect(() => {
     if (!projectName || !serviceName) {
@@ -93,13 +78,8 @@ export default function ServiceEditPage() {
         originalTagRef.current = inst.serviceTag;
 
         const svc = platformServices.find((s) => s.name === inst.service);
-        if (svc?.versions?.length) {
-          setVersionOptions(
-            svc.versions.map((v) => ({
-              label: v === svc.defaultVersion ? `${v} (recommended)` : v,
-              value: v,
-            })),
-          );
+        if (svc) {
+          setVersionOptions(versionOptionsFor(svc));
         }
 
         const { profiles, ...params } = inst.parameters || {};
@@ -116,17 +96,13 @@ export default function ServiceEditPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load instance',
-        });
+        showError('Failed to load instance');
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [projectName, serviceName, loadSchema]);
+  }, [projectName, serviceName, loadSchema, showError]);
 
   const onVersionChange = (tag: string) => {
     if (!instance || !tag) return;
@@ -168,20 +144,12 @@ export default function ServiceEditPage() {
     serviceApi
       .updateServiceParameters(projectName, instance.name, body)
       .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Changes saved',
-          detail: `${instance.name} has been updated.`,
-        });
+        showSuccess(`${instance.name} has been updated.`, 'Changes saved');
         setSaving(false);
         navigateBack(projectName);
       })
       .catch((err) => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Failed to save changes'),
-        });
+        showError(apiErrorMessage(err, 'Failed to save changes'));
         setSaving(false);
       });
   };
@@ -238,12 +206,11 @@ export default function ServiceEditPage() {
         </div>
 
         {loading ? (
-          <div className="empty-state-panel">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-spin pi-spinner"></i>
-            </div>
-            <h3>Loading instance configuration…</h3>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-spin pi-spinner"
+            title="Loading instance configuration…"
+          />
         ) : instance ? (
           <>
             {hasPendingChanges && instance.status === 'Ready' && (
@@ -306,10 +273,10 @@ export default function ServiceEditPage() {
                     </div>
                   </div>
                 </div>
-              ) : filteredSchema ? (
+              ) : rawSchema ? (
                 <div className="form-section">
                   <DynamicSchemaForm
-                    schema={filteredSchema}
+                    schema={rawSchema}
                     initialValues={parameterValues}
                     onParametersChange={(params) => {
                       parametersRef.current = params;
@@ -360,17 +327,18 @@ export default function ServiceEditPage() {
             </div>
           </>
         ) : (
-          <div className="empty-state-panel">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-exclamation-triangle"></i>
-            </div>
-            <h3>Instance not found</h3>
-            <p>The service instance could not be loaded.</p>
-            <button className="btn-secondary" onClick={goBack}>
-              <i className="pi pi-arrow-left"></i>
-              Back to instances
-            </button>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-exclamation-triangle"
+            title="Instance not found"
+            description="The service instance could not be loaded."
+            action={
+              <button className="btn-secondary" onClick={goBack}>
+                <i className="pi pi-arrow-left"></i>
+                Back to instances
+              </button>
+            }
+          />
         )}
       </div>
     </>

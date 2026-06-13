@@ -2,14 +2,14 @@
    OKDP Control Plane UI — global stylesheet (single entry point)
 
    Structure:
-     1. Imports        — Tailwind, fonts, icons, design tokens
-     2. Variants       — class-based dark mode, OS dark scheme
+     1. Imports        — Tailwind, icons, design tokens (fonts: index.html)
+     2. Variants       — class-based dark mode
      3. Theme          — --db-* tokens exposed as Tailwind utilities
      4. Base layer     — body, scrollbar, selection, focus, motion
      5. Keyframes      — legacy animations referenced by utilities
      6. Page layout    — legacy page-level patterns (top-bar, buttons)
      7. Design system  — okdp @utility classes (services / spark)
-     8. PrimeReact     — unlayered overrides the theme CSS requires
+     8. PrimeReact     — overrides in @layer primereact-overrides
      9. Dark mode      — PrimeReact surfaces re-skinned via --db-* tokens
    ============================================================ */
 
@@ -22,17 +22,12 @@
 @layer theme, base, primereact, primereact-overrides, components, utilities;
 
 @import 'tailwindcss';
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 @import 'primeicons/primeicons.css';
 @import 'primereact/resources/themes/lara-light-blue/theme.css';
 @import './styles/variables.css';
 
 /* Dark mode is class-based (body.dark-mode), not media-query based */
 @custom-variant dark (&:where(body.dark-mode, body.dark-mode *));
-
-/* OS-level dark scheme — only for the few legacy rules that keyed off
-   prefers-color-scheme instead of the app's body.dark-mode toggle */
-@custom-variant os-dark (@media (prefers-color-scheme: dark));
 
 /* =========================================
    Tailwind theme mapping
@@ -149,7 +144,7 @@
     min-height: 100vh;
     background-color: var(--db-bg-secondary);
     background-image: radial-gradient(
-      circle at top 30%,
+      circle at 50% 30%,
       rgba(65, 146, 143, 0.05) 0%,
       transparent 60%
     );
@@ -1839,7 +1834,8 @@ h1 {
    variables.css flips the --db-* tokens under body.dark-mode, which
    covers everything the app styles itself. The lara-light theme,
    however, hardcodes light surfaces inside @layer primereact; the
-   unlayered overrides below re-skin the components the app uses so
+   @layer primereact-overrides rules below (ordered after primereact,
+   before components/utilities) re-skin the components the app uses so
    they follow the flipped tokens. */
 
   /* ===== Popup menus ===== */
@@ -2246,4 +2242,11 @@ body.dark-mode .stat-chip.chip-danger.active {
   background: rgba(220, 38, 38, 0.16);
   border-color: rgba(220, 38, 38, 0.4);
   color: #f87171;
+}
+
+/* The dark ramp reverses --db-primary-500/700 to light teals, which would
+   wash out the white header-badge icon — pin the gradient to the dark teals.
+   The .amber variant keeps its own (unflipped) accent gradient. */
+body.dark-mode .header-badge:not(.amber) {
+  background: linear-gradient(135deg, #41928f, #2d6663);
 }

@@ -13,18 +13,9 @@ export interface PodLogViewerProps {
   serviceName: string;
   pods: Pod[];
   initialPodName?: string;
-  closable?: boolean;
-  onClose?: () => void;
 }
 
-export function PodLogViewer({
-  projectId,
-  serviceName,
-  pods,
-  initialPodName,
-  closable = false,
-  onClose,
-}: PodLogViewerProps) {
+export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: PodLogViewerProps) {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
 
@@ -192,9 +183,6 @@ export function PodLogViewer({
           </label>
 
           <Button icon="pi pi-download" text rounded onClick={downloadLogs} title="Download logs" />
-          {closable && (
-            <Button icon="pi pi-times" text rounded onClick={() => onClose?.()} title="Close" />
-          )}
         </div>
       </div>
 

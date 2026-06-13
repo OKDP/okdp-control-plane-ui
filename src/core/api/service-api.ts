@@ -6,43 +6,41 @@ import type {
   DeployServiceRequest,
   ServiceEvent,
   ServiceInstance,
-  CatalogCategory,
   Pod,
   ServiceMetrics,
 } from '../models/service.model';
 
 const baseUrl = environment.apiBaseUrl;
+const seg = encodeURIComponent;
 
 export const serviceApi = {
   // --- Platform services (managed by OKDP) ---
 
-  async getPlatformServices(): Promise<PlatformService[]> {
-    return (await http.get<PlatformService[]>(`${baseUrl}/api/platform-services`)) || [];
+  getPlatformServices(): Promise<PlatformService[]> {
+    return http.getList<PlatformService>(`${baseUrl}/api/platform-services`);
   },
 
   getService(projectId: string, serviceName: string): Promise<ServiceInstance> {
     return http.get<ServiceInstance>(
-      `${baseUrl}/api/projects/${projectId}/services/${serviceName}`,
+      `${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}`,
     );
   },
 
-  async getServices(projectId: string): Promise<ServiceInstance[]> {
-    return (
-      (await http.get<ServiceInstance[]>(`${baseUrl}/api/projects/${projectId}/services`)) || []
-    );
+  getServices(projectId: string): Promise<ServiceInstance[]> {
+    return http.getList<ServiceInstance>(`${baseUrl}/api/projects/${seg(projectId)}/services`);
   },
 
   deployService(projectId: string, req: DeployServiceRequest): Promise<ServiceInstance> {
-    return http.post<ServiceInstance>(`${baseUrl}/api/projects/${projectId}/services`, req);
+    return http.post<ServiceInstance>(`${baseUrl}/api/projects/${seg(projectId)}/services`, req);
   },
 
   deleteService(projectId: string, serviceName: string): Promise<void> {
-    return http.delete(`${baseUrl}/api/projects/${projectId}/services/${serviceName}`);
+    return http.delete(`${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}`);
   },
 
   subscribeServices(projectId: string, subscriber: StreamSubscriber<ServiceEvent>): () => void {
     return subscribeJsonStream(
-      `${baseUrl}/api/projects/${projectId}/services/stream`,
+      `${baseUrl}/api/projects/${seg(projectId)}/services/stream`,
       subscriber,
       'Service SSE',
     );
@@ -51,7 +49,7 @@ export const serviceApi = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getServiceSchema(serviceName: string, tag?: string): Promise<any> {
     const params = tag ? `?tag=${encodeURIComponent(tag)}` : '';
-    return http.get(`${baseUrl}/api/platform-services/${serviceName}/schema${params}`);
+    return http.get(`${baseUrl}/api/platform-services/${seg(serviceName)}/schema${params}`);
   },
 
   getProfileImages(): Promise<Record<string, { label: string; image: string }[]>> {
@@ -65,24 +63,22 @@ export const serviceApi = {
     body: { tag?: string; parameters?: Record<string, any> },
   ): Promise<ServiceInstance> {
     return http.patch<ServiceInstance>(
-      `${baseUrl}/api/projects/${projectId}/services/${serviceName}/parameters`,
+      `${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}/parameters`,
       body,
     );
   },
 
   // --- Pod operations ---
 
-  async getPods(projectId: string, serviceName: string): Promise<Pod[]> {
-    return (
-      (await http.get<Pod[]>(
-        `${baseUrl}/api/projects/${projectId}/services/${serviceName}/pods`,
-      )) || []
+  getPods(projectId: string, serviceName: string): Promise<Pod[]> {
+    return http.getList<Pod>(
+      `${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}/pods`,
     );
   },
 
   getServiceMetrics(projectId: string, serviceName: string): Promise<ServiceMetrics> {
     return http.get<ServiceMetrics>(
-      `${baseUrl}/api/projects/${projectId}/services/${serviceName}/metrics`,
+      `${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}/metrics`,
     );
   },
 
@@ -93,7 +89,7 @@ export const serviceApi = {
     tailLines = 100,
     container?: string,
   ): Promise<string> {
-    let url = `${baseUrl}/api/projects/${projectId}/services/${serviceName}/pods/${podName}/logs?tailLines=${tailLines}`;
+    let url = `${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}/pods/${seg(podName)}/logs?tailLines=${tailLines}`;
     if (container) {
       url += `&container=${encodeURIComponent(container)}`;
     }
@@ -108,16 +104,10 @@ export const serviceApi = {
     container?: string,
     tailLines = 100,
   ): () => void {
-    let url = `${baseUrl}/api/projects/${projectId}/services/${serviceName}/pods/${podName}/logs?follow=true&tailLines=${tailLines}`;
+    let url = `${baseUrl}/api/projects/${seg(projectId)}/services/${seg(serviceName)}/pods/${seg(podName)}/logs?follow=true&tailLines=${tailLines}`;
     if (container) {
       url += `&container=${encodeURIComponent(container)}`;
     }
     return subscribeTextStream(url, subscriber);
-  },
-
-  // --- Catalog (client self-service) ---
-
-  async getCatalog(): Promise<CatalogCategory[]> {
-    return (await http.get<CatalogCategory[]>(`${baseUrl}/api/catalog`)) || [];
   },
 };

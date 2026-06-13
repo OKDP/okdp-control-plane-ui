@@ -182,7 +182,11 @@ const K8S_QUANTITY_RE = /^[0-9]+(\.[0-9]+)?(m|n|u|[kKMGTPE]i?|e[-+]?[0-9]+)?$/;
 
 function isQuantityField(field: SchemaField): boolean {
   if (field.type !== 'string') return false;
-  const hay = `${field.name} ${field.description ?? ''} ${field.title ?? ''}`.toLowerCase();
+  // Enum values are server-chosen, never free-form quantities.
+  if (field.enum && field.enum.length > 0) return false;
+  // formatLabel splits camelCase/underscores so \bmemory\b matches "driverMemory".
+  const hay =
+    `${formatLabel(field.name)} ${field.description ?? ''} ${field.title ?? ''}`.toLowerCase();
   return /\b(cpu|memory|mem)\b/.test(hay) || /request|limit/.test(field.name.toLowerCase());
 }
 
@@ -208,6 +212,15 @@ function validateField(field: SchemaField, value: unknown): string {
   return '';
 }
 
+// One-level (non-transitive) x-ui-condition semantics, shared by render,
+// validation and emission so a hidden field can neither block submission
+// nor leak its stale value into the emitted params.
+function isVisible(field: SchemaField, values: Record<string, any>): boolean {
+  const cond = field['x-ui-condition'];
+  if (!cond) return true;
+  return values[cond.field] === cond.value;
+}
+
 // Stable default — an inline `{}` default would change identity on every
 // parent render and re-trigger the values-rebuild effect in a loop.
 const EMPTY_VALUES: Record<string, any> = {};
@@ -227,20 +240,21 @@ export function DynamicSchemaForm({
   // Rebuild values when the schema or the initial values change
   useEffect(() => {
     if (schema) {
-      setValues(initialFormValues(buildFields(schema), initialValues));
+      setValues(initialFormValues(fields, initialValues));
     }
-  }, [schema, initialValues]);
+  }, [schema, fields, initialValues]);
+
+  const fieldsByName = useMemo(() => new Map(fields.map((f) => [f.name, f])), [fields]);
 
   const fieldErrors = useMemo(() => {
     const errors: Record<string, string> = {};
-    for (const group of groups) {
-      for (const field of [...group.fields, ...group.advancedFields]) {
-        const msg = validateField(field, values[field.name]);
-        if (msg) errors[field.name] = msg;
-      }
+    for (const field of fields) {
+      if (!isVisible(field, values)) continue;
+      const msg = validateField(field, values[field.name]);
+      if (msg) errors[field.name] = msg;
     }
     return errors;
-  }, [groups, values]);
+  }, [fields, values]);
 
   // Emit on every change, including initialization (legacy behavior).
   // Refs keep parent re-renders from re-triggering the effect.
@@ -254,22 +268,21 @@ export function DynamicSchemaForm({
 
     const filtered: Record<string, any> = {};
     for (const [key, val] of Object.entries(values)) {
+      // Unknown keys (no matching field) are treated as visible.
+      const field = fieldsByName.get(key);
+      if (field && !isVisible(field, values)) continue;
       if (Array.isArray(val) || (val !== '' && val !== null && val !== undefined)) {
         filtered[key] = val;
       }
     }
     onParametersChangeRef.current(filtered);
-  }, [values, fieldErrors]);
+  }, [values, fieldErrors, fieldsByName]);
 
   const setValue = (name: string, value: any) => {
     setValues((v) => ({ ...v, [name]: value }));
   };
 
-  const isFieldVisible = (field: SchemaField): boolean => {
-    const cond = field['x-ui-condition'];
-    if (!cond) return true;
-    return values[cond.field] === cond.value;
-  };
+  const isFieldVisible = (field: SchemaField): boolean => isVisible(field, values);
 
   const toggleAdvanced = (groupName: string) => {
     setAdvancedOpen((open) => ({ ...open, [groupName]: !open[groupName] }));
@@ -277,6 +290,9 @@ export function DynamicSchemaForm({
 
   const renderWidget = (field: SchemaField) => {
     const value = values[field.name];
+    // The field-invalid CSS targets the element carrying the class, so it is
+    // passed into each widget rather than set on a wrapper.
+    const invalid = fieldErrors[field.name] ? ' field-invalid' : '';
     switch (resolveWidget(field)) {
       case 'password':
         return (
@@ -287,6 +303,7 @@ export function DynamicSchemaForm({
             feedback={false}
             toggleMask
             className="w-full"
+            inputClassName={invalid ? 'field-invalid' : undefined}
             onChange={(e) => setValue(field.name, e.target.value)}
           />
         );
@@ -297,7 +314,7 @@ export function DynamicSchemaForm({
             value={value ?? ''}
             placeholder={field['x-ui-placeholder'] || ''}
             rows={3}
-            className="w-full"
+            className={`w-full${invalid}`}
             onChange={(e) => setValue(field.name, e.target.value)}
           />
         );
@@ -310,7 +327,7 @@ export function DynamicSchemaForm({
             optionLabel="label"
             optionValue="value"
             placeholder={field['x-ui-placeholder'] || 'Select...'}
-            className="w-full"
+            className={`w-full${invalid}`}
             onChange={(e) => setValue(field.name, e.value)}
           />
         );
@@ -355,28 +372,20 @@ export function DynamicSchemaForm({
             type="url"
             value={value ?? ''}
             placeholder={field['x-ui-placeholder'] || ''}
-            className="w-full"
+            className={`w-full${invalid}`}
             onChange={(e) => setValue(field.name, e.target.value)}
           />
         );
       default:
         return (
-          <>
-            <InputText
-              id={field.name}
-              type="text"
-              value={value ?? ''}
-              placeholder={field['x-ui-placeholder'] || ''}
-              className={`w-full${fieldErrors[field.name] ? ' field-invalid' : ''}`}
-              onChange={(e) => setValue(field.name, e.target.value)}
-            />
-            {fieldErrors[field.name] && (
-              <small className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-danger">
-                <i className="pi pi-exclamation-triangle text-[13px]"></i>
-                {fieldErrors[field.name]}
-              </small>
-            )}
-          </>
+          <InputText
+            id={field.name}
+            type="text"
+            value={value ?? ''}
+            placeholder={field['x-ui-placeholder'] || ''}
+            className={`w-full${invalid}`}
+            onChange={(e) => setValue(field.name, e.target.value)}
+          />
         );
     }
   };
@@ -403,6 +412,12 @@ export function DynamicSchemaForm({
                 {field.title || formatLabel(field.name)}
               </label>
               {renderWidget(field)}
+              {fieldErrors[field.name] && (
+                <small className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-danger">
+                  <i className="pi pi-exclamation-triangle text-[13px]"></i>
+                  {fieldErrors[field.name]}
+                </small>
+              )}
               {field.description && <small className="field-help">{field.description}</small>}
             </div>
           ),

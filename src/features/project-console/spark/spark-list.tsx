@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -7,7 +7,8 @@ import { Toast } from 'primereact/toast';
 import { sparkApi } from '../../../core/api/spark-api';
 import { applyListEvent } from '../../../core/api/sse';
 import type { SparkAppInstance, SparkUIInfo } from '../../../core/models/spark.model';
-import { apiErrorMessage, formatMediumDate } from '../services/service-utils';
+import { apiErrorMessage, formatMediumDate, openInNewTab } from '../services/service-utils';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { StatusTag } from '../../../shared/components/status-tag';
 import { getStatusTone, isTerminalStatus } from './spark-utils';
 import SearchFilter from '../../../shared/components/search-filter';
@@ -22,7 +23,7 @@ function shortenImage(image: string): string {
 export function SparkList() {
   const navigate = useNavigate();
   const { projectId: projectName } = useParams<{ projectId: string }>();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError, showWarn } = useToastMessages();
 
   const [apps, setApps] = useState<SparkAppInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,11 +44,7 @@ export function SparkList() {
       })
       .catch(() => {
         if (cancelled) return;
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load Spark jobs',
-        });
+        showError('Failed to load Spark jobs');
         setLoading(false);
       });
 
@@ -59,7 +56,7 @@ export function SparkList() {
       cancelled = true;
       unsubscribe();
     };
-  }, [projectName]);
+  }, [projectName, showError]);
 
   const viewDetail = (app: SparkAppInstance) => {
     if (projectName) {
@@ -74,19 +71,11 @@ export function SparkList() {
     sparkApi
       .deleteApp(projectName, app.name)
       .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Deleted',
-          detail: `Spark job "${app.name}" has been removed`,
-        });
+        showSuccess(`Spark job "${app.name}" has been removed`, 'Deleted');
         setApps((current) => current.filter((a) => a.name !== app.name));
       })
       .catch((err) => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Failed to delete Spark job'),
-        });
+        showError(apiErrorMessage(err, 'Failed to delete Spark job'));
       });
   };
 
@@ -97,21 +86,13 @@ export function SparkList() {
       .then((info) => {
         const url = info[field] as string;
         if (url) {
-          window.open(url, '_blank');
+          openInNewTab(url);
         } else {
-          toast.current?.show({
-            severity: 'warn',
-            summary: warnTitle,
-            detail: 'URL not available.',
-          });
+          showWarn('URL not available.', warnTitle);
         }
       })
       .catch(() => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to retrieve Spark UI info',
-        });
+        showError('Failed to retrieve Spark UI info');
       });
   };
 

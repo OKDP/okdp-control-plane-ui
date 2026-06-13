@@ -19,16 +19,13 @@ export interface Group {
 }
 
 const apiUrl = `${environment.apiBaseUrl}/api/v1/identity`;
+const seg = encodeURIComponent;
 
 // CRUD only — the 15s polling/refresh state of the Angular IdentityService
 // lives in the admin feature's useIdentity hook.
 export const identityApi = {
-  async listUsers(): Promise<User[]> {
-    return (await http.get<User[]>(`${apiUrl}/users`)) || [];
-  },
-
-  getUser(name: string): Promise<User> {
-    return http.get<User>(`${apiUrl}/users/${name}`);
+  listUsers(): Promise<User[]> {
+    return http.getList<User>(`${apiUrl}/users`);
   },
 
   createUser(user: User): Promise<User> {
@@ -36,15 +33,15 @@ export const identityApi = {
   },
 
   updateUser(name: string, user: User): Promise<User> {
-    return http.put<User>(`${apiUrl}/users/${name}`, user);
+    return http.put<User>(`${apiUrl}/users/${seg(name)}`, user);
   },
 
   deleteUser(name: string): Promise<void> {
-    return http.delete(`${apiUrl}/users/${name}`);
+    return http.delete(`${apiUrl}/users/${seg(name)}`);
   },
 
-  async listGroups(): Promise<Group[]> {
-    return (await http.get<Group[]>(`${apiUrl}/groups`)) || [];
+  listGroups(): Promise<Group[]> {
+    return http.getList<Group>(`${apiUrl}/groups`);
   },
 
   createGroup(group: Group): Promise<Group> {
@@ -52,10 +49,10 @@ export const identityApi = {
   },
 
   updateGroup(name: string, group: Group): Promise<Group> {
-    return http.put<Group>(`${apiUrl}/groups/${name}`, group);
+    return http.put<Group>(`${apiUrl}/groups/${seg(name)}`, group);
   },
 
   deleteGroup(name: string): Promise<void> {
-    return http.delete(`${apiUrl}/groups/${name}`);
+    return http.delete(`${apiUrl}/groups/${seg(name)}`);
   },
 };

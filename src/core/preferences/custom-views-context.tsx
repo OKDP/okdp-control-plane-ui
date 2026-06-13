@@ -1,5 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { CUSTOM_VIEWS_KEY } from '../storage-keys';
 
 /** A user-created view launcher: an external URL presented as a tile on the
@@ -60,16 +68,25 @@ export function CustomViewsProvider({ children }: { children: ReactNode }) {
     setByProject((prev) => {
       const next = { ...prev, [projectName]: fn(prev[projectName] ?? []) };
       if (next[projectName].length === 0) delete next[projectName];
-      localStorage.setItem(CUSTOM_VIEWS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
+  // Persist outside the state updater — StrictMode double-invokes updaters,
+  // so side effects there can desync storage from the kept state.
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_VIEWS_KEY, JSON.stringify(byProject));
+  }, [byProject]);
+
   const value = useMemo<CustomViewsContextValue>(
     () => ({
       viewsFor: (projectName) => byProject[projectName] ?? NO_VIEWS,
-      addView: (projectName, view) =>
-        mutate(projectName, (views) => [...views, { ...view, id: crypto.randomUUID() }]),
+      addView: (projectName, view) => {
+        // Generate the id outside the updater: under StrictMode the updater
+        // runs twice and would otherwise produce two different ids.
+        const withId = { ...view, id: crypto.randomUUID() };
+        mutate(projectName, (views) => [...views, withId]);
+      },
       updateView: (projectName, view) =>
         mutate(projectName, (views) => views.map((v) => (v.id === view.id ? view : v))),
       removeView: (projectName, id) =>

@@ -6,13 +6,17 @@ import { Toast } from 'primereact/toast';
 import { serviceApi } from '../../../core/api/service-api';
 import type { PlatformService } from '../../../core/models/service.model';
 import { DynamicSchemaForm } from '../../../shared/components/dynamic-schema-form';
+import EmptyState from '../../../shared/components/empty-state';
 import { ProfileListEditor, type Profile } from '../../../shared/components/profile-list-editor';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { k8sNameError } from '../../../shared/utils/k8s-names';
 import {
   apiErrorMessage,
   areaBasePath,
   hasProfileEditorWidget,
   parentLabel,
-  stripProfileEditorFields,
+  useServiceSchema,
+  versionOptionsFor,
 } from './service-utils';
 
 type StepKey = 'basics' | 'params' | 'profiles' | 'review';
@@ -29,14 +33,15 @@ const PROGRESS_STAGES = [
   { label: 'Waiting for readiness' },
 ];
 
-const NAME_REGEX = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
-
 export default function ServiceDeployPage() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams] = useSearchParams();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError, showWarn } = useToastMessages();
   const progressTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Post-deploy redirect timer — cleared on unmount so a navigation during
+  // the success pause can't be yanked back to the instances list.
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [service, setService] = useState<PlatformService | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,8 +50,15 @@ export default function ServiceDeployPage() {
   // is blocked when a CPU/memory quantity field is malformed.
   const [paramsValid, setParamsValid] = useState(true);
   const [deployProgress, setDeployProgress] = useState(0);
-  const [schemaLoading, setSchemaLoading] = useState(false);
-  const [serviceSchema, setServiceSchema] = useState<any>(null);
+  const {
+    schema: serviceSchema,
+    setSchema: setServiceSchema,
+    schemaLoading,
+    loadSchema,
+  } = useServiceSchema(
+    showWarn,
+    'Could not load configuration schema. You can still deploy with default parameters.',
+  );
   const [profileImages, setProfileImages] = useState<
     Record<string, { label: string; image: string }[]>
   >({});
@@ -58,10 +70,6 @@ export default function ServiceDeployPage() {
   const [parameters, setParameters] = useState<Record<string, any>>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
-  const filteredSchema = useMemo(
-    () => (serviceSchema ? stripProfileEditorFields(serviceSchema) : null),
-    [serviceSchema],
-  );
   const profileEditor = hasProfileEditorWidget(serviceSchema);
 
   // Steps are computed from the loaded schema: the "Profiles" step is
@@ -82,13 +90,7 @@ export default function ServiceDeployPage() {
 
   const currentStepKey: StepKey = steps[currentStep]?.key ?? 'basics';
 
-  const nameError = useMemo(() => {
-    if (!instanceName) return '';
-    if (!NAME_REGEX.test(instanceName.trim())) {
-      return "Must be lowercase alphanumeric or '-', starting and ending with alphanumeric.";
-    }
-    return '';
-  }, [instanceName]);
+  const nameError = useMemo(() => k8sNameError(instanceName), [instanceName]);
 
   const isFormValid = useMemo(() => {
     const baseValid = !!selectedTag && !nameError && !!instanceName;
@@ -122,25 +124,6 @@ export default function ServiceDeployPage() {
     return out;
   }, [parameters]);
 
-  const loadSchema = useCallback((serviceName: string, tag: string) => {
-    setSchemaLoading(true);
-    serviceApi
-      .getServiceSchema(serviceName, tag)
-      .then((schema) => {
-        setServiceSchema(schema);
-        setSchemaLoading(false);
-      })
-      .catch(() => {
-        toast.current?.show({
-          severity: 'warn',
-          summary: 'Schema unavailable',
-          detail:
-            'Could not load configuration schema. You can still deploy with default parameters.',
-        });
-        setSchemaLoading(false);
-      });
-  }, []);
-
   useEffect(() => {
     serviceApi
       .getProfileImages()
@@ -152,21 +135,17 @@ export default function ServiceDeployPage() {
       .getPlatformServices()
       .then((services) => {
         if (cancelled) return;
+        // A requested service must match exactly — falling back to another
+        // service would silently deploy the wrong thing (the empty state
+        // below handles the no-match case).
         const requestedService = searchParams.get('service');
-        const svc =
-          services.length === 1
-            ? services[0]
-            : (requestedService && services.find((s) => s.name === requestedService)) ||
-              services[0];
+        const svc = requestedService
+          ? services.find((s) => s.name === requestedService)
+          : services[0];
         if (svc) {
           setService(svc);
           setInstanceName(svc.name);
-          setVersionOptions(
-            svc.versions.map((v) => ({
-              label: v === svc.defaultVersion ? `${v} (recommended)` : v,
-              value: v,
-            })),
-          );
+          setVersionOptions(versionOptionsFor(svc));
           setSelectedTag(svc.defaultVersion);
           loadSchema(svc.name, svc.defaultVersion);
         }
@@ -174,11 +153,7 @@ export default function ServiceDeployPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load service info',
-        });
+        showError('Failed to load service info');
         setLoading(false);
       });
     return () => {
@@ -194,8 +169,17 @@ export default function ServiceDeployPage() {
     }
   }, []);
 
-  // Route change during an in-flight deploy must not leak the interval.
-  useEffect(() => clearProgressTick, [clearProgressTick]);
+  // Route change during an in-flight deploy must not leak the interval, nor
+  // let the success-redirect timer navigate after the user already left.
+  useEffect(
+    () => () => {
+      clearProgressTick();
+      if (navTimerRef.current !== null) {
+        clearTimeout(navTimerRef.current);
+      }
+    },
+    [clearProgressTick],
+  );
 
   const onVersionChange = (tag: string) => {
     if (!service || !tag) return;
@@ -241,12 +225,8 @@ export default function ServiceDeployPage() {
       .then(() => {
         clearProgressTick();
         setDeployProgress(PROGRESS_STAGES.length);
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Deploying instance',
-          detail: `${instanceName} is being provisioned.`,
-        });
-        setTimeout(() => {
+        showSuccess(`${instanceName} is being provisioned.`, 'Deploying instance');
+        navTimerRef.current = setTimeout(() => {
           setDeploying(false);
           const returnTo = searchParams.get('returnTo');
           if (returnTo) {
@@ -258,11 +238,7 @@ export default function ServiceDeployPage() {
       })
       .catch((err) => {
         clearProgressTick();
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Deployment failed'),
-        });
+        showError(apiErrorMessage(err, 'Deployment failed'));
         setDeploying(false);
       });
   };
@@ -300,12 +276,11 @@ export default function ServiceDeployPage() {
         </div>
 
         {loading ? (
-          <div className="empty-state-panel">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-spin pi-spinner"></i>
-            </div>
-            <h3>Loading service configuration…</h3>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-spin pi-spinner"
+            title="Loading service configuration…"
+          />
         ) : deploying ? (
           <div className="form-card deploy-progress">
             {PROGRESS_STAGES.map((stage, i) => (
@@ -416,10 +391,10 @@ export default function ServiceDeployPage() {
                       </div>
                     </div>
                   </div>
-                ) : filteredSchema ? (
+                ) : serviceSchema ? (
                   <div className="form-section">
                     <DynamicSchemaForm
-                      schema={filteredSchema}
+                      schema={serviceSchema}
                       onParametersChange={setParameters}
                       onValidityChange={setParamsValid}
                     />
@@ -511,17 +486,18 @@ export default function ServiceDeployPage() {
             </div>
           </>
         ) : (
-          <div className="empty-state-panel">
-            <div className="empty-icon-wrapper">
-              <i className="pi pi-exclamation-triangle"></i>
-            </div>
-            <h3>Service unavailable</h3>
-            <p>No deployable service configuration was found.</p>
-            <button className="btn-secondary" onClick={goBack}>
-              <i className="pi pi-arrow-left"></i>
-              Back to instances
-            </button>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon="pi pi-exclamation-triangle"
+            title="Service unavailable"
+            description="No deployable service configuration was found."
+            action={
+              <button className="btn-secondary" onClick={goBack}>
+                <i className="pi pi-arrow-left"></i>
+                Back to instances
+              </button>
+            }
+          />
         )}
       </div>
     </>

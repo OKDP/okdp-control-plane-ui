@@ -60,6 +60,9 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
 
 async function parseJson<T>(response: Response): Promise<T> {
   const text = await response.text();
+  // Empty/204 bodies resolve `undefined` despite the `T` typing — tolerated so
+  // mutation endpoints returning no content keep working. Lists go through
+  // `getList`, which normalizes this to [].
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
@@ -72,27 +75,31 @@ function jsonInit(method: string, body: unknown): RequestInit {
 }
 
 export const http = {
-  async get<T>(url: string): Promise<T> {
-    return parseJson<T>(await request(url));
+  async get<T>(url: string, init?: RequestInit): Promise<T> {
+    return parseJson<T>(await request(url, init));
   },
 
-  async getText(url: string): Promise<string> {
-    return (await request(url)).text();
+  async getList<T>(url: string, init?: RequestInit): Promise<T[]> {
+    return (await parseJson<T[] | undefined>(await request(url, init))) ?? [];
   },
 
-  async post<T>(url: string, body: unknown): Promise<T> {
-    return parseJson<T>(await request(url, jsonInit('POST', body)));
+  async getText(url: string, init?: RequestInit): Promise<string> {
+    return (await request(url, init)).text();
   },
 
-  async put<T>(url: string, body: unknown): Promise<T> {
-    return parseJson<T>(await request(url, jsonInit('PUT', body)));
+  async post<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
+    return parseJson<T>(await request(url, { ...jsonInit('POST', body), ...init }));
   },
 
-  async patch<T>(url: string, body: unknown): Promise<T> {
-    return parseJson<T>(await request(url, jsonInit('PATCH', body)));
+  async put<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
+    return parseJson<T>(await request(url, { ...jsonInit('PUT', body), ...init }));
   },
 
-  async delete(url: string): Promise<void> {
-    await request(url, { method: 'DELETE' });
+  async patch<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
+    return parseJson<T>(await request(url, { ...jsonInit('PATCH', body), ...init }));
+  },
+
+  async delete(url: string, init?: RequestInit): Promise<void> {
+    await request(url, { ...init, method: 'DELETE' });
   },
 };

@@ -260,9 +260,8 @@ export default function ProjectPage() {
   // tree sidebar). Every other page (/projects, /identity, …) gets an empty
   // sidebar even while a project is still selected in the context.
   const viewsMatch = useMatch('/projects/:projectId/views/*');
-  const viewsIndexMatch = useMatch('/projects/:projectId/views');
   const projectMatch = useMatch('/projects/:projectId/*');
-  const onViewsWorld = viewsMatch !== null || viewsIndexMatch !== null;
+  const onViewsWorld = viewsMatch !== null;
   const onProjectConsole = projectMatch !== null && !onViewsWorld;
 
   const projectName = context.currentProject?.name;
@@ -276,7 +275,7 @@ export default function ProjectPage() {
   // frame, while `currentProject` waits for the projects list to load.
   const accentProject = projectMatch?.params.projectId ?? projectName;
   const envColor = accentProject ? getProjectColor(accentProject) : undefined;
-  const futureTitle = 'Direction future, non engagé';
+  const futureTitle = 'Future direction — not committed';
 
   // Views sidebar content: the lateral menu's categories, but holding the
   // /views tiles — external launchers for deployed UI services plus the

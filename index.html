@@ -7,6 +7,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/svg+xml" href="/images/okdp-notext.svg" />
+    <!-- Brand font loaded here, not via CSS @import: the Tailwind v4 bundler
+         repositions a remote @import after other rules, making it invalid CSS
+         that the bundler then strips from the production build. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+    />
   </head>
   <body>
     <script>

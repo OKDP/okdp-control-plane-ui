@@ -3,7 +3,7 @@ import { formatMediumDateTime } from '../services/service-utils';
 import { getConditionIcon } from './secret-status';
 import { StatusTag, type StatusTone } from '../../../shared/components/status-tag';
 
-interface ConditionLike {
+export interface ConditionLike {
   type: string;
   status: string;
   reason?: string;
@@ -11,7 +11,7 @@ interface ConditionLike {
   lastTransitionTime?: string;
 }
 
-interface StatusDetailLike {
+export interface StatusDetailLike {
   status: string;
   conditions: ConditionLike[];
   lastError?: string;
@@ -107,11 +107,7 @@ export function StatusDetailContent({
                             {cond.type}: {ok ? 'True' : 'False'}
                           </span>
                           {cond.reason && (
-                            <span
-                              className={`okdp-tag ${ok ? 'okdp-tag-success' : 'okdp-tag-danger'}`}
-                            >
-                              {cond.reason}
-                            </span>
+                            <StatusTag value={cond.reason} tone={ok ? 'success' : 'danger'} />
                           )}
                         </div>
                         {cond.message && (

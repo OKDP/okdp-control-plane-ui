@@ -2,8 +2,12 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './core/auth/require-auth';
 import { RequireAdmin } from './core/auth/require-admin';
+import { RootRedirect } from './core/auth/auth-redirector';
 import { ProjectRouteSync } from './core/guards/project-route';
 import { useProjectContext } from './core/context/project-context';
+// Type-only: a value import would statically pull the lazy()-split page module
+// into the routes chunk and defeat the code split.
+import type { ServicesPageProps } from './features/project-console/services/services-page';
 
 /** /views convenience target: the views world lives under the project scope
  *  (/projects/:projectId/views) so deep links and project switching keep it. */
@@ -40,19 +44,10 @@ const SparkSubmitPage = lazy(() => import('./features/project-console/spark/spar
 const SparkEditPage = lazy(() => import('./features/project-console/spark/spark-edit-page'));
 const SparkDetailPage = lazy(() => import('./features/project-console/spark/spark-detail-page'));
 
-/**
- * Service list pages share one component driven by per-route props
- * (the Angular `route.data` equivalent).
- */
-interface ServiceRouteData {
-  title: string;
-  deployLabel: string;
-  serviceFilter: string;
-  emptyMessage: string;
-}
-
-/** Deploy / edit / detail / list route quadruple under a base path. */
-function serviceRoutes(basePath: string, data: ServiceRouteData) {
+/** Deploy / edit / detail / list route quadruple under a base path. The list
+ *  pages share one component driven by per-route props (the Angular
+ *  `route.data` equivalent). */
+function serviceRoutes(basePath: string, data: ServicesPageProps) {
   return (
     <>
       <Route path={`${basePath}/deploy`} element={<ServiceDeployPage />} />
@@ -67,7 +62,9 @@ export function AppRoutes() {
   return (
     <Suspense fallback={null}>
       <Routes>
-        <Route path="/" element={<Navigate to="/home" replace />} />
+        {/* RootRedirect (not a plain /home Navigate) so a freshly restored
+            deep link can't be clobbered in the same effect flush. */}
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<HomePage />} />
         {/* Authenticated entry point: default project, or getting started
             when the platform has no project yet. */}

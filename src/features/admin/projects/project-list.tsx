@@ -7,8 +7,7 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
-import { projectApi, type Project, type ProjectEvent } from '../../../core/api/project-api';
-import { applyListEvent } from '../../../core/api/sse';
+import { projectApi, type Project } from '../../../core/api/project-api';
 import { logger } from '../../../core/services/logger';
 import { useAuth } from '../../../core/auth/auth-context';
 import { useProjectContext } from '../../../core/context/project-context';
@@ -74,76 +73,47 @@ function rollupMetric(
 export default function ProjectList() {
   const auth = useAuth();
   const isAdmin = auth.hasRole('admins');
-  const { currentProjectId } = useProjectContext();
+  // The projects list (REST snapshot + SSE merge) lives in ProjectContext —
+  // the provider is always mounted above this page; no second subscription.
+  const {
+    currentProjectId,
+    availableProjects: projects,
+    isLoading,
+    loadError,
+    reload,
+  } = useProjectContext();
   const { toast, showSuccess, showError } = useToastMessages();
   // Row dots follow color edits live (other tab, or Project Settings).
   const colorsVersion = useProjectColorsVersion();
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  // Mirror of `projects` so the SSE handler can decide on toasts without
-  // side effects inside the state updater (updaters must stay pure).
-  const projectsRef = useRef<Project[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-  // Bumped by the error panel's retry button to re-run the load effect.
-  const [reloadKey, setReloadKey] = useState(0);
   const [globalFilter, setGlobalFilter] = useState('');
   const [visible, setVisible] = useState(false);
   const [newProject, setNewProject] = useState<Project>({ name: '', description: '' });
   const [newColor, setNewColor] = useState<string>(PROJECT_COLOR_PALETTE[0]);
 
-  const applyProjects = (next: Project[]) => {
-    projectsRef.current = next;
-    setProjects(next);
-  };
-
+  // Watch-confirmed created/deleted toasts (covers other admins/tabs too):
+  // diff against the previous snapshot. The ref is seeded from the first
+  // loaded list — and re-seeded after a reload() — so an initial population
+  // never produces spurious "created" toasts.
+  const prevProjectsRef = useRef<Project[] | null>(null);
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let cancelled = false;
-
-    // Re-entry (retry): back to the loading state before fetching again.
-    setLoaded(false);
-    setLoadError(false);
-
-    const handleProjectEvent = (event: ProjectEvent) => {
-      const project = event.object;
-      const exists = projectsRef.current.some((p) => p.name === project.name);
-
-      if (event.type === 'ADDED' && !exists) {
-        showSuccess(`Project ${project.name} created`);
-      } else if (event.type === 'DELETED' && exists) {
-        showSuccess(`Project ${project.name} deleted`);
-        clearProjectColor(project.name);
+    if (isLoading || loadError) {
+      prevProjectsRef.current = null;
+      return;
+    }
+    const prev = prevProjectsRef.current;
+    prevProjectsRef.current = projects;
+    if (!prev) return;
+    for (const p of projects) {
+      if (!prev.some((q) => q.name === p.name)) showSuccess(`Project ${p.name} created`);
+    }
+    for (const p of prev) {
+      if (!projects.some((q) => q.name === p.name)) {
+        showSuccess(`Project ${p.name} deleted`);
+        clearProjectColor(p.name);
       }
-
-      applyProjects(applyListEvent(projectsRef.current, event, (p) => p.name));
-    };
-
-    projectApi
-      .getProjects()
-      .then((data) => {
-        if (cancelled) return;
-        applyProjects(data);
-        setLoaded(true);
-        unsubscribe = projectApi.subscribeProjects({
-          next: handleProjectEvent,
-          error: (err) => logger.error('Stream error', err),
-        });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        logger.error('Failed to load projects', err);
-        // Dedicated error panel below; an empty list here must not be
-        // mistaken for the "no projects yet" wizard state.
-        setLoadError(true);
-        setLoaded(true);
-      });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [reloadKey, showSuccess]);
+    }
+  }, [projects, isLoading, loadError, showSuccess]);
 
   const showDialog = () => {
     setNewProject({ name: '', description: '' });
@@ -177,8 +147,11 @@ export default function ProjectList() {
   // Four distinct states: loading (placeholder), error (panel + retry),
   // empty (getting-started wizard), populated (filter + table). The wizard
   // must never flash while the list is still loading or failed to load.
-  const empty = loaded && !loadError && projects.length === 0;
-  const populated = loaded && !loadError && projects.length > 0;
+  // The context's SSE stream runs in parallel with its snapshot fetch, so a
+  // failed fetch may coexist with a populated list: error only while empty.
+  const showLoadError = loadError && projects.length === 0;
+  const empty = !isLoading && !loadError && projects.length === 0;
+  const populated = !isLoading && projects.length > 0;
 
   const projectStats = useProjectStats(projects.map((p) => p.name));
 
@@ -208,7 +181,7 @@ export default function ProjectList() {
         }
       />
 
-      {!loaded ? (
+      {isLoading ? (
         /* Loading: same centered geometry as the wizard, so an empty result
            settles into the wizard without layout shift. */
         <EmptyState
@@ -216,13 +189,13 @@ export default function ProjectList() {
           title="Loading projects…"
           description="Fetching the project list."
         />
-      ) : loadError ? (
+      ) : showLoadError ? (
         <EmptyState
           icon="pi pi-exclamation-triangle"
           title="Failed to load projects"
           description="The project list could not be retrieved. Check your connection and try again."
           action={
-            <button className="btn-secondary mt-3" onClick={() => setReloadKey((k) => k + 1)}>
+            <button className="btn-secondary mt-3" onClick={reload}>
               <i className="pi pi-refresh"></i>
               <span>Retry</span>
             </button>

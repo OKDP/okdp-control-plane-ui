@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
@@ -9,68 +9,20 @@ import { Toast } from 'primereact/toast';
 import { sparkApi } from '../../../core/api/spark-api';
 import type { SparkAppRequest, SparkImage } from '../../../core/models/spark.model';
 import { apiErrorMessage } from '../services/service-utils';
+import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import {
+  applyResourceFormValues,
   buildSections,
   CORE_KEYS_SUBMIT,
-  parseKeyValue,
-  SECTION_BADGE_TONES,
+  FALLBACK_SECTIONS,
   type SchemaSection,
 } from './spark-utils';
-import { SparkPropertyField } from './spark-property-field';
-
-const FALLBACK_SECTIONS: SchemaSection[] = [
-  {
-    title: 'Core',
-    icon: 'pi-cog',
-    iconClass: 'core',
-    properties: [
-      {
-        key: 'type',
-        type: 'string',
-        description: 'Application language type',
-        enumValues: ['Java', 'Scala', 'Python', 'R'],
-        isObject: false,
-        isArray: false,
-      },
-      {
-        key: 'mode',
-        type: 'string',
-        description: 'Deploy mode',
-        enumValues: ['cluster', 'client'],
-        isObject: false,
-        isArray: false,
-      },
-      { key: 'image', type: 'string', description: 'Spark image', isObject: false, isArray: false },
-      {
-        key: 'mainClass',
-        type: 'string',
-        description: 'Main class',
-        isObject: false,
-        isArray: false,
-      },
-      {
-        key: 'mainApplicationFile',
-        type: 'string',
-        description: 'Main application file',
-        isObject: false,
-        isArray: false,
-      },
-      {
-        key: 'arguments',
-        type: 'array',
-        description: 'Application arguments',
-        isObject: false,
-        isArray: true,
-        itemType: 'string',
-      },
-    ],
-  },
-];
+import { SparkSchemaSections } from './spark-schema-sections';
 
 export default function SparkSubmitPage() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
-  const toast = useRef<Toast>(null);
+  const { toast, showSuccess, showError } = useToastMessages();
 
   const [sparkImages, setSparkImages] = useState<SparkImage[]>([]);
   const [schemaSections, setSchemaSections] = useState<SchemaSection[]>([]);
@@ -136,50 +88,20 @@ export default function SparkSubmitPage() {
       sparkVersion: formValues['sparkVersion'] || undefined,
     };
 
-    const argsStr = formValues['arguments'];
-    if (argsStr && typeof argsStr === 'string') {
-      req.arguments = argsStr
-        .split(',')
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-    }
-
-    const driverStr = formValues['driver'];
-    if (driverStr && typeof driverStr === 'string') {
-      const parsed = parseKeyValue(driverStr);
-      if (parsed['cores']) req.driverCores = parseInt(parsed['cores'], 10) || 1;
-      if (parsed['memory']) req.driverMemory = parsed['memory'];
-    }
-
-    const executorStr = formValues['executor'];
-    if (executorStr && typeof executorStr === 'string') {
-      const parsed = parseKeyValue(executorStr);
-      if (parsed['instances']) req.executorInstances = parseInt(parsed['instances'], 10) || 2;
-      if (parsed['cores']) req.executorCores = parseInt(parsed['cores'], 10) || 1;
-      if (parsed['memory']) req.executorMemory = parsed['memory'];
-    }
-
-    const sparkConfStr = formValues['sparkConf'];
-    if (sparkConfStr && typeof sparkConfStr === 'string') {
-      req.sparkConf = parseKeyValue(sparkConfStr);
-    }
+    applyResourceFormValues(req, formValues, {
+      driverCores: 1,
+      executorInstances: 2,
+      executorCores: 1,
+    });
 
     sparkApi
       .submitApp(projectId, req)
       .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Submitted',
-          detail: `Spark job "${req.name}" submitted`,
-        });
+        showSuccess(`Spark job "${req.name}" submitted`, 'Submitted');
         navigate(`/projects/${projectId}/views/spark/applications`);
       })
       .catch((err) => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Failed to submit Spark job'),
-        });
+        showError(apiErrorMessage(err, 'Failed to submit Spark job'));
         setSubmitting(false);
       });
   };
@@ -192,19 +114,11 @@ export default function SparkSubmitPage() {
     sparkApi
       .submitAppYAML(projectId, { yaml: yamlContent })
       .then(() => {
-        toast.current?.show({
-          severity: 'success',
-          summary: 'Submitted',
-          detail: 'Spark job submitted from YAML',
-        });
+        showSuccess('Spark job submitted from YAML', 'Submitted');
         navigate(`/projects/${projectId}/views/spark/applications`);
       })
       .catch((err) => {
-        toast.current?.show({
-          severity: 'error',
-          summary: 'Error',
-          detail: apiErrorMessage(err, 'Failed to submit Spark job'),
-        });
+        showError(apiErrorMessage(err, 'Failed to submit Spark job'));
         setSubmitting(false);
       });
   };
@@ -271,50 +185,14 @@ export default function SparkSubmitPage() {
                   </div>
                 </div>
 
-                {schemaSections.map((section) => (
-                  <div
-                    key={section.title}
-                    className="py-5 first:pt-0 not-last:border-b not-last:border-b-border-light"
-                  >
-                    <div className="mb-5 flex items-center gap-3">
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${SECTION_BADGE_TONES[section.iconClass]?.badge ?? ''}`}
-                      >
-                        <i
-                          className={`pi ${section.icon} ${SECTION_BADGE_TONES[section.iconClass]?.icon ?? 'text-[1rem]'}`}
-                        ></i>
-                      </div>
-                      <h3 className="m-0 text-[17px] font-bold tracking-[-0.02em] text-fg">
-                        {section.title}
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
-                      {section.properties.map((prop) => (
-                        <div
-                          key={prop.key}
-                          className={`flex flex-col gap-1.5${prop.isObject || prop.isArray ? ' col-span-full' : ''}`}
-                        >
-                          <label
-                            className="flex items-center gap-1 text-[13px] font-semibold tracking-[-0.01em] text-fg-secondary"
-                            title={prop.description}
-                          >
-                            {prop.key}
-                            {prop.description && (
-                              <i className="pi pi-info-circle cursor-help text-[11px] opacity-50"></i>
-                            )}
-                          </label>
-                          <SparkPropertyField
-                            prop={prop}
-                            value={formValues[prop.key]}
-                            imageOptions={imageOptions}
-                            descriptionPlaceholder
-                            onChange={(v) => setValue(prop.key, v)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                <SparkSchemaSections
+                  sections={schemaSections}
+                  formValues={formValues}
+                  imageOptions={imageOptions}
+                  descriptionPlaceholder
+                  dense
+                  onChange={setValue}
+                />
 
                 <div className="deploy-actions mt-5 flex justify-end gap-2 border-t border-t-border-light pt-3">
                   <Button label="Cancel" severity="secondary" outlined onClick={goBack} />
