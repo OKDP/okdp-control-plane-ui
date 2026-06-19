@@ -1,51 +1,115 @@
 # OKDP Console
 
-The OKDP Console is the web interface for managing OKDP projects and resources.
+The OKDP Console is the web interface of the [OKDP](https://okdp.io) data
+platform: it manages OKDP projects and their data-platform services — Spark
+applications, JupyterHub, Airflow, Trino, Superset, Polaris, secret stores — by
+talking to the OKDP control-plane API.
+
+Built with React 19, Vite, TypeScript (strict), PrimeReact and Tailwind CSS v4.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
+
+## Prerequisites
+
+- Node.js 22+ and npm
+- A running OKDP control plane on `http://localhost:8093` (the development API
+  target)
+- Access to the development OIDC identity provider (the dev build authenticates
+  against the OKDP sandbox authority)
 
 ## Development server
 
-To start a local development server, run:
-
 ```bash
+npm install
 npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Open `http://localhost:4200/`. The app reloads on source changes.
 
-## Build
+> **The port matters.** The OIDC redirect URIs registered with the identity
+> provider point at `localhost:4200` — running on another port breaks login.
+> The port is pinned in `vite.config.ts`; don't change it.
 
-To build the project run:
+## Scripts
+
+| Command | What it does |
+|---------|--------------|
+| `npm start` / `npm run dev` | Vite dev server on port 4200 |
+| `npm run build` | type-check (`tsc -b`) + production bundle → `dist/` |
+| `npm run preview` | serve the production bundle locally |
+| `npm test` | run the unit tests once (Vitest) |
+| `npm run test:watch` | run the tests in watch mode |
+| `npm run test:coverage` | tests with coverage report |
+| `npm run lint` | ESLint over `src` (with `--fix`) |
+| `npm run format` | Prettier over `src` |
+
+Run a single test file or test name:
 
 ```bash
-npm run build
+npx vitest run src/core/auth/auth-context.test.tsx
+npx vitest run -t "logs out"
 ```
 
-The build artifacts will be stored in the `dist/` directory.
+## Configuration
 
-## Architecture
+`src/config/environment.ts` switches on `import.meta.env.PROD`:
 
-- **Framework**: Angular 20
-- **UI Library**: PrimeNG
-- **Styling**: SCSS with CSS Variables for theming
+| | Development | Production |
+|---|---|---|
+| API base URL | `http://localhost:8093` | `/api` (same-origin, behind an ingress) |
+| OIDC authority | OKDP sandbox | inherited from dev (see below) |
+| OIDC client | `okdp-app` | `okdp-app` |
 
-## Key Features
+Authentication uses the OIDC authorization-code flow (`oidc-client-ts`) with
+silent renew; tokens live in sessionStorage. Roles come from the OIDC `groups`
+claim — members of `admins` get the admin pages.
 
-- **Project Management**: Create, list, and delete projects.
-- **Secrets**: Per-project **Secret Stores** (e.g. HashiCorp Vault) and **External Secrets** that sync into Kubernetes Secrets.
-- **Responsive Design**: Collapsible sidebar, adaptive layouts.
-- **Modern UI**: Clean aesthetic with consistent theming.
+> **Production note:** the OIDC authority is currently baked into the bundle at
+> build time and inherits the sandbox value; deployments targeting another IdP
+> need a build-time override or runtime config injection. The production image
+> also expects a fronting ingress to route `/api` to the control plane — the
+> nginx in the image serves only the static bundle. See
+> [Known limitations](ARCHITECTURE.md#known-limitations--open-decisions).
 
-## Example: Secret Store (Vault)
+## Docker
 
-1. Open your project → **Secrets** → **Secret Stores** → **Add secret store**.
-2. Fill the form with simple values like below. The Vault URL must work **from inside the cluster** (where ESO runs).
+The production image builds the static bundle and serves it with nginx on
+port 4200 (SPA fallback included, hashed assets cached immutably,
+`index.html` served with `no-cache`):
 
-| Field | Simple example |
-|-------|----------------|
-| Store name | `my-store` |
-| Server URL | `http://vault-main.vault-system.svc.cluster.local:8200` |
-| Secret path | `secret` |
-| KV version | `v2` |
-| Token | `root` *(sandbox / dev only; never in production)* |
-| Default store | optional checkbox |
+```bash
+docker build -t okdp-console .
+docker run --rm -p 4200:4200 okdp-console
+```
 
+## Project structure
+
+```
+src/
+  core/        # cross-cutting infra: auth, http/sse clients, contexts, theme
+  features/    # one folder per functional area (admin, project-console, …)
+  shared/      # reusable components, hooks and utils
+  config/      # environment switch
+```
+
+Conventions in brief (details in [ARCHITECTURE.md](ARCHITECTURE.md) and
+`CLAUDE.md`):
+
+- strict TypeScript, no `any`; use the app `logger`, not `console`
+- design tokens (`--db-*` variables / Tailwind utilities) over raw hex/px
+- live lists follow the *initial REST fetch + SSE merge* pattern
+- all web-storage keys are centralized in `src/core/storage-keys.ts`
+- tests are co-located `*.test.ts(x)` (Vitest + Testing Library)
+
+## Tests
+
+```bash
+npm test
+```
+
+Unit tests run with Vitest + Testing Library in `jsdom`. External SDKs such as
+`oidc-client-ts` are mocked with `vi.hoisted` + `vi.mock`
+(see `src/core/auth/auth-context.test.tsx` for the pattern).
+
+## License
+
+[Apache License 2.0](LICENSE)

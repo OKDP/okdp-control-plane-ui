@@ -29,7 +29,6 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
-/.angular/cache
 .sass-cache/
 /connect.lock
 /coverage
@@ -50,3 +49,5 @@ CLAUDE.md
 .cursor/
 .claude/
 .agent/
+# TypeScript incremental build
+tsconfig.tsbuildinfo
