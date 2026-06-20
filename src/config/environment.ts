@@ -45,8 +45,10 @@ const production: Environment = {
 
   production: true,
 
-  // API Configuration - relative URLs for same-origin deployment
-  apiBaseUrl: '/api',
+  // API Configuration - same-origin deployment. The base is empty because
+  // every API module already prefixes its paths with /api; a non-empty base
+  // here would produce /api/api/... which the server does not route.
+  apiBaseUrl: '',
 
   oidc: {
     ...development.oidc,
