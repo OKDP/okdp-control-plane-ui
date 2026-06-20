@@ -30,8 +30,18 @@ export function useProjectStats(projectNames: string[]): Record<string, ProjectS
   // rows must not refetch). Cache-seeded entries are NOT in this set — the
   // snapshot paints instantly, the live aggregation still runs.
   const fetchedRef = useRef<Set<string>>(new Set());
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const lastNonceRef = useRef(0);
+  useEffect(() => {
+    const id = setInterval(() => setRefreshNonce((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
+    if (refreshNonce !== lastNonceRef.current) {
+      lastNonceRef.current = refreshNonce;
+      fetchedRef.current.clear();
+    }
     const names = namesKey ? namesKey.split('|') : [];
 
     // No cancellation: fetchedRef marks every name as fetched up front, so a
@@ -125,7 +135,7 @@ export function useProjectStats(projectNames: string[]): Record<string, ProjectS
         }
       })();
     }
-  }, [namesKey]);
+  }, [namesKey, refreshNonce]);
 
   return stats;
 }
