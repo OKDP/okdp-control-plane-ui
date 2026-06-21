@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useProjectContext } from '../../core/context/project-context';
+import { useAuth } from '../../core/auth/auth-context';
 
 /**
  * Authenticated entry point (/home): routes to the default project when one
@@ -8,9 +9,14 @@ import { useProjectContext } from '../../core/context/project-context';
  */
 export default function StartPage() {
   const { availableProjects, isLoading, currentProjectId } = useProjectContext();
+  const auth = useAuth();
 
   if (isLoading) {
     return null;
+  }
+
+  if (auth.hasRole('admins')) {
+    return <Navigate to="/admin" replace />;
   }
 
   if (availableProjects.length > 0) {
