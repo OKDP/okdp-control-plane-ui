@@ -14,6 +14,13 @@ export default function AdminPage() {
 
       <QuickActions>
         <ActionCard
+          to="/projects"
+          icon="pi pi-th-large"
+          tone="blue"
+          title="Projects"
+          description="Create and manage data projects"
+        />
+        <ActionCard
           to="/identity"
           icon="pi pi-users"
           tone="primary"
