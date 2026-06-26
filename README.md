@@ -1,9 +1,12 @@
+<p align="center">
+  <a href="https://okdp.io">
+    <img src="https://okdp.io/logos/okdp-inverted.png" alt="OKDP: Open Kubernetes Data Platform" height="180" />
+  </a>
+</p>
+
 [![ci](https://github.com/OKDP/okdp-control-plane-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/OKDP/okdp-control-plane-ui/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/OKDP/okdp-control-plane-ui)](https://github.com/OKDP/okdp-control-plane-ui/releases/latest)&ensp;&ensp;
+[![Release](https://img.shields.io/github/v/release/OKDP/okdp-control-plane-ui)](https://github.com/OKDP/okdp-control-plane-ui/releases/latest)
 [![License Apache2](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
-<a href="https://okdp.io">
-<img src="https://okdp.io/logos/okdp-notext.svg" height="20px" style="margin: 0 2px;" />
-</a>
 
 # OKDP Console
 
@@ -221,7 +224,7 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 
 ---
 
-**Built for the OKDP Community**
+**Built 🚀 for the OKDP Community**
 <a href="https://okdp.io">
   <img src="https://okdp.io/logos/okdp-notext.svg" height="20px" style="margin: 0 2px;" />
 </a>
