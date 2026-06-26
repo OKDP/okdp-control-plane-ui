@@ -18,8 +18,20 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ## Development server
 
+Run it directly on your machine, or in the devcontainer (only Docker needed). Both
+talk to the **OKDP dev-sandbox** (see its README for cluster, DNS and CA setup).
+
+**Directly:**
+
 ```bash
-npm install
+npm ci
+npm start
+```
+
+**Devcontainer:** open the repo and "Reopen in Container" (or run `devcontainer up`).
+The image ships Node, installs dependencies on create, and publishes port 4200.
+
+```bash
 npm start
 ```
 
@@ -79,6 +91,20 @@ port 4200 (SPA fallback included, hashed assets cached immutably,
 ```bash
 docker build -t okdp-console .
 docker run --rm -p 4200:4200 okdp-console
+```
+
+## Deploy with the Helm chart
+
+In a cluster the console runs from the published image, deployed with the
+bundled chart (`chart/`). nginx serves the static bundle; the chart's ingress
+routes `/api` to the in-cluster control-plane Service and `/` to the console,
+and (when kubauth is present) registers the OIDC client:
+
+```bash
+helm install okdp-ui ./chart -n okdp-system \
+  --set image.tag=0.6.0 \
+  --set ingress.host=console.okdp.dev-sandbox \
+  --set backend.service=okdp-server
 ```
 
 ## Project structure

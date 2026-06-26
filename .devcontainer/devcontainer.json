@@ -1,0 +1,45 @@
+{
+  "name": "okdp-control-plane-ui",
+  "build": {
+    "context": "..",
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "node",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+
+  "mounts": [
+    "source=okdp-ui-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+    "source=okdp-ui-npm-cache,target=/home/node/.npm,type=volume"
+  ],
+  // volumes mount root-owned, so chown them to node before installing
+  "postCreateCommand": "sudo chown -R node:node node_modules /home/node/.npm && npm ci",
+
+  // publish 4200 to the host. vite must bind 0.0.0.0 (host:true in vite.config.ts)
+  "appPort": ["4200:4200"],
+  "portsAttributes": {
+    "4200": { "label": "Vite dev server", "onAutoForward": "notify" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "vitest.explorer",
+        "dsznajder.es7-react-js-snippets",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
+      }
+    }
+  }
+}
