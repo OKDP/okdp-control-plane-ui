@@ -4,15 +4,17 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import pkg from './package.json';
 
-// Dev server stays on the Angular CLI port (4200) so the OIDC redirect URIs
-// registered with the identity provider keep working.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   server: {
+    // bind 0.0.0.0 so the host can reach Vite from a container
+    host: true,
+    // keep the dev server on 4200, the OIDC redirect URIs are registered for it
     port: 4200,
+    strictPort: true,
   },
   test: {
     environment: 'jsdom',

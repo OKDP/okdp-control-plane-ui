@@ -18,8 +18,20 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ## Development server
 
+Run it directly on your machine, or in the devcontainer (only Docker needed). Both
+talk to the **OKDP dev-sandbox** (see its README for cluster, DNS and CA setup).
+
+**Directly:**
+
 ```bash
-npm install
+npm ci
+npm start
+```
+
+**Devcontainer:** open the repo and "Reopen in Container" (or run `devcontainer up`).
+The image ships Node, installs dependencies on create, and publishes port 4200.
+
+```bash
 npm start
 ```
 
