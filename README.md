@@ -97,8 +97,7 @@ docker run --rm -p 4200:4200 okdp-console
 
 In a cluster the console runs from the published image, deployed with the
 bundled chart (`chart/`). nginx serves the static bundle; the chart's ingress
-routes `/api` to the in-cluster control-plane Service and `/` to the console,
-and (when kubauth is present) registers the OIDC client:
+routes `/api` to the in-cluster control-plane Service and `/` to the console:
 
 ```bash
 helm install okdp-ui ./chart -n okdp-system \
@@ -106,6 +105,11 @@ helm install okdp-ui ./chart -n okdp-system \
   --set ingress.host=console.okdp.dev-sandbox \
   --set backend.service=okdp-server
 ```
+
+> **OIDC client.** This chart does not register the OIDC client. The `okdp-app`
+> OidcClient (a kubauth resource) is provisioned by the platform layer, with its
+> redirect URIs pointing at the console ingress host above. Provision it with
+> kubauth before deploying the console, otherwise the login redirect fails.
 
 ## Project structure
 
