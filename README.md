@@ -146,9 +146,6 @@ must route `/api` to the control plane.
 
 ## Deploy with the Helm chart
 
-In a cluster the Console is deployed from the bundled chart (`chart/`). Its
-ingress routes `/api` to the control-plane Service and `/` to the Console:
-
 ```bash
 helm install okdp-ui ./chart -n okdp-system \
   --set image.tag=0.6.0 \
@@ -156,9 +153,7 @@ helm install okdp-ui ./chart -n okdp-system \
   --set backend.service=okdp-server
 ```
 
-The chart does not register the OIDC client. The `okdp-app` OidcClient and the
-kubauth CORS origin are provisioned by the platform (see the okdp-sandbox),
-pointing at the Console ingress host.
+The OIDC client and CORS are provided by the platform (okdp-sandbox), not the chart.
 
 ## OKDP Integration
 
