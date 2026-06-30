@@ -25,6 +25,7 @@ const SettingsPage = lazy(() => import('./features/settings/settings-page'));
 const CustomViewsPage = lazy(() => import('./features/custom-views/custom-views-page'));
 const AdminPage = lazy(() => import('./features/admin/admin-page'));
 const IdentityPage = lazy(() => import('./features/admin/identity/identity-page'));
+const CatalogPage = lazy(() => import('./features/admin/catalog/catalog-page'));
 const ProjectPage = lazy(() => import('./features/project-console/project-page'));
 const ProjectHome = lazy(() => import('./features/project-console/home/project-home'));
 const SecretsPage = lazy(() => import('./features/project-console/secret-stores/secrets-page'));
@@ -100,6 +101,15 @@ export function AppRoutes() {
             element={
               <RequireAdmin>
                 <IdentityPage />
+              </RequireAdmin>
+            }
+          />
+
+          <Route
+            path="/catalog"
+            element={
+              <RequireAdmin>
+                <CatalogPage />
               </RequireAdmin>
             }
           />

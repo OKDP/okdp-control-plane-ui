@@ -74,6 +74,28 @@ function jsonInit(method: string, body: unknown): RequestInit {
   };
 }
 
+/**
+ * Extract the backend `error` (or `message`) field from a failed request,
+ * with fallback — the OKDP server reports validation failures as
+ * `{"error": "..."}`, so this surfaces e.g. "version not found in registry".
+ */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof HttpError && err.body) {
+    try {
+      const parsed = JSON.parse(err.body);
+      if (parsed && typeof parsed.error === 'string') {
+        return parsed.error;
+      }
+      if (parsed && typeof parsed.message === 'string') {
+        return parsed.message;
+      }
+    } catch {
+      // not JSON — fall through
+    }
+  }
+  return fallback;
+}
+
 export const http = {
   async get<T>(url: string, init?: RequestInit): Promise<T> {
     return parseJson<T>(await request(url, init));

@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { HttpError } from '../../../core/api/http';
 import { serviceApi } from '../../../core/api/service-api';
 import type { PlatformService } from '../../../core/models/service.model';
 import type { StatusTone } from '../../../shared/components/status-tag';
@@ -71,26 +70,9 @@ export function versionOptionsFor(svc: PlatformService): { label: string; value:
   }));
 }
 
-/**
- * Extract the backend `error` (or `message`) field from a failed request,
- * with fallback — mirrors the legacy `err?.error?.error || err?.error?.message`.
- */
-export function apiErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof HttpError && err.body) {
-    try {
-      const parsed = JSON.parse(err.body);
-      if (parsed && typeof parsed.error === 'string') {
-        return parsed.error;
-      }
-      if (parsed && typeof parsed.message === 'string') {
-        return parsed.message;
-      }
-    } catch {
-      // not JSON — fall through
-    }
-  }
-  return fallback;
-}
+// Lives in core/api/http (next to HttpError) so non-project-console features
+// can surface backend error messages without importing from this module.
+export { apiErrorMessage } from '../../../core/api/http';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

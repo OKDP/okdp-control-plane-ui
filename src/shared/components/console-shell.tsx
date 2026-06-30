@@ -96,6 +96,11 @@ export function ConsoleShell({
             icon: 'pi pi-users',
             command: () => navigate('/identity'),
           },
+          {
+            label: 'Service Catalog',
+            icon: 'pi pi-box',
+            command: () => navigate('/catalog'),
+          },
         ]
       : []),
     { separator: true },
