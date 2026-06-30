@@ -23,6 +23,7 @@ const StartPage = lazy(() => import('./features/start/start-page'));
 const ProjectList = lazy(() => import('./features/admin/projects/project-list'));
 const SettingsPage = lazy(() => import('./features/settings/settings-page'));
 const CustomViewsPage = lazy(() => import('./features/custom-views/custom-views-page'));
+const SqlEditorPage = lazy(() => import('./features/custom-views/sql-editor-page'));
 const AdminPage = lazy(() => import('./features/admin/admin-page'));
 const IdentityPage = lazy(() => import('./features/admin/identity/identity-page'));
 const ProjectPage = lazy(() => import('./features/project-console/project-page'));
@@ -123,6 +124,7 @@ export function AppRoutes() {
                   sidebar instead of the project tree. */}
               <Route path="views">
                 <Route index element={<CustomViewsPage />} />
+                <Route path="sql-editor" element={<SqlEditorPage />} />
                 <Route path="spark/applications/submit" element={<SparkSubmitPage />} />
                 <Route path="spark/applications/:appName/edit" element={<SparkEditPage />} />
                 <Route path="spark/applications/:appName" element={<SparkDetailPage />} />

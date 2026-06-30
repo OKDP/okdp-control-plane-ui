@@ -1558,6 +1558,26 @@ h1 {
   }
 }
 
+/* Wrapper around the CodeMirror SQL editor — mirrors `.text-input`'s frame and
+   focus ring so the editor reads as a form control. The editor's own colors
+   come from the `--cm-*` tokens via EditorView.theme. */
+@utility sql-editor-shell {
+  border: 1px solid var(--db-border-color);
+  background: var(--db-bg-primary);
+  border-radius: var(--db-radius-md);
+  overflow: hidden;
+  transition:
+    border-color var(--db-transition-fast),
+    box-shadow var(--db-transition-fast);
+  &:focus-within {
+    border-color: var(--db-primary);
+    box-shadow: var(--db-shadow-focus);
+  }
+  & .cm-editor {
+    background: transparent;
+  }
+}
+
 @utility review-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
