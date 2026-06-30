@@ -9,6 +9,27 @@ export interface PlatformService {
   description: string;
   icon?: string;
   category?: string;
+  // Per-service package repository override (defaults to the Context's global
+  // packageRepository when empty). Versions are resolved against this registry.
+  repository?: string;
+}
+
+/**
+ * Write payload for the catalog-management endpoints (POST/PUT
+ * /api/platform-services). `defaultVersion` is optional on the wire — the
+ * server falls back to the first version when it is omitted. The server also
+ * validates each version against the OCI registry (quay.io) and rejects the
+ * request (400) when a version does not exist. `repository` overrides the
+ * package registry for this service; omitted means the global one is used.
+ */
+export interface PlatformServiceRequest {
+  name: string;
+  versions: string[];
+  defaultVersion?: string;
+  description?: string;
+  icon?: string;
+  category?: string;
+  repository?: string;
 }
 
 export interface DeployServiceRequest {
