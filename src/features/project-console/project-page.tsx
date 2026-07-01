@@ -13,7 +13,14 @@ import {
   sideNavLabelClass,
   sideNavLinkClass,
 } from '../../shared/components/console-nav-classes';
-import { NAV_CATEGORIES, navItemIcon, type NavCategory } from './nav-config';
+import {
+  NAV_CATEGORIES,
+  navItemIcon,
+  catalogNavItems,
+  type NavCategory,
+  type NavItem,
+} from './nav-config';
+import { usePlatformCatalog } from './use-platform-catalog';
 import {
   BUILT_IN_VIEWS,
   builtInViewIcon,
@@ -232,6 +239,31 @@ export default function ProjectPage() {
         },
   ).filter((category) => category.items.length > 0);
 
+  // Catalog-driven entries: every exposed service that has no bespoke area
+  // (not a key in SERVICE_AREAS) is surfaced under a generic "Other services"
+  // section, linking to the generic /services/<name> area. This is what makes
+  // a freshly-exposed service reachable from the console without a code change.
+  const catalog = usePlatformCatalog();
+  const catalogItems: NavItem[] = catalogNavItems(catalog);
+  // Insert the generic section just before the fixed "Project Panel" category.
+  const withCatalog: NavCategory[] = (() => {
+    if (catalogItems.length === 0) return visibleCategories;
+    const extra: NavCategory = {
+      key: 'catalog-extra',
+      label: 'Other services',
+      icon: 'pi-box',
+      defaultExpanded: true,
+      items: catalogItems,
+    };
+    const fixedIdx = visibleCategories.findIndex((c) => c.fixed);
+    if (fixedIdx < 0) return [...visibleCategories, extra];
+    return [
+      ...visibleCategories.slice(0, fixedIdx),
+      extra,
+      ...visibleCategories.slice(fixedIdx),
+    ];
+  })();
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
   );
@@ -400,7 +432,7 @@ export default function ProjectPage() {
               collapsed={sidebarCollapsed}
             />
 
-            {visibleCategories.map((category) => (
+            {withCatalog.map((category) => (
               <NavSection
                 key={category.key}
                 icon={category.icon}

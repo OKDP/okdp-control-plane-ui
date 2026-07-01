@@ -7,6 +7,7 @@ import {
   siTrino,
 } from 'simple-icons';
 import { BrandIcon, type BrandGlyph } from '../../shared/components/brand-icon';
+import { SERVICE_AREAS } from './services/service-utils';
 
 /** Apache Airflow brandmark, vendored from the official multicolor pinwheel
  *  icon (via the gilbarbara/svg-logos collection, CC0) — the simple-icons
@@ -218,4 +219,26 @@ export function navItemBySegment(segment: string): NavItem | undefined {
     if (item) return item;
   }
   return undefined;
+}
+
+/** Normalize a catalog icon (stored as `pi-box` or `pi pi-box`) into a full
+ *  primeicons class, falling back to a generic box. */
+function catalogIconClass(icon?: string): string {
+  if (!icon) return 'pi pi-box';
+  return icon.startsWith('pi ') ? icon : `pi ${icon}`;
+}
+
+/** Maps catalog services that have NO bespoke console area (not a key in
+ *  SERVICE_AREAS) to generic sidebar entries pointing at the /services/<name>
+ *  area. Bespoke services are excluded — they render from NAV_CATEGORIES with
+ *  their own logos. This is what surfaces a freshly-exposed service in the
+ *  console without a code change. */
+export function catalogNavItems(services: { name: string; icon?: string }[]): NavItem[] {
+  return services
+    .filter((s) => !SERVICE_AREAS[s.name])
+    .map((s) => ({
+      segment: `services/${s.name}`,
+      icon: catalogIconClass(s.icon),
+      label: s.name,
+    }));
 }

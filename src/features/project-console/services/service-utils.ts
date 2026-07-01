@@ -52,9 +52,13 @@ export function parentLabel(service: string | undefined | null): string {
   return SERVICE_AREAS[service ?? '']?.label || service || 'Services';
 }
 
-/** URL segments of a service's console area, defaulting to the generic list. */
+/** URL segments of a service's console area. Services with a bespoke area use
+ *  it; any other catalog service falls back to the generic `services/<name>`
+ *  area (rendered by the same list/deploy/detail pages) instead of being
+ *  wrongly nested under jupyterhub. */
 export function areaBasePath(service: string | undefined | null): string[] {
-  return SERVICE_AREAS[service ?? '']?.basePath ?? ['jupyterhub'];
+  if (!service) return ['services'];
+  return SERVICE_AREAS[service]?.basePath ?? ['services', service];
 }
 
 /** Open an external (cluster-workload) URL without handing it window.opener. */

@@ -35,7 +35,7 @@ const PROGRESS_STAGES = [
 
 export default function ServiceDeployPage() {
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, svcType } = useParams<{ projectId: string; svcType: string }>();
   const [searchParams] = useSearchParams();
   const { toast, showSuccess, showError, showWarn } = useToastMessages();
   const progressTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -138,7 +138,9 @@ export default function ServiceDeployPage() {
         // A requested service must match exactly — falling back to another
         // service would silently deploy the wrong thing (the empty state
         // below handles the no-match case).
-        const requestedService = searchParams.get('service');
+        // Bespoke deploy pages pass ?service=; the generic services/:svcType
+        // area carries the service type in the URL param instead.
+        const requestedService = searchParams.get('service') ?? svcType;
         const svc = requestedService
           ? services.find((s) => s.name === requestedService)
           : services[0];

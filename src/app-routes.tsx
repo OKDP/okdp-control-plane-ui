@@ -185,6 +185,16 @@ export function AppRoutes() {
                 serviceFilter: 'superset',
                 emptyMessage: 'No Superset instances deployed yet.',
               })}
+
+              {/* Catalog-driven generic area: any exposed service without a
+                  bespoke console area is reachable here (list / deploy /
+                  detail). The service type comes from the :svcType param. */}
+              {serviceRoutes('services/:svcType', {
+                title: '',
+                deployLabel: 'Deploy',
+                serviceFilter: '',
+                emptyMessage: 'No instances deployed yet.',
+              })}
             </Route>
           </Route>
         </Route>
