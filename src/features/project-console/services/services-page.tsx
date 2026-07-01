@@ -78,18 +78,21 @@ export default function ServicesPage({
 }: ServicesPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, svcType } = useParams<{ projectId: string; svcType: string }>();
+  // Bespoke areas pass a static serviceFilter; the generic `services/:svcType`
+  // area resolves the service type from the URL param instead.
+  const effectiveFilter = serviceFilter || svcType || '';
 
-  const copy = areaCopy(serviceFilter);
-  const basePath = areaBasePath(serviceFilter);
-  const breadcrumbCurrent = serviceFilter ? parentLabel(serviceFilter) : 'Instances';
+  const copy = areaCopy(effectiveFilter);
+  const basePath = areaBasePath(effectiveFilter);
+  const breadcrumbCurrent = effectiveFilter ? parentLabel(effectiveFilter) : 'Instances';
 
   const goToDeploy = () => {
     if (!projectId) return;
 
     const params = new URLSearchParams({ returnTo: location.pathname + location.search });
-    if (serviceFilter) {
-      params.set('service', serviceFilter);
+    if (effectiveFilter) {
+      params.set('service', effectiveFilter);
     }
     navigate(`/projects/${projectId}/${basePath.join('/')}/deploy?${params.toString()}`);
   };
@@ -98,7 +101,7 @@ export default function ServicesPage({
     <div className="services-list animate-in">
       <PageHeader
         breadcrumb={{ parent: copy.breadcrumbParent, current: breadcrumbCurrent }}
-        title={title}
+        title={title || svcType || 'Services'}
         subtitle={copy.subtitle}
         actions={
           <button className="create-btn" onClick={goToDeploy}>
@@ -109,7 +112,7 @@ export default function ServicesPage({
       />
 
       <ServiceList
-        serviceFilter={serviceFilter}
+        serviceFilter={effectiveFilter}
         emptyMessage={emptyMessage}
         emptyTitle={copy.emptyTitle}
         basePath={basePath}
