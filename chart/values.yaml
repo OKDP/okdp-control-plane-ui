@@ -1,0 +1,26 @@
+replicaCount: 1
+
+image:
+  repository: quay.io/okdp/images/okdp-ui
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# In-cluster okdp-server Service. The ingress routes /api to it so the browser
+# stays same-origin (no CORS). Must resolve in the release namespace.
+backend:
+  service: okdp-server
+  port: 8093
+
+service:
+  type: ClusterIP
+  port: 4200
+
+# Public exposure of the console.
+ingress:
+  className: nginx
+  host: console.okdp.dev-sandbox
+  clusterIssuer: default-issuer
+  tlsSecretName: okdp-ui-tls
+
+resources: {}

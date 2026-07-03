@@ -144,6 +144,17 @@ docker run --rm -p 4200:4200 okdp-console
 that, as above, the image serves only the static bundle — a fronting ingress
 must route `/api` to the control plane.
 
+## Deploy with the Helm chart
+
+```bash
+helm install okdp-ui ./chart -n okdp-system \
+  --set image.tag=0.6.0 \
+  --set ingress.host=console.okdp.dev-sandbox \
+  --set backend.service=okdp-server
+```
+
+The OIDC client and CORS are provided by the platform (okdp-sandbox), not the chart.
+
 ## OKDP Integration
 
 This component is part of the [OKDP Data Platform](https://okdp.io) — a
