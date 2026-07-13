@@ -228,6 +228,25 @@ function catalogIconClass(icon?: string): string {
   return icon.startsWith('pi ') ? icon : `pi ${icon}`;
 }
 
+/** SeaweedFS brandmark — hand-vendored (absent from simple-icons): three green
+ *  fronds, so the catalog sidebar entry reads on-brand instead of a plain box. */
+const siteSeaweedfs: BrandGlyph = {
+  viewBox: '0 0 24 24',
+  paths: [
+    { fill: '#57c98a', d: 'M12 21 Q4.5 16 6.5 7 Q9.5 13 12 21 Z' },
+    { fill: '#57c98a', d: 'M12 21 Q19.5 16 17.5 7 Q14.5 13 12 21 Z' },
+    { fill: '#2e9e6b', d: 'M12 21 Q8 12 12 3 Q16 12 12 21 Z' },
+  ],
+};
+
+/** Real brand logos for catalog services that have no bespoke area, matched by
+ *  service name. When a name isn't here, catalogNavItems falls back to the
+ *  catalog `icon` and then a generic box. Extend as new UI services are exposed. */
+const CATALOG_BRANDS: Record<string, BrandGlyph> = {
+  'spark-operator': siApachespark,
+  seaweedfs: siteSeaweedfs,
+};
+
 /** Maps catalog services that have NO bespoke console area (not a key in
  *  SERVICE_AREAS) to generic sidebar entries pointing at the /services/<name>
  *  area. Bespoke services are excluded — they render from NAV_CATEGORIES with
@@ -239,6 +258,7 @@ export function catalogNavItems(services: { name: string; icon?: string }[]): Na
     .map((s) => ({
       segment: `services/${s.name}`,
       icon: catalogIconClass(s.icon),
+      brand: CATALOG_BRANDS[s.name],
       label: s.name,
     }));
 }
