@@ -211,6 +211,20 @@ npx vitest run -t "force local logout"
 **Expected result:** `vitest` reports the matched tests passing, e.g.
 `Test Files  1 passed (1)`.
 
+## Example: Secret Store (Vault)
+
+1. Open your project → **Secrets** → **Secret Stores** → **Add secret store**.
+2. Fill the form with simple values like below. The Vault URL must work **from inside the cluster** (where ESO runs).
+
+| Field | Simple example |
+|-------|----------------|
+| Store name | `my-store` |
+| Server URL | `http://vault-main.vault-system.svc.cluster.local:8200` |
+| Secret path | `secret` |
+| KV version | `v2` |
+| Token | `root` *(sandbox / dev only; never in production)* |
+| Default store | optional checkbox |
+
 ### Project structure
 
 ```
