@@ -1,5 +1,6 @@
 import { Navigate, useLocation, useParams } from 'react-router-dom';
 
+/** Service paths of the pre-rewrite console, paired with their current path. */
 const LEGACY_SERVICE_SEGMENTS: readonly (readonly [string, string])[] = [
   ['services', 'jupyterhub'],
   ['lakehouse/polaris', 'polaris'],
