@@ -35,6 +35,9 @@ RUN sed -i 's/^\(\s*user\s\+.*\)$/# \1/' /etc/nginx/nginx.conf \
 
 EXPOSE 4200
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1:4200/health || exit 1
+
 USER ${OKDP_UI_UID}
 
 # Run nginx in the foreground
