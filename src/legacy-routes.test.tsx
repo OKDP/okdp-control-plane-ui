@@ -5,8 +5,8 @@ import { legacyRedirectRoutes } from './legacy-routes';
 
 let landedAt = '';
 function LocationProbe() {
-  const { pathname } = useLocation();
-  landedAt = pathname;
+  const { pathname, search, hash } = useLocation();
+  landedAt = `${pathname}${search}${hash}`;
   return null;
 }
 
@@ -50,6 +50,14 @@ describe('legacy URL redirects', () => {
     expect(resolve('/project/demo/bi/superset')).toBe('/projects/demo/superset');
     expect(resolve('/project/demo/spark/applications')).toBe(
       '/projects/demo/views/spark/applications',
+    );
+  });
+
+  it('keeps the query string and hash of a bookmarked link', () => {
+    expect(resolve('/admin/projects?tab=quotas#top')).toBe('/projects?tab=quotas#top');
+    expect(resolve('/project?sort=name')).toBe('/projects?sort=name');
+    expect(resolve('/project/demo/lakehouse/trino?tab=config#logs')).toBe(
+      '/projects/demo/trino?tab=config#logs',
     );
   });
 

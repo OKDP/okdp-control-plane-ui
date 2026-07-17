@@ -1,4 +1,4 @@
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 
 const LEGACY_SERVICE_SEGMENTS: readonly (readonly [string, string])[] = [
   ['services', 'jupyterhub'],
@@ -19,7 +19,9 @@ function rewriteLegacyTail(tail: string): string {
 
 export function LegacyProjectRedirect() {
   const { projectId, '*': tail = '' } = useParams();
+  const { search, hash } = useLocation();
   const base = projectId ? `/projects/${projectId}` : '/projects';
   const rewritten = rewriteLegacyTail(tail);
-  return <Navigate to={rewritten ? `${base}/${rewritten}` : base} replace />;
+  const path = rewritten ? `${base}/${rewritten}` : base;
+  return <Navigate to={`${path}${search}${hash}`} replace />;
 }
