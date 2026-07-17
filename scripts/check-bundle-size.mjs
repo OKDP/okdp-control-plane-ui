@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ASSETS = 'dist/assets';
@@ -22,7 +22,7 @@ let totalRaw = 0;
 let entryRaw = 0;
 let entryName = '(none)';
 for (const f of files) {
-  const size = readFileSync(join(ASSETS, f)).length;
+  const size = statSync(join(ASSETS, f)).size;
   totalRaw += size;
   if (/^index-.*\.js$/.test(f) && size > entryRaw) {
     entryRaw = size;
@@ -31,22 +31,23 @@ for (const f of files) {
 }
 
 const checks = [
-  { label: `entry (${entryName})`, value: kb(entryRaw), budget: BUDGETS.entry },
-  { label: 'total JS', value: kb(totalRaw), budget: BUDGETS.totalJs },
+  { label: `entry (${entryName})`, bytes: entryRaw, budget: BUDGETS.entry },
+  { label: 'total JS', bytes: totalRaw, budget: BUDGETS.totalJs },
 ];
 
 let failed = false;
 console.log('Bundle size check (raw, uncompressed):');
 for (const c of checks) {
+  // Compared in bytes so a size just under the budget is not rounded past it.
   let status = 'OK';
-  if (c.value >= c.budget.error) {
+  if (c.bytes >= c.budget.error * 1024) {
     status = 'ERROR';
     failed = true;
-  } else if (c.value >= c.budget.warn) {
+  } else if (c.bytes >= c.budget.warn * 1024) {
     status = 'WARN';
   }
   console.log(
-    `  ${status.padEnd(5)} ${c.label}: ${c.value} KB (warn ${c.budget.warn}, error ${c.budget.error})`,
+    `  ${status.padEnd(5)} ${c.label}: ${kb(c.bytes)} KB (warn ${c.budget.warn}, error ${c.budget.error})`,
   );
 }
 
