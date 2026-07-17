@@ -31,6 +31,17 @@ function LocationProbe() {
 // Flush pending effects so that any (unwanted) redirect has a chance to run.
 const flushEffects = () => act(() => Promise.resolve());
 
+function authState(roles: string[] = []) {
+  return {
+    ready: true,
+    isAuthenticated: true,
+    profile: { username: 'jdoe' },
+    roles,
+    hasRole: (role: string) => roles.includes(role),
+    forceLogout: vi.fn(),
+  };
+}
+
 function renderAt(path: string) {
   window.history.replaceState({}, '', path);
   return render(
@@ -62,13 +73,7 @@ describe('AuthRedirector', () => {
     vi.clearAllMocks();
     sessionStorage.clear();
     currentPath = '';
-    mocks.useAuth.mockReturnValue({
-      ready: true,
-      isAuthenticated: true,
-      profile: { username: 'jdoe' },
-      roles: [],
-      forceLogout: vi.fn(),
-    });
+    mocks.useAuth.mockReturnValue(authState());
   });
 
   describe('Deep links', () => {
@@ -106,6 +111,23 @@ describe('AuthRedirector', () => {
       renderAt('/login');
 
       await waitFor(() => expect(currentPath).toBe('/home'));
+    });
+
+    it('should land an operator with admin access on /admin', async () => {
+      mocks.useAuth.mockReturnValue(authState(['admins']));
+
+      renderAt('/login');
+
+      await waitFor(() => expect(currentPath).toBe('/admin'));
+    });
+
+    it('should leave /home alone for an admin, so the header link still reaches their project', async () => {
+      mocks.useAuth.mockReturnValue(authState(['admins']));
+
+      renderAt('/home');
+      await flushEffects();
+
+      expect(currentPath).toBe('/home');
     });
 
     it('should restore and consume the saved return URL', async () => {
