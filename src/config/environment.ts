@@ -46,7 +46,7 @@ const production: Environment = {
   production: true,
 
   // API Configuration - relative URLs for same-origin deployment
-  apiBaseUrl: '/api',
+  apiBaseUrl: '',
 
   oidc: {
     ...development.oidc,
