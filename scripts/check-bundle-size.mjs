@@ -3,12 +3,12 @@ import { join } from 'node:path';
 
 const ASSETS = 'dist/assets';
 
-const BUDGETS = {
+const BUDGETS_KIB = {
   entry: { warn: 450, error: 550 },
   totalJs: { warn: 1300, error: 1600 },
 };
 
-const kb = (bytes) => Math.round((bytes / 1024) * 10) / 10;
+const kib = (bytes) => Math.round((bytes / 1024) * 10) / 10;
 
 let files;
 try {
@@ -31,8 +31,8 @@ for (const f of files) {
 }
 
 const checks = [
-  { label: `entry (${entryName})`, bytes: entryRaw, budget: BUDGETS.entry },
-  { label: 'total JS', bytes: totalRaw, budget: BUDGETS.totalJs },
+  { label: `entry (${entryName})`, bytes: entryRaw, budget: BUDGETS_KIB.entry },
+  { label: 'total JS', bytes: totalRaw, budget: BUDGETS_KIB.totalJs },
 ];
 
 let failed = false;
@@ -47,7 +47,7 @@ for (const c of checks) {
     status = 'WARN';
   }
   console.log(
-    `  ${status.padEnd(5)} ${c.label}: ${kb(c.bytes)} KB (warn ${c.budget.warn}, error ${c.budget.error})`,
+    `  ${status.padEnd(5)} ${c.label}: ${kib(c.bytes)} KiB (warn ${c.budget.warn} KiB, error ${c.budget.error} KiB)`,
   );
 }
 

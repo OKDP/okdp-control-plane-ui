@@ -328,7 +328,8 @@ render with line/column info, transport errors separately.
   `noUnusedLocals` / `noUnusedParameters` / `noImplicitReturns`;
   `vite.config.ts` is included in type-checking. The app version rendered in
   the footer comes from `package.json` via the `__APP_VERSION__` Vite define
-  (declared in `src/vite-env.d.ts`).
+  (declared in `src/vite-env.d.ts`). `npm run size-check` builds and then fails
+  if a bundle exceeds the budgets in `scripts/check-bundle-size.mjs`.
 - **Tests**: Vitest + Testing Library (`jsdom`), configured in
   `vite.config.ts`; tests are co-located `*.test.ts(x)`. External SDKs
   (e.g. `oidc-client-ts`) are mocked with `vi.hoisted` + `vi.mock` — see
@@ -345,6 +346,7 @@ render with line/column info, transport errors separately.
 index.html               # SPA shell; pre-paint dark-mode script; font links
 vite.config.ts           # Vite + React + Tailwind plugins; port 4200; Vitest; __APP_VERSION__
 Dockerfile / nginx.conf  # two-stage build; nginx static serving on 4200
+scripts/                 # check-bundle-size.mjs (npm run size-check)
 src/
   main.tsx               # entry: StrictMode, createRoot, styles.css
   App.tsx                # provider tree, AuthGate, ScrollToTop
