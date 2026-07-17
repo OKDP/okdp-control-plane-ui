@@ -5,6 +5,7 @@ import { Avatar } from 'primereact/avatar';
 import { Menu } from 'primereact/menu';
 import type { MenuItem } from 'primereact/menuitem';
 import { useAuth } from '../../core/auth/auth-context';
+import { useUserManagementEnabled } from '../../core/capabilities/use-capabilities';
 import { useEnvBar } from '../../core/preferences/env-bar-context';
 import { NAV_SIZE_SCALE, useNavPrefs } from '../../core/preferences/nav-prefs-context';
 import { environment } from '../../config/environment';
@@ -72,6 +73,7 @@ export function ConsoleShell({
 }: ConsoleShellProps) {
   const auth = useAuth();
   const navigate = useNavigate();
+  const userManagement = useUserManagementEnabled();
   const { envBarEnabled } = useEnvBar();
   const { menuSize } = useNavPrefs();
   const menuRef = useRef<Menu>(null);
@@ -96,11 +98,15 @@ export function ConsoleShell({
             icon: 'pi pi-shield',
             command: () => navigate('/admin'),
           },
-          {
-            label: 'Identity',
-            icon: 'pi pi-users',
-            command: () => navigate('/identity'),
-          },
+          ...(userManagement
+            ? [
+                {
+                  label: 'Identity',
+                  icon: 'pi pi-users',
+                  command: () => navigate('/identity'),
+                },
+              ]
+            : []),
           {
             label: 'Service Catalog',
             icon: 'pi pi-box',
