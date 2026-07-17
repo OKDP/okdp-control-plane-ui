@@ -6,8 +6,8 @@
   "scripts": {
     "start": "vite",
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/check-bundle-size.mjs",
-    "size-check": "node scripts/check-bundle-size.mjs",
+    "build": "tsc -b && vite build",
+    "size-check": "npm run build && node scripts/check-bundle-size.mjs",
     "preview": "vite preview",
     "lint": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,html,scss,css,json}\"",

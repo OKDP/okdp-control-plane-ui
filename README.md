@@ -194,6 +194,7 @@ HTTP layer forces a logout on `401`/`403`.
 |---------|--------------|
 | `npm start` / `npm run dev` | Vite dev server on port 4200 |
 | `npm run build` | type-check (`tsc -b`) + production bundle → `dist/` |
+| `npm run size-check` | build, then fail if a bundle exceeds its size budget |
 | `npm run preview` | serve the production bundle locally |
 | `npm test` | run the unit tests once (Vitest) |
 | `npm run test:watch` | run the tests in watch mode |
