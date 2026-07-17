@@ -1,11 +1,6 @@
-import { Navigate, Route, useLocation } from 'react-router-dom';
+import { Route } from 'react-router-dom';
+import { LegacyRedirect } from './legacy-redirect';
 import { LegacyProjectRedirect } from './legacy-project-redirect';
-
-/** Carries the query string and hash of the legacy link over to the new path. */
-function LegacyRedirect({ to }: { to: string }) {
-  const { search, hash } = useLocation();
-  return <Navigate to={`${to}${search}${hash}`} replace />;
-}
 
 export function legacyRedirectRoutes() {
   return (
