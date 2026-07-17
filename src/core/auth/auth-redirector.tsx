@@ -19,10 +19,10 @@ function shouldRedirect(target: string): boolean {
 
 /**
  * Post-login navigation (AuthRedirectService equivalent): once the user is
- * authenticated, restore the saved deep link or land on /home, which routes
- * to the default project (or the getting-started view). Also registers the
- * 401/403 handler that forces a logout and returns to the login page (auth
- * interceptor equivalent).
+ * authenticated, restore the saved deep link, or land an admin on /admin and
+ * everyone else on /home, which routes to the default project (or the
+ * getting-started view). Also registers the 401/403 handler that forces a
+ * logout and returns to the login page (auth interceptor equivalent).
  */
 export function AuthRedirector() {
   const auth = useAuth();
@@ -67,10 +67,11 @@ export function AuthRedirector() {
       return;
     }
 
+    // Landing only: /home stays the shared entry point for the header link.
     if (shouldRedirect('/home')) {
-      navigate('/home', { replace: true });
+      navigate(auth.hasRole('admins') ? '/admin' : '/home', { replace: true });
     }
-  }, [auth.ready, auth.isAuthenticated, navigate]);
+  }, [auth, navigate]);
 
   return null;
 }
