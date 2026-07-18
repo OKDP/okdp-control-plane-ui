@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import { capabilitiesApi, type Capabilities } from '../api/capabilities-api';
 
-/** Legacy fallback: servers without GET /api/capabilities always expose the
- *  identity API, so an unreachable endpoint means "behave like before". */
+// Servers without /api/capabilities always exposed the identity API, so an
+// unreachable endpoint must keep the previous behaviour.
 const legacyCapabilities: Capabilities = {
   identity: { provider: 'kubauth', userManagement: true },
   oidcProvisioning: { provider: 'none' },
 };
 
-// Fetched once per tab and shared by every consumer: capabilities only change
-// when an operator edits the platform Context, a reload is fine to pick it up.
+// Fetched once per tab: capabilities only change when an operator edits the
+// platform Context, so a reload is enough to pick them up.
 let cached: Capabilities | undefined;
 let inflight: Promise<Capabilities> | undefined;
 
-function fetchCapabilities(): Promise<Capabilities> {
+export function fetchCapabilities(): Promise<Capabilities> {
   inflight ??= capabilitiesApi
     .get()
     .catch(() => legacyCapabilities)
@@ -24,8 +24,6 @@ function fetchCapabilities(): Promise<Capabilities> {
   return inflight;
 }
 
-/** Platform capabilities, undefined while the first fetch is in flight.
- *  Consumers should hide optional features until capabilities are known. */
 export function useCapabilities(): Capabilities | undefined {
   const [capabilities, setCapabilities] = useState<Capabilities | undefined>(cached);
 
@@ -43,8 +41,7 @@ export function useCapabilities(): Capabilities | undefined {
   return capabilities;
 }
 
-/** True when the platform manages users/groups (identity.provider: kubauth);
- *  undefined while loading — treat as hidden. */
+// undefined while loading: treat as hidden.
 export function useUserManagementEnabled(): boolean | undefined {
   return useCapabilities()?.identity.userManagement;
 }

@@ -26,8 +26,7 @@ const development: Environment = {
   apiBaseUrl: 'http://localhost:8093',
 
   oidc: {
-    // Keycloak is the sandbox IdP (kubauth retired); the okdp-ui client is
-    // seeded by the sandbox Keycloak configuration.
+    // Keycloak is the default sandbox IdP instead of kubauth
     authority: 'https://keycloak.okdp.sandbox/realms/master',
     clientId: 'okdp-ui',
     redirectUri: window.location.origin,
@@ -57,3 +56,11 @@ const production: Environment = {
 };
 
 export const environment: Environment = import.meta.env.PROD ? production : development;
+
+/** Overrides the build-time OIDC config with the platform's runtime config. */
+export function applyRuntimeOidc(oidc?: { authority: string; clientId: string; scope?: string }) {
+  if (!oidc?.authority || !oidc.clientId) return;
+  environment.oidc.authority = oidc.authority;
+  environment.oidc.clientId = oidc.clientId;
+  if (oidc.scope) environment.oidc.scope = oidc.scope;
+}
