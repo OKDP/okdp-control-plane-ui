@@ -165,6 +165,67 @@ describe('AuthRedirector', () => {
 
       await waitFor(() => expect(currentPath).toBe('/home'));
     });
+
+    it('should land an admin on /admin from the index route (regression: RootRedirect won the race to /home)', async () => {
+      mocks.useAuth.mockReturnValue(authState(['admins']));
+
+      renderAtRoot();
+
+      await waitFor(() => expect(currentPath).toBe('/admin'));
+    });
+
+    it('should let a restored deep link win over the admin landing on the index route', async () => {
+      mocks.useAuth.mockReturnValue(authState(['admins']));
+      sessionStorage.setItem(AUTH_RETURN_URL_KEY, '/projects/test/services');
+
+      renderAtRoot();
+
+      await waitFor(() => expect(currentPath).toBe('/projects/test/services'));
+    });
+
+    it('should hold the index route until auth is ready, then land the admin on /admin', async () => {
+      mocks.useAuth.mockReturnValue({ ...authState(['admins']), ready: false });
+
+      const view = renderAtRoot();
+      await flushEffects();
+      expect(currentPath).toBe('/');
+
+      mocks.useAuth.mockReturnValue(authState(['admins']));
+      view.rerender(
+        <MemoryRouter initialEntries={['/']}>
+          <AuthRedirector />
+          <LocationProbe />
+          <Routes>
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="*" element={null} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(currentPath).toBe('/admin'));
+    });
+
+    it('should keep the deep link saved before auth was ready (regression: re-read of the consumed key)', async () => {
+      mocks.useAuth.mockReturnValue({ ...authState(['admins']), ready: false });
+      sessionStorage.setItem(AUTH_RETURN_URL_KEY, '/settings');
+
+      const view = renderAtRoot();
+      await flushEffects();
+
+      mocks.useAuth.mockReturnValue(authState(['admins']));
+      view.rerender(
+        <MemoryRouter initialEntries={['/']}>
+          <AuthRedirector />
+          <LocationProbe />
+          <Routes>
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="*" element={null} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(currentPath).toBe('/settings'));
+    });
   });
 
   describe('Unauthorized handler', () => {
