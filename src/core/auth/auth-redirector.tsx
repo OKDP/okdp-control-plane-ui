@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import { setUnauthorizedHandler } from '../api/http';
@@ -77,18 +77,29 @@ export function AuthRedirector() {
 }
 
 /**
- * '/' index target: consume a pending saved deep link, falling back to /home.
- * Must be the route element itself — a plain <Navigate to="/home"> at '/'
- * flushes its effect in the same commit as AuthRedirector's restore and would
- * clobber the freshly restored deep link. Anonymous visits still end at
- * /login via /home's RequireAuth (which re-saves the link).
+ * '/' index target: consume a pending saved deep link, falling back to /admin
+ * for operators with admin access and /home for everyone else — the same
+ * landing rule as AuthRedirector, which only sees the /login entry because
+ * this Navigate wins the race on '/'. Must be the route element itself — a
+ * plain <Navigate to="/home"> at '/' flushes its effect in the same commit as
+ * AuthRedirector's restore and would clobber the freshly restored deep link.
+ * Anonymous visits still end at /login via /home's RequireAuth (which
+ * re-saves the link).
  */
 export function RootRedirect() {
-  // Read during render, consume in an effect: StrictMode double-invokes
-  // render, and a removeItem there would lose the URL on the second pass.
-  const returnUrl = sessionStorage.getItem(AUTH_RETURN_URL_KEY);
+  const auth = useAuth();
+  // Capture once in a state initializer: the key is consumed below, and a
+  // re-render after auth.ready flips must not re-read the now-empty storage
+  // (StrictMode double-invokes the initializer before the effect runs, so
+  // both passes still see the URL).
+  const [returnUrl] = useState(() => sessionStorage.getItem(AUTH_RETURN_URL_KEY));
   useEffect(() => {
     sessionStorage.removeItem(AUTH_RETURN_URL_KEY);
   }, []);
-  return <Navigate to={returnUrl || '/home'} replace />;
+  // Routing before `ready` would send a logged-in admin to /home because the
+  // roles are not loaded yet; RequireAuth applies the same wait further down.
+  if (!auth.ready) {
+    return null;
+  }
+  return <Navigate to={returnUrl || (auth.hasRole('admins') ? '/admin' : '/home')} replace />;
 }
