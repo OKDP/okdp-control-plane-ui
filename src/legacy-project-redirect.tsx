@@ -11,11 +11,14 @@ const LEGACY_SERVICE_SEGMENTS: readonly (readonly [string, string])[] = [
 ];
 
 function rewriteLegacyTail(tail: string): string {
+  // A trailing slash on the bookmarked link must not ride into the new path,
+  // so the redirect target stays canonical (e.g. .../trino, not .../trino/).
+  const segment = tail.replace(/\/+$/, '');
   for (const [from, to] of LEGACY_SERVICE_SEGMENTS) {
-    if (tail === from) return to;
-    if (tail.startsWith(`${from}/`)) return `${to}/${tail.slice(from.length + 1)}`;
+    if (segment === from) return to;
+    if (segment.startsWith(`${from}/`)) return `${to}/${segment.slice(from.length + 1)}`;
   }
-  return tail;
+  return segment;
 }
 
 export function LegacyProjectRedirect() {
