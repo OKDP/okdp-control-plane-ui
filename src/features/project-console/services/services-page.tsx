@@ -36,7 +36,7 @@ function areaCopy(serviceFilter: string): ServiceAreaCopy {
         subtitle: 'Browse completed Spark applications and stream live job monitoring UIs.',
         emptyTitle: 'Deploy a Spark History Server',
       };
-    case 'trino':
+    case 'trinodb':
       return {
         breadcrumbParent: 'Lakehouse',
         subtitle:

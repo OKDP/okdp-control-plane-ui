@@ -162,11 +162,11 @@ export function AppRoutes() {
                 emptyMessage: 'No Polaris instances deployed yet.',
               })}
 
-              {/* Trino (Lakehouse / data-querying) — kubocd Package: trino@0.1.0 */}
+              {/* Trino (Lakehouse / data-querying) — kubocd Package: trinodb */}
               {serviceRoutes('trino', {
                 title: 'Trino',
                 deployLabel: 'Deploy',
-                serviceFilter: 'trino',
+                serviceFilter: 'trinodb',
                 emptyMessage: 'No Trino instances deployed yet.',
               })}
 

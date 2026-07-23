@@ -41,7 +41,9 @@ export interface ServiceArea {
 export const SERVICE_AREAS: Record<string, ServiceArea> = {
   jupyterhub: { label: 'JupyterHub', basePath: ['jupyterhub'] },
   'spark-history-server': { label: 'History Server', basePath: ['spark', 'history-server'] },
-  trino: { label: 'Trino', basePath: ['trino'] },
+  // Keyed by the catalog's actual package/service name (trinodb), not the
+  // "Trino" label — the URL area itself still lives at /trino.
+  trinodb: { label: 'Trino', basePath: ['trino'] },
   polaris: { label: 'Polaris', basePath: ['polaris'] },
   superset: { label: 'Superset', basePath: ['superset'] },
   airflow: { label: 'Airflow', basePath: ['airflow'] },

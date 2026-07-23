@@ -3,7 +3,7 @@ import { areaBasePath, parentLabel, SERVICE_AREAS } from './service-utils';
 
 describe('areaBasePath', () => {
   it('returns the bespoke area for a known service', () => {
-    expect(areaBasePath('trino')).toEqual(['trino']);
+    expect(areaBasePath('trinodb')).toEqual(['trino']);
     expect(areaBasePath('spark-history-server')).toEqual(['spark', 'history-server']);
   });
 
@@ -26,7 +26,7 @@ describe('areaBasePath', () => {
 
 describe('parentLabel', () => {
   it('uses the bespoke label, else the service name, else Services', () => {
-    expect(parentLabel('trino')).toBe(SERVICE_AREAS['trino'].label);
+    expect(parentLabel('trinodb')).toBe(SERVICE_AREAS['trinodb'].label);
     expect(parentLabel('seaweedfs')).toBe('seaweedfs');
     expect(parentLabel(undefined)).toBe('Services');
   });

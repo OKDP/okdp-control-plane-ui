@@ -4,7 +4,7 @@ import { catalogNavItems } from './nav-config';
 describe('catalogNavItems', () => {
   it('excludes services that already have a bespoke console area', () => {
     const items = catalogNavItems([
-      { name: 'trino' },
+      { name: 'trinodb' },
       { name: 'jupyterhub' },
       { name: 'spark-history-server' },
     ]);
@@ -42,7 +42,7 @@ describe('catalogNavItems', () => {
 
   it('keeps only the non-bespoke services from a mixed catalog', () => {
     const items = catalogNavItems([
-      { name: 'trino' },
+      { name: 'trinodb' },
       { name: 'seaweedfs' },
       { name: 'superset' },
       { name: 'spark-operator' },
