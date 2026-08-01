@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { legacyRedirectRoutes } from './legacy-routes';
 import { RequireAuth } from './core/auth/require-auth';
 import { RequireAdmin } from './core/auth/require-admin';
 import { RootRedirect } from './core/auth/auth-redirector';
@@ -198,6 +199,8 @@ export function AppRoutes() {
             </Route>
           </Route>
         </Route>
+
+        {legacyRedirectRoutes()}
 
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
