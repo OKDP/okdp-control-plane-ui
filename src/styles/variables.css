@@ -94,6 +94,24 @@
   --db-font-size-2xl: 28px;
   --db-line-height-tight: 1.3;
   --db-line-height-base: 1.6;
+
+  /* ========== SQL editor (CodeMirror) — Light ========== */
+  /* Syntax token colors + editor chrome. Mirrored in body.dark-mode so the
+     editor follows the theme without a React re-render. */
+  --cm-keyword: #0550ae;
+  --cm-function: #8250df;
+  --cm-type: #953800;
+  --cm-string: #0a7d33;
+  --cm-number: #0e7490;
+  --cm-constant: #0e7490;
+  --cm-comment: #6e7781;
+  --cm-operator: #6e7781;
+  --cm-variable: #953800;
+  --cm-punctuation: #8a94a3;
+  --cm-name: var(--db-text-primary);
+  --cm-active-line: rgba(65, 146, 143, 0.05);
+  --cm-selection: rgba(65, 146, 143, 0.18);
+  --cm-bracket-match: rgba(65, 146, 143, 0.18);
 }
 
 /* Manual Dark Mode — Class Based */
@@ -137,4 +155,19 @@ body.dark-mode {
   --db-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
   --db-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
   --db-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  /* ========== SQL editor (CodeMirror) — Dark ========== */
+  --cm-keyword: #79c0ff;
+  --cm-function: #d2a8ff;
+  --cm-type: #ffa657;
+  --cm-string: #7ee787;
+  --cm-number: #56d4dd;
+  --cm-constant: #56d4dd;
+  --cm-comment: #8b949e;
+  --cm-operator: #8b949e;
+  --cm-variable: #ffa657;
+  --cm-punctuation: #6e7781;
+  --cm-active-line: rgba(90, 177, 174, 0.08);
+  --cm-selection: rgba(90, 177, 174, 0.25);
+  --cm-bracket-match: rgba(90, 177, 174, 0.28);
 }
