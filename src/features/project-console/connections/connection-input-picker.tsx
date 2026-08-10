@@ -19,7 +19,7 @@ import { missingRequiredFields, omitBlankSecrets, toDynamicSchema } from './conn
 import { CredentialsBlock, type CredentialsMode } from './credentials-block';
 import { ConnectionTestReport } from './connection-test-result';
 
-/** Internal sentinel for "no connection" — PrimeReact's Dropdown mishandles an
+/** Internal sentinel for "no connection": PrimeReact's Dropdown mishandles an
  *  option whose value is the empty string, so the option carries this value and
  *  the picker reports '' to its parent: the package resolves an empty parameter
  *  to a name nothing can be called, and skips the binding. */
@@ -30,8 +30,6 @@ interface PickerChoice {
   label: string;
   value: string;
   description?: string;
-  /** Set when the name exists at both scopes: the value cannot say which. */
-  disabled?: boolean;
 }
 
 /**
@@ -90,30 +88,15 @@ export function ConnectionInputPicker({
   }, [reload, input.contract]);
 
   const options = useMemo<PickerChoice[]>(() => {
-    // A package parameter carries a bare name, and the resolver looks for it in
-    // the project and at platform scope. When both hold that name, the two rows
-    // send the same value, so the choice cannot be expressed: the release ends
-    // in WAIT_INPUT_CONNECTIONS with "Too many possible connections". Offering
-    // them as if they were distinguishable is the misleading part.
-    const seen = new Set<string>();
-    const ambiguous = new Set<string>();
-    for (const connection of selectable) {
-      if (seen.has(connection.name)) ambiguous.add(connection.name);
-      seen.add(connection.name);
-    }
-
     const choices: PickerChoice[] = selectable.map((connection) => ({
       label: connection.name,
       value: connection.name,
       // The status belongs here: a candidate in ERROR is offered like any other,
       // and picking it leaves the release waiting with nothing to explain why.
       status: connection.status,
-      disabled: ambiguous.has(connection.name),
-      description: ambiguous.has(connection.name)
-        ? 'A project and a platform connection share this name, so neither can be picked. Rename one of them.'
-        : connection.managed
-          ? `Provided by ${connection.providedBy || 'a deployed service'}`
-          : connection.description,
+      description: connection.managed
+        ? `Provided by ${connection.providedBy || 'a deployed service'}`
+        : connection.description,
     }));
     // "Nothing chosen" is not always "no connection". When the package carries
     // a default, it is a template rendered against the Environment, which is
@@ -141,7 +124,7 @@ export function ConnectionInputPicker({
     <div className="form-field" data-testid={`connection-input-${input.alias}`}>
       <div className="field-head">
         <label style={{ margin: 0 }}>
-          Connection — {input.alias}
+          Connection: {input.alias}
           <span className="muted-text small"> ({input.contract})</span>
         </label>
         {/* Creating is only offered for contracts a user may declare by hand:
@@ -169,7 +152,6 @@ export function ConnectionInputPicker({
         options={options}
         optionLabel="label"
         optionValue="value"
-        optionDisabled="disabled"
         placeholder={
           state === 'loading'
             ? 'Loading connections...'
@@ -217,7 +199,8 @@ export function ConnectionInputPicker({
 
 /** The connection-creation dialog, reduced to what the deploy flow needs: the
  *  type is fixed by the input's contract, and the Test button probes the live
- *  endpoint before anything is saved — same server call as the Connections
+ *  endpoint before anything is saved, through the same server call as the
+ *  Connections
  *  page, so the behaviour cannot drift. */
 function InlineConnectionCreate({
   projectId,
@@ -234,6 +217,9 @@ function InlineConnectionCreate({
 }) {
   const [name, setName] = useState('');
   const [values, setValues] = useState<ConnectionValues>({});
+  // Credentials are held apart from the schema values: the form owns the
+  // latter and re-emits them whole, without the secret fields it never sees.
+  const [credentials, setCredentials] = useState<ConnectionValues>({});
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
@@ -249,7 +235,7 @@ function InlineConnectionCreate({
       ? existingSecret
         ? []
         : ['Secret name']
-      : credentialFields.filter((f) => f.required && !values[f.name]).map((f) => f.label);
+      : credentialFields.filter((f) => f.required && !credentials[f.name]).map((f) => f.label);
   const missingFields = [...missingRequiredFields(contract, values), ...missingCredentials];
   const formValid = !!name && !nameError && missingFields.length === 0;
 
@@ -259,7 +245,7 @@ function InlineConnectionCreate({
     setTesting(true);
     setTestResult(null);
     api
-      .test({ type: contract.name, values: omitBlankSecrets(contract, values) })
+      .test({ type: contract.name, values: omitBlankSecrets(contract, { ...values, ...credentials }) })
       .then(setTestResult)
       .catch(() => setTestResult({ success: false, message: 'Test request failed', durationMs: 0 }))
       .finally(() => setTesting(false));
@@ -272,12 +258,13 @@ function InlineConnectionCreate({
       .create({
         name,
         type: contract.name,
-        values: omitBlankSecrets(contract, values),
+        values: omitBlankSecrets(contract, { ...values, ...credentials }),
         existingSecret: credentialsMode === 'existing' ? existingSecret : undefined,
       })
       .then(() => {
         setSaving(false);
         setName('');
+        setCredentials({});
         setTestResult(null);
         onCreated(name);
       })
@@ -338,8 +325,8 @@ function InlineConnectionCreate({
           contract={contract}
           mode={credentialsMode}
           onModeChange={setCredentialsMode}
-          values={values}
-          onValueChange={(field, value) => setValues((v) => ({ ...v, [field]: value }))}
+          values={credentials}
+          onValueChange={(field, value) => setCredentials((c) => ({ ...c, [field]: value }))}
           existingSecret={existingSecret}
           onExistingSecretChange={setExistingSecret}
         />
