@@ -30,6 +30,8 @@ interface PickerChoice {
   label: string;
   value: string;
   description?: string;
+  /** Set when the name exists at both scopes: the value cannot say which. */
+  disabled?: boolean;
 }
 
 /**
@@ -80,21 +82,38 @@ export function ConnectionInputPicker({
       .catalog()
       .then((catalog) => {
         const found = catalog.types.find((type) => type.name === input.contract);
-        setCreatableType(found && found.external ? found : null);
+        // Without the connection CRDs nothing can be persisted, so offering the
+        // creation form here would end on a 501 the picker cannot explain.
+        setCreatableType(found && found.external && catalog.crdAvailable ? found : null);
       })
       .catch(() => setCreatableType(null));
   }, [reload, input.contract]);
 
   const options = useMemo<PickerChoice[]>(() => {
+    // A package parameter carries a bare name, and the resolver looks for it in
+    // the project and at platform scope. When both hold that name, the two rows
+    // send the same value, so the choice cannot be expressed: the release ends
+    // in WAIT_INPUT_CONNECTIONS with "Too many possible connections". Offering
+    // them as if they were distinguishable is the misleading part.
+    const seen = new Set<string>();
+    const ambiguous = new Set<string>();
+    for (const connection of selectable) {
+      if (seen.has(connection.name)) ambiguous.add(connection.name);
+      seen.add(connection.name);
+    }
+
     const choices: PickerChoice[] = selectable.map((connection) => ({
       label: connection.name,
       value: connection.name,
       // The status belongs here: a candidate in ERROR is offered like any other,
       // and picking it leaves the release waiting with nothing to explain why.
       status: connection.status,
-      description: connection.managed
-        ? `Provided by ${connection.providedBy || 'a deployed service'}`
-        : connection.description,
+      disabled: ambiguous.has(connection.name),
+      description: ambiguous.has(connection.name)
+        ? 'A project and a platform connection share this name, so neither can be picked. Rename one of them.'
+        : connection.managed
+          ? `Provided by ${connection.providedBy || 'a deployed service'}`
+          : connection.description,
     }));
     // "Nothing chosen" is not always "no connection". When the package carries
     // a default, it is a template rendered against the Environment, which is
@@ -150,6 +169,7 @@ export function ConnectionInputPicker({
         options={options}
         optionLabel="label"
         optionValue="value"
+        optionDisabled="disabled"
         placeholder={
           state === 'loading'
             ? 'Loading connections...'

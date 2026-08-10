@@ -241,4 +241,11 @@ export const connectionApi = {
       `${projectUrl(projectId)}/${seg(connectionName)}/consumers`,
     );
   },
+
+  /** Services bound to a connection, to show before a destructive edit. */
+  consumers(projectId: string, connectionName: string): Promise<ConnectionConsumer[]> {
+    return http.getList<ConnectionConsumer>(
+      `${projectUrl(projectId)}/${seg(connectionName)}/consumers`,
+    );
+  },
 };
