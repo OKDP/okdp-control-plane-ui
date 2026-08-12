@@ -153,14 +153,44 @@ describe('AuthProvider', () => {
   });
 
   describe('Roles', () => {
-    it('should return true for existing role', async () => {
-      mocks.getUser.mockResolvedValue(mockUser({ sub: '123', groups: ['admins', 'users'] }));
+    it('should read the roles from the configured claim', async () => {
+      mocks.getUser.mockResolvedValue(
+        mockUser({ sub: '123', groups: ['platform_admin', 'auditor'] }),
+      );
 
       const { result } = renderHook(() => useAuth(), { wrapper });
       await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
 
-      expect(result.current.hasRole('admins')).toBe(true);
+      expect(result.current.hasRole('platform_admin')).toBe(true);
       expect(result.current.hasRole('superusers')).toBe(false);
+      expect(result.current.isAdmin).toBe(true);
+    });
+
+    // The bug this test exists for: rolesClaim pointed at realm_access.roles,
+    // which Keycloak puts in the ACCESS token only. The profile comes from the
+    // ID token, so the console read nothing and locked its own admin out while
+    // the token plainly carried platform_admin.
+    it('should grant nothing when the claim is absent from the ID token', async () => {
+      mocks.getUser.mockResolvedValue(
+        mockUser({ sub: '123', realm_access: { roles: ['platform_admin'] } }),
+      );
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+      // Nothing is granted, and the reason is said out loud rather than guessed.
+      expect(result.current.roles).toEqual([]);
+      expect(result.current.isAdmin).toBe(false);
+    });
+
+    it('should grant nothing when the claim holds the wrong shape', async () => {
+      mocks.getUser.mockResolvedValue(mockUser({ sub: '123', groups: 'platform_admin' }));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+      expect(result.current.roles).toEqual([]);
+      expect(result.current.isAdmin).toBe(false);
     });
   });
 

@@ -8,7 +8,8 @@
 
 declare global {
   interface Window {
-    __OKDP_CONFIG__?: Partial<Pick<OidcConfig, 'authority' | 'clientId'>>;
+    __OKDP_CONFIG__?: Partial<Pick<OidcConfig, 'authority' | 'clientId'>> &
+      Partial<IdentityConfig>;
   }
 }
 
@@ -25,10 +26,19 @@ interface OidcConfig {
   logLevel: string;
 }
 
+/** Read from the cluster at startup: the roles of one realm are the groups of
+ *  another. rolesClaim must name an ID token claim, dots allowed for a nested
+ *  one. */
+interface IdentityConfig {
+  rolesClaim: string;
+  adminRole: string;
+}
+
 interface Environment {
   production: boolean;
   apiBaseUrl: string;
   oidc: OidcConfig;
+  identity: IdentityConfig;
   githubUrl: string;
 }
 
@@ -47,6 +57,11 @@ const development: Environment = {
     responseType: 'code',
     silentRenew: true,
     logLevel: 'Debug',
+  },
+
+  identity: {
+    rolesClaim: runtime.rolesClaim || 'groups',
+    adminRole: runtime.adminRole || 'platform_admin',
   },
 
   // External Links
