@@ -6,6 +6,9 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { Dropdown } from 'primereact/dropdown';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Password } from 'primereact/password';
+import { Button } from 'primereact/button';
+import { connectionApi, type SelectableConnection } from '../../core/api/connection-api';
+import { formatLabel } from '../utils/format-label';
 
 /* The dsf-root class scopes the .field-invalid PrimeReact-input override in
    the PrimeReact overrides section of styles.css. */
@@ -26,6 +29,13 @@ export interface SchemaField {
   maxLength?: number;
   pattern?: string;
   multipleOf?: number;
+  /** Kept for structured values: the shape of an array's items, and whether an
+   *  object accepts free keys. Without them a mapping and a datasource list are
+   *  indistinguishable. */
+  items?: any;
+  additionalProperties?: any;
+  properties?: any;
+  'x-kubocd-connection-ref'?: { contract: string };
   'x-ui-order'?: number;
   'x-ui-group'?: string;
   'x-ui-widget'?: string;
@@ -45,6 +55,9 @@ export interface FieldGroup {
 
 export interface DynamicSchemaFormProps {
   schema: any;
+  /** Needed to offer the project's connections on nested connectionRef fields
+   *  (a datasource naming a trino connection). Omitted, those stay text. */
+  projectId?: string;
   initialValues?: Record<string, any>;
   onParametersChange: (params: Record<string, any>) => void;
   /**
@@ -68,12 +81,235 @@ function getGroupIcon(groupName: string): string {
   return GROUP_ICONS[groupName] || 'pi-cog';
 }
 
-function formatLabel(name: string): string {
-  return name
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/_/g, ' ')
-    .replace(/^./, (s) => s.toUpperCase())
-    .trim();
+/** Structured parameters (a role mapping, a list of datasources) edited as
+ *  JSON. The text being typed is kept locally, otherwise every keystroke would
+ *  have to parse: a half-written object is not valid JSON. The parsed value is
+ *  only pushed up when it parses, so a typo never replaces the structure. */
+function JsonField({
+  field,
+  value,
+  invalid,
+  onChange,
+}: {
+  field: SchemaField;
+  value: unknown;
+  invalid: boolean;
+  onChange: (parsed: unknown) => void;
+}) {
+  const serialize = (v: unknown) =>
+    v === undefined || v === null || (typeof v === 'object' && Object.keys(v).length === 0)
+      ? ''
+      : JSON.stringify(v, null, 2);
+
+  const [text, setText] = useState(() => serialize(value));
+  const [badJson, setBadJson] = useState(false);
+  // Follow the value while the user is not the one changing it (version switch,
+  // schema reload), without fighting their cursor.
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(serialize(value));
+     
+  }, [value]);
+
+  const commit = (next: string) => {
+    setText(next);
+    if (next.trim() === '') {
+      setBadJson(false);
+      onChange(field.type === 'array' ? [] : {});
+      return;
+    }
+    try {
+      onChange(JSON.parse(next));
+      setBadJson(false);
+    } catch {
+      setBadJson(true);
+    }
+  };
+
+  return (
+    <>
+      <InputTextarea
+        id={field.name}
+        value={text}
+        rows={4}
+        spellCheck={false}
+        placeholder={field.type === 'array' ? '[]' : '{}'}
+        className={`w-full mono${invalid || badJson ? ' field-invalid' : ''}`}
+        onFocus={() => (focused.current = true)}
+        onBlur={() => {
+          focused.current = false;
+          if (!badJson) setText(serialize(value));
+        }}
+        onChange={(e) => commit(e.target.value)}
+      />
+      {badJson && <small className="field-hint err">Invalid JSON, the value is not saved.</small>}
+    </>
+  );
+}
+
+/** A free-form map, edited as pairs. This is what a role mapping is: a claim
+ *  value on the left, the roles it grants on the right. Several roles are
+ *  comma-separated, and the value keeps the shape it had, list or plain string. */
+function KeyValueField({
+  value,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const rows = Object.entries(value);
+  const asText = (v: unknown) => (Array.isArray(v) ? v.join(', ') : String(v ?? ''));
+  const asValue = (text: string, previous: unknown) => {
+    const parts = text.split(',').map((p) => p.trim()).filter(Boolean);
+    return Array.isArray(previous) || parts.length > 1 ? parts : text.trim();
+  };
+
+  const replace = (index: number, key: string, raw: string) => {
+    const next: Record<string, unknown> = {};
+    rows.forEach(([k, v], i) => {
+      if (i === index) {
+        if (key) next[key] = asValue(raw, v);
+      } else {
+        next[k] = v;
+      }
+    });
+    onChange(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.map(([key, val], index) => (
+        <div key={index} className="flex items-center gap-2">
+          <InputText
+            className="w-full mono"
+            value={key}
+            placeholder="OIDC role"
+            onChange={(e) => replace(index, e.target.value, asText(val))}
+          />
+          <span className="text-fg-secondary">&rarr;</span>
+          <InputText
+            className="w-full mono"
+            value={asText(val)}
+            placeholder="granted roles, comma-separated"
+            onChange={(e) => replace(index, key, e.target.value)}
+          />
+          <Button
+            type="button"
+            icon="pi pi-times"
+            text
+            aria-label={`Retirer ${key}`}
+            onClick={() => {
+              const next = { ...value };
+              delete next[key];
+              onChange(next);
+            }}
+          />
+        </div>
+      ))}
+      <div>
+        <Button
+          type="button"
+          label="Add an entry"
+          icon="pi pi-plus"
+          text
+          onClick={() => onChange({ ...value, '': '' })}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** A list of objects whose shape the schema knows: one row per entry, one
+ *  column per property. A property carrying a connection marker gets the
+ *  project's connections of that contract rather than a free-text field, which
+ *  is the only way to name one without copying it by hand. */
+function ObjectListField({
+  field,
+  value,
+  projectId,
+  onChange,
+}: {
+  field: SchemaField;
+  value: any[];
+  projectId?: string;
+  onChange: (next: any[]) => void;
+}) {
+  const props: Record<string, any> = field.items?.properties || {};
+  const columns = Object.keys(props);
+  const [connections, setConnections] = useState<Record<string, SelectableConnection[]>>({});
+
+  // One lookup per contract used by the row, not per row.
+  useEffect(() => {
+    if (!projectId) return;
+    const contracts = columns
+      .map((c) => props[c]?.['x-kubocd-connection-ref']?.contract)
+      .filter((i): i is string => !!i);
+    [...new Set(contracts)].forEach((contract) => {
+      connectionApi
+        .selectable(projectId, contract)
+        .then((found) => setConnections((c) => ({ ...c, [contract]: found })))
+        .catch(() => setConnections((c) => ({ ...c, [contract]: [] })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, field.name]);
+
+  const patch = (index: number, column: string, columnValue: any) =>
+    onChange(value.map((row, i) => (i === index ? { ...row, [column]: columnValue } : row)));
+
+  return (
+    <div className="flex flex-col gap-2">
+      {value.map((row, index) => (
+        <div key={index} className="flex items-end gap-2">
+          {columns.map((column) => {
+            const contract = props[column]?.['x-kubocd-connection-ref']?.contract;
+            return (
+              <div key={column} className="flex-1">
+                <label className="text-[12px] text-fg-secondary">{formatLabel(column)}</label>
+                {contract ? (
+                  <Dropdown
+                    value={row[column] ?? null}
+                    options={(connections[contract] || []).map((c) => ({
+                      label: c.name,
+                      value: c.name,
+                    }))}
+                    optionLabel="label"
+                    optionValue="value"
+                    placeholder={`Connexion ${contract}`}
+                    appendTo={document.body}
+                    className="w-full"
+                    onChange={(e) => patch(index, column, e.value)}
+                  />
+                ) : (
+                  <InputText
+                    className="w-full"
+                    value={row[column] ?? ''}
+                    placeholder={props[column]?.default ?? ''}
+                    onChange={(e) => patch(index, column, e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
+          <Button
+            type="button"
+            icon="pi pi-times"
+            text
+            aria-label="Retirer la ligne"
+            onClick={() => onChange(value.filter((_, i) => i !== index))}
+          />
+        </div>
+      ))}
+      <div>
+        <Button
+          type="button"
+          label="Ajouter"
+          icon="pi pi-plus"
+          text
+          onClick={() => onChange([...value, {}])}
+        />
+      </div>
+    </div>
+  );
 }
 
 function resolveWidget(field: SchemaField): string {
@@ -83,6 +319,11 @@ function resolveWidget(field: SchemaField): string {
   if (field.enum && field.enum.length > 0) return 'select';
   if (field.type === 'boolean') return 'toggle';
   if (field.type === 'integer' || field.type === 'number') return 'number';
+  // A structured value in a text input renders as [object Object], and editing
+  // it would replace the structure by that string.
+  if (field.type === 'array' && field.items?.properties) return 'object-list';
+  if (field.type === 'object' && Object.keys(field.properties || {}).length === 0) return 'key-value';
+  if (field.type === 'object' || field.type === 'array') return 'yaml';
   return 'text';
 }
 
@@ -121,6 +362,10 @@ function buildFields(schema: any): SchemaField[] {
     maxLength: def.maxLength,
     pattern: def.pattern,
     multipleOf: def.multipleOf,
+    items: def.items,
+    additionalProperties: def.additionalProperties,
+    properties: def.properties,
+    'x-kubocd-connection-ref': def['x-kubocd-connection-ref'],
     'x-ui-order': def['x-ui-order'] ?? 999,
     'x-ui-group': def['x-ui-group'] || 'General',
     'x-ui-widget': def['x-ui-widget'],
@@ -210,16 +455,24 @@ function validateField(field: SchemaField, value: unknown): string {
   if (!K8S_QUANTITY_RE.test(v)) {
     return `Invalid Kubernetes quantity. Use a number with an optional suffix (e.g. "500Mi", "2Gi", "500m", "1").`;
   }
-  // A bare digit means BYTES for memory or CORES for CPU — almost never
-  // what the user wants. "1" for memory = 1 byte, "1" for CPU = 1 core.
-  // Catch the ambiguous case and nudge towards an explicit suffix.
+  return '';
+}
+
+// A bare digit is a VALID quantity (bytes for memory, cores for CPU) but is
+// often a unit slip, and schema defaults such as "1" core are legitimate:
+// this nudges without blocking the deploy.
+function warnField(field: SchemaField, value: unknown): string {
+  if (value === undefined || value === null || value === '') return '';
+  if (!isQuantityField(field)) return '';
+  const v = String(value).trim();
+  if (!K8S_QUANTITY_RE.test(v)) return '';
   if (/^[0-9]+(\.[0-9]+)?$/.test(v)) {
     const lower = field.name.toLowerCase();
     if (lower.includes('memory') || lower.includes('mem')) {
-      return `"${v}" would be interpreted as ${v} byte(s). Did you mean "${v}Mi" or "${v}Gi"?`;
+      return `"${v}" is read as ${v} byte(s). Did you mean "${v}Mi" or "${v}Gi"?`;
     }
     if (lower.includes('cpu')) {
-      return `"${v}" would be interpreted as ${v} core(s). Add an "m" suffix for milli-cores if that is not intended.`;
+      return `"${v}" is read as ${v} core(s). Add an "m" suffix for milli-cores if that is not intended.`;
     }
   }
   return '';
@@ -240,6 +493,7 @@ const EMPTY_VALUES: Record<string, any> = {};
 
 export function DynamicSchemaForm({
   schema,
+  projectId,
   initialValues = EMPTY_VALUES,
   onParametersChange,
   onValidityChange,
@@ -267,6 +521,16 @@ export function DynamicSchemaForm({
       if (msg) errors[field.name] = msg;
     }
     return errors;
+  }, [fields, values]);
+
+  const fieldWarnings = useMemo(() => {
+    const warnings: Record<string, string> = {};
+    for (const field of fields) {
+      if (!isVisible(field, values)) continue;
+      const msg = warnField(field, values[field.name]);
+      if (msg) warnings[field.name] = msg;
+    }
+    return warnings;
   }, [fields, values]);
 
   // Emit on every change, including initialization (legacy behavior).
@@ -318,6 +582,31 @@ export function DynamicSchemaForm({
             className="w-full"
             inputClassName={invalid ? 'field-invalid' : undefined}
             onChange={(e) => setValue(field.name, e.target.value)}
+          />
+        );
+      case 'object-list':
+        return (
+          <ObjectListField
+            field={field}
+            value={Array.isArray(value) ? value : []}
+            projectId={projectId}
+            onChange={(next) => setValue(field.name, next)}
+          />
+        );
+      case 'key-value':
+        return (
+          <KeyValueField
+            value={value && typeof value === 'object' ? (value as Record<string, unknown>) : {}}
+            onChange={(next) => setValue(field.name, next)}
+          />
+        );
+      case 'yaml':
+        return (
+          <JsonField
+            field={field}
+            value={value}
+            invalid={!!fieldErrors[field.name]}
+            onChange={(parsed) => setValue(field.name, parsed)}
           />
         );
       case 'textarea':
@@ -434,6 +723,12 @@ export function DynamicSchemaForm({
                 <small className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-danger">
                   <i className="pi pi-exclamation-triangle text-[13px]"></i>
                   {fieldErrors[field.name]}
+                </small>
+              )}
+              {!fieldErrors[field.name] && fieldWarnings[field.name] && (
+                <small className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-amber-600">
+                  <i className="pi pi-exclamation-triangle text-[13px]"></i>
+                  {fieldWarnings[field.name]}
                 </small>
               )}
               {field.description && <small className="field-help">{field.description}</small>}
