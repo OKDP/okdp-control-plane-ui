@@ -147,14 +147,29 @@ must route `/api` to the control plane.
 
 ## Deploy with the Helm chart
 
+The published chart is the normal path:
+
 ```bash
-helm install okdp-ui ./chart -n okdp-system \
-  --set image.tag=0.6.0 \
-  --set ingress.host=console.okdp.sandbox \
-  --set backend.service=okdp-server
+helm install okdp-control-plane-ui oci://quay.io/okdp/charts/okdp-control-plane-ui --version <X>
 ```
 
-The OIDC client and CORS are provided by the platform (okdp-sandbox), not the chart.
+
+The examples below install from `chart/` in this checkout, which is what a
+contributor does while changing the chart itself.
+
+```bash
+helm install okdp-control-plane-ui ./chart -n okdp-system \
+  --set image.tag=0.6.0 \
+  --set ingress.host=okdp-ui.okdp.sandbox \
+  --set backend.service=okdp-control-plane-server \
+  --set oidc.authority=https://keycloak.okdp.sandbox/realms/master
+```
+
+`oidc.authority` has no default: the console cannot reach any provider without
+it. `ingress.host` must match the client's redirect URIs in the realm.
+
+The OIDC client itself and CORS are provided by the platform (okdp-sandbox), not
+the chart.
 
 ## OKDP Integration
 
