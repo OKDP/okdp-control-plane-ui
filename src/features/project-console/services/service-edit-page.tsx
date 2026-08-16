@@ -48,9 +48,9 @@ export default function ServiceEditPage() {
     Record<string, { label: string; image: string }[]>
   >({});
   const [parameterValues, setParameterValues] = useState<Record<string, any>>({});
-  // Connections the package declares. Editing used to render them as raw text
-  // fields, so changing a database meant typing a connection name from memory,
-  // with nothing checking it exists or satisfies the contract.
+  // Connections the package declares. They get a picker rather than a text
+  // field, so changing a database offers what satisfies the contract instead of
+  // asking for a name from memory.
   const [packageInputs, setPackageInputs] = useState<PackageInput[]>([]);
   const [connectionChoices, setConnectionChoices] = useState<Record<string, string>>({});
   const [existingProfiles, setExistingProfiles] = useState<Profile[]>([]);
@@ -63,7 +63,7 @@ export default function ServiceEditPage() {
 
   const hasPendingChanges = selectedTag !== originalTagRef.current;
 
-  // The parameters a connection input owns get a picker; leaving them in the
+  // The parameters a connection input owns get a picker. Leaving them in the
   // schema form would render the same choice twice, once as a raw string.
   const visibleSchema = useMemo(() => {
     if (!rawSchema?.properties || packageInputs.length === 0) {
@@ -339,6 +339,7 @@ export default function ServiceEditPage() {
                   ))}
                   <DynamicSchemaForm
                     schema={visibleSchema}
+                    projectId={projectName}
                     initialValues={parameterValues}
                     onParametersChange={(params) => {
                       parametersRef.current = params;
