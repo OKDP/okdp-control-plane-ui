@@ -3,6 +3,7 @@ import { http } from './http';
 import { subscribeJsonStream, subscribeTextStream, type StreamSubscriber } from './sse';
 import type {
   PlatformService,
+  MenuCategory,
   DeployServiceRequest,
   ServiceEvent,
   ServiceInstance,
@@ -33,6 +34,10 @@ export const serviceApi = {
 
   getPlatformServices(): Promise<PlatformService[]> {
     return http.getList<PlatformService>(`${baseUrl}/api/platform-services`);
+  },
+
+  getMenuCategories(): Promise<MenuCategory[]> {
+    return http.getList<MenuCategory>(`${baseUrl}/api/platform-categories`);
   },
 
   getService(projectId: string, serviceName: string): Promise<ServiceInstance> {

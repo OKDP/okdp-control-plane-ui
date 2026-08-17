@@ -7,7 +7,8 @@ import {
   siTrino,
 } from 'simple-icons';
 import { BrandIcon, type BrandGlyph } from '../../shared/components/brand-icon';
-import { SERVICE_AREAS } from './services/service-utils';
+import { areaBasePath } from './services/service-utils';
+import type { MenuCategory, PlatformService } from '../../core/models/service.model';
 
 /** Apache Airflow brandmark, vendored from the official multicolor pinwheel
  *  icon (via the gilbarbara/svg-logos collection, CC0) — the simple-icons
@@ -230,7 +231,16 @@ function catalogIconClass(icon?: string): string {
   return icon.startsWith('pi ') ? icon : `pi ${icon}`;
 }
 
-/** SeaweedFS brandmark — hand-vendored (absent from simple-icons): three green
+/** Section icon for a NavSection, which prepends `pi ` itself: normalize a
+ *  catalog category icon (`pi-cog` or `pi pi-cog`) to its bare `pi-cog` form,
+ *  falling back to a generic box. */
+function sectionIconClass(icon?: string): string {
+  const cls = (icon ?? '').trim();
+  if (!cls) return 'pi-box';
+  return cls.replace(/^pi\s+/, '');
+}
+
+/** SeaweedFS brandmark, hand-vendored (absent from simple-icons): three green
  *  fronds, so the catalog sidebar entry reads on-brand instead of a plain box. */
 const siteSeaweedfs: BrandGlyph = {
   viewBox: '0 0 24 24',
@@ -241,26 +251,102 @@ const siteSeaweedfs: BrandGlyph = {
   ],
 };
 
-/** Real brand logos for catalog services that have no bespoke area, matched by
- *  service name. When a name isn't here, catalogNavItems falls back to the
- *  catalog `icon` and then a generic box. Extend as new UI services are exposed. */
-const CATALOG_BRANDS: Record<string, BrandGlyph> = {
-  'spark-operator': siApachespark,
-  seaweedfs: siteSeaweedfs,
+/** Per-service console presentation, keyed by catalog service name: the display
+ *  label and brand logo shown in the sidebar. The catalog drives which services
+ *  appear and how they are grouped; this table only supplies the cosmetics for
+ *  services that have a bespoke logo, so a freshly-exposed or custom package
+ *  still appears (with its catalog icon and the generic /services/<name> route)
+ *  without an entry here. The console route is derived from areaBasePath, so
+ *  bespoke areas (e.g. spark/history-server) are honored automatically. */
+interface ServicePresentation {
+  label?: string;
+  brand?: BrandGlyph;
+  /** Follow text color instead of the brand hex (near-black marks). */
+  brandMono?: boolean;
+}
+
+const SERVICE_PRESENTATION: Record<string, ServicePresentation> = {
+  polaris: { label: 'Polaris', brand: siteApachepolaris },
+  trino: { label: 'Trino', brand: siTrino },
+  airflow: { label: 'Airflow', brand: siteApacheairflow },
+  'spark-history-server': { label: 'Spark', brand: siApachespark },
+  jupyterhub: { label: 'JupyterHub', brand: siJupyter },
+  superset: { label: 'Superset', brand: siApachesuperset },
+  'spark-operator': { brand: siApachespark },
+  seaweedfs: { brand: siteSeaweedfs },
 };
 
-/** Maps catalog services that have NO bespoke console area (not a key in
- *  SERVICE_AREAS) to generic sidebar entries pointing at the /services/<name>
- *  area. Bespoke services are excluded — they render from NAV_CATEGORIES with
- *  their own logos. This is what surfaces a freshly-exposed service in the
- *  console without a code change. */
-export function catalogNavItems(services: { name: string; icon?: string }[]): NavItem[] {
-  return services
-    .filter((s) => !SERVICE_AREAS[s.name])
-    .map((s) => ({
-      segment: `services/${s.name}`,
-      icon: catalogIconClass(s.icon),
-      brand: CATALOG_BRANDS[s.name],
-      label: s.name,
-    }));
+/** Sidebar entry for a catalog service. Display label precedence: the catalog
+ *  `label` (admin-editable), then the bespoke presentation label, then the
+ *  service name. Brand logo when known, the catalog icon otherwise; routed to
+ *  its bespoke console area (SERVICE_AREAS) or the generic /services/<name>. */
+function catalogNavItem(svc: PlatformService): NavItem {
+  const presentation = SERVICE_PRESENTATION[svc.name] ?? {};
+  return {
+    segment: areaBasePath(svc.name).join('/'),
+    icon: catalogIconClass(svc.icon),
+    brand: presentation.brand,
+    brandMono: presentation.brandMono,
+    label: svc.label?.trim() || presentation.label || svc.name,
+  };
+}
+
+/** Build the console sidebar sections from the catalog: every service that
+ *  exposes a UI, grouped by its `category` into ordered, labeled sections from
+ *  the catalog category metadata, each enriched with its brand logo and bespoke
+ *  route when known. Services whose category has no metadata (or none at all)
+ *  fall into a trailing "Other services" section, so nothing is ever dropped.
+ *  The caller appends the fixed "Project Panel". `isHidden` applies the user's
+ *  show/hide preferences. Returns an empty list when the catalog is unavailable,
+ *  so the console still renders (with just the fixed section). */
+export function catalogConsoleCategories(
+  services: PlatformService[],
+  categories: MenuCategory[],
+  isHidden: (item: NavItem) => boolean = () => false,
+): NavCategory[] {
+  // Bucket the menu services by category key ('' for uncategorized).
+  const itemsByCategory = new Map<string, NavItem[]>();
+  for (const svc of services) {
+    // exposesUI === false marks an infrastructure-only package (operator,
+    // storage backend) with no console page, left out of the navigation.
+    if (svc.exposesUI === false) continue;
+    const item = catalogNavItem(svc);
+    if (isHidden(item)) continue;
+    const key = svc.category ?? '';
+    const bucket = itemsByCategory.get(key) ?? [];
+    bucket.push(item);
+    itemsByCategory.set(key, bucket);
+  }
+
+  const result: NavCategory[] = [];
+  const consumed = new Set<string>();
+  // Defined categories first, in their configured order.
+  for (const category of [...categories].sort((a, b) => a.order - b.order)) {
+    const items = itemsByCategory.get(category.key);
+    if (!items || items.length === 0) continue;
+    consumed.add(category.key);
+    result.push({
+      key: category.key,
+      label: category.label || category.key,
+      icon: sectionIconClass(category.icon),
+      defaultExpanded: true,
+      items,
+    });
+  }
+
+  // Uncategorized services, or categories with no metadata, go to "Other services".
+  const leftover: NavItem[] = [];
+  for (const [key, items] of itemsByCategory) {
+    if (!consumed.has(key)) leftover.push(...items);
+  }
+  if (leftover.length > 0) {
+    result.push({
+      key: 'catalog-other',
+      label: 'Other services',
+      icon: 'pi-box',
+      defaultExpanded: true,
+      items: leftover,
+    });
+  }
+  return result;
 }

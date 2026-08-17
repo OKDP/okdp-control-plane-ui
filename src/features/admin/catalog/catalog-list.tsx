@@ -7,6 +7,7 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Chips, type ChipsChangeEvent } from 'primereact/chips';
 import { Dropdown } from 'primereact/dropdown';
+import { Checkbox } from 'primereact/checkbox';
 import { Toast } from 'primereact/toast';
 import { catalogApi } from '../../../core/api/catalog-api';
 import { apiErrorMessage } from '../../../core/api/http';
@@ -30,6 +31,8 @@ interface CatalogForm {
   icon: string;
   category: string;
   repository: string;
+  label: string;
+  exposesUI: boolean;
 }
 
 const EMPTY_FORM: CatalogForm = {
@@ -40,6 +43,8 @@ const EMPTY_FORM: CatalogForm = {
   icon: '',
   category: '',
   repository: '',
+  label: '',
+  exposesUI: true,
 };
 
 export function CatalogList() {
@@ -76,6 +81,8 @@ export function CatalogList() {
       icon: s.icon ?? '',
       category: s.category ?? '',
       repository: s.repository ?? '',
+      label: s.label ?? '',
+      exposesUI: s.exposesUI !== false,
     });
     setIsEditMode(true);
     setServiceDialog(true);
@@ -122,6 +129,10 @@ export function CatalogList() {
       icon: form.icon.trim() || undefined,
       category: form.category.trim() || undefined,
       repository: form.repository.trim() || undefined,
+      label: form.label.trim() || undefined,
+      // Omit when the service exposes a UI (the default); only false is
+      // meaningful, marking an infrastructure-only package hidden from the menu.
+      exposesUI: form.exposesUI ? undefined : false,
     };
 
     setSaving(true);
@@ -297,6 +308,19 @@ export function CatalogList() {
           </div>
 
           <div className="field">
+            <label htmlFor="label">
+              Display name <span className="optional">(optional)</span>
+            </label>
+            <InputText
+              id="label"
+              value={form.label}
+              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+              className="w-full dialog-input"
+              placeholder="Shown in the project menu; defaults to the service name"
+            />
+          </div>
+
+          <div className="field">
             <label htmlFor="versions">Versions</label>
             <Chips
               inputId="versions"
@@ -348,6 +372,23 @@ export function CatalogList() {
               placeholder="Pick or type a category"
               appendTo={document.body}
             />
+          </div>
+
+          <div className="field">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                inputId="exposesUI"
+                checked={form.exposesUI}
+                onChange={(e) => setForm((f) => ({ ...f, exposesUI: e.checked ?? false }))}
+              />
+              <label htmlFor="exposesUI" className="mb-0">
+                Exposes a console UI
+              </label>
+            </div>
+            <small className="text-fg-muted">
+              Uncheck for infrastructure-only packages (operators, storage backends) so they stay
+              out of the project menu.
+            </small>
           </div>
 
           <div className="field">
