@@ -16,11 +16,11 @@ import {
 import {
   NAV_CATEGORIES,
   navItemIcon,
-  catalogNavItems,
+  catalogConsoleCategories,
   type NavCategory,
-  type NavItem,
 } from './nav-config';
 import { usePlatformCatalog } from './use-platform-catalog';
+import { useMenuCategories } from './use-menu-categories';
 import {
   BUILT_IN_VIEWS,
   builtInViewIcon,
@@ -227,42 +227,22 @@ export default function ProjectPage() {
   const { viewsFor } = useCustomViews();
   const switcherRef = useRef<Dropdown>(null);
 
-  // Entries hidden by default or from the user's settings drop out of the
-  // menu (fixed categories are exempt); a category left empty disappears
-  // entirely — no header, no collapsed-rail separator.
-  const visibleCategories = NAV_CATEGORIES.map((category) =>
-    category.fixed
-      ? category
-      : {
-          ...category,
-          items: category.items.filter((i) => !isNavItemHidden(i.label, i.defaultHidden)),
-        },
-  ).filter((category) => category.items.length > 0);
-
-  // Catalog-driven entries: every exposed service that has no bespoke area
-  // (not a key in SERVICE_AREAS) is surfaced under a generic "Other services"
-  // section, linking to the generic /services/<name> area. This is what makes
-  // a freshly-exposed service reachable from the console without a code change.
+  // The console sidebar is built from the catalog: every service that exposes a
+  // UI, grouped into ordered, labeled sections from the catalog category
+  // metadata, with brand logos and bespoke routes kept for known services. A
+  // freshly-exposed or custom package therefore appears without a code change.
+  // The user's show/hide preferences still apply (fixed categories are exempt);
+  // the fixed "Project Panel" is appended last. When the catalog is unavailable
+  // only that fixed section shows, so the console always renders.
   const catalog = usePlatformCatalog();
-  const catalogItems: NavItem[] = catalogNavItems(catalog);
-  // Insert the generic section just before the fixed "Project Panel" category.
-  const withCatalog: NavCategory[] = (() => {
-    if (catalogItems.length === 0) return visibleCategories;
-    const extra: NavCategory = {
-      key: 'catalog-extra',
-      label: 'Other services',
-      icon: 'pi-box',
-      defaultExpanded: true,
-      items: catalogItems,
-    };
-    const fixedIdx = visibleCategories.findIndex((c) => c.fixed);
-    if (fixedIdx < 0) return [...visibleCategories, extra];
-    return [
-      ...visibleCategories.slice(0, fixedIdx),
-      extra,
-      ...visibleCategories.slice(fixedIdx),
-    ];
-  })();
+  const menuCategories = useMenuCategories();
+  const consoleCategories = catalogConsoleCategories(catalog, menuCategories, (item) =>
+    isNavItemHidden(item.label, item.defaultHidden),
+  );
+  const fixedCategory = NAV_CATEGORIES.find((category) => category.fixed);
+  const withCatalog: NavCategory[] = fixedCategory
+    ? [...consoleCategories, fixedCategory]
+    : consoleCategories;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',

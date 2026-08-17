@@ -1,56 +1,117 @@
 import { describe, it, expect } from 'vitest';
-import { catalogNavItems } from './nav-config';
+import { catalogConsoleCategories } from './nav-config';
+import type { MenuCategory, PlatformService } from '../../core/models/service.model';
 
-describe('catalogNavItems', () => {
-  it('excludes services that already have a bespoke console area', () => {
-    const items = catalogNavItems([
-      { name: 'trino' },
-      { name: 'jupyterhub' },
-      { name: 'spark-history-server' },
-    ]);
-    expect(items).toHaveLength(0);
+function svc(name: string, extra: Partial<PlatformService> = {}): PlatformService {
+  return { name, versions: ['1.0.0'], defaultVersion: '1.0.0', description: '', ...extra };
+}
+
+const CATEGORIES: MenuCategory[] = [
+  { key: 'data-catalog', label: 'Data Catalog', icon: 'pi-database', order: 1 },
+  { key: 'data-processing', label: 'Data Processing', icon: 'pi-bolt', order: 2 },
+];
+
+describe('catalogConsoleCategories', () => {
+  it('groups services into ordered, labeled sections from the category metadata', () => {
+    const sections = catalogConsoleCategories(
+      [
+        svc('spark-history-server', { category: 'data-processing' }),
+        svc('polaris', { category: 'data-catalog' }),
+      ],
+      CATEGORIES,
+    );
+    expect(sections.map((s) => s.label)).toEqual(['Data Catalog', 'Data Processing']);
+    // Section icon is the bare primeicon (NavSection prepends `pi `).
+    expect(sections[0].icon).toBe('pi-database');
+    expect(sections[0].items.map((i) => i.label)).toEqual(['Polaris']);
   });
 
-  it('maps an unknown catalog service to a generic /services/<name> entry', () => {
-    const [item] = catalogNavItems([{ name: 'custom-store' }]);
-    expect(item.segment).toBe('services/custom-store');
-    expect(item.label).toBe('custom-store');
+  it('respects the configured order regardless of input order', () => {
+    const reversed: MenuCategory[] = [
+      { key: 'data-processing', label: 'Data Processing', icon: 'pi-bolt', order: 2 },
+      { key: 'data-catalog', label: 'Data Catalog', icon: 'pi-database', order: 1 },
+    ];
+    const sections = catalogConsoleCategories(
+      [
+        svc('polaris', { category: 'data-catalog' }),
+        svc('spark-history-server', { category: 'data-processing' }),
+      ],
+      reversed,
+    );
+    expect(sections.map((s) => s.label)).toEqual(['Data Catalog', 'Data Processing']);
+  });
+
+  it('keeps the brand logo and bespoke route for a known service', () => {
+    const [section] = catalogConsoleCategories(
+      [svc('spark-history-server', { category: 'data-processing' })],
+      [{ key: 'data-processing', label: 'Data Processing', icon: 'pi-bolt', order: 1 }],
+    );
+    const [item] = section.items;
+    expect(item.label).toBe('Spark');
+    expect(item.segment).toBe('spark/history-server');
+    expect(item.brand).toBeDefined();
+  });
+
+  it('uses the catalog label over the bespoke label when set', () => {
+    const [section] = catalogConsoleCategories(
+      [svc('trino', { category: 'data-catalog', label: 'Trino SQL' })],
+      CATEGORIES,
+    );
+    expect(section.items[0].label).toBe('Trino SQL');
+    // The bespoke brand is still kept.
+    expect(section.items[0].brand).toBeDefined();
+  });
+
+  it('routes an unknown service to a generic /services/<name> entry with its catalog icon', () => {
+    const [section] = catalogConsoleCategories(
+      [svc('my-store', { category: 'data-catalog', icon: 'pi-box' })],
+      CATEGORIES,
+    );
+    const [item] = section.items;
+    expect(item.label).toBe('my-store');
+    expect(item.segment).toBe('services/my-store');
     expect(item.icon).toBe('pi pi-box');
-    // No known brand → falls back to the icon (a generic box here).
     expect(item.brand).toBeUndefined();
   });
 
-  it('normalizes the icon (bare `pi-x`, full `pi pi-x`, or missing)', () => {
-    const [bare, full, none] = catalogNavItems([
-      { name: 'a', icon: 'pi-database' },
-      { name: 'b', icon: 'pi pi-server' },
-      { name: 'c' },
-    ]);
-    expect(bare.icon).toBe('pi pi-database');
-    expect(full.icon).toBe('pi pi-server');
-    expect(none.icon).toBe('pi pi-box');
+  it('excludes services that do not expose a UI', () => {
+    const sections = catalogConsoleCategories(
+      [
+        svc('spark-operator', { category: 'data-processing', exposesUI: false }),
+        svc('spark-history-server', { category: 'data-processing' }),
+      ],
+      CATEGORIES,
+    );
+    expect(sections.flatMap((s) => s.items.map((i) => i.label))).toEqual(['Spark']);
   });
 
-  it('attaches a real brand logo to known catalog services', () => {
-    const [seaweedfs, sparkOperator] = catalogNavItems([
-      { name: 'seaweedfs' },
-      { name: 'spark-operator' },
-    ]);
-    expect(seaweedfs.brand).toBeDefined();
-    expect(sparkOperator.brand).toBeDefined();
+  it('puts uncategorized services and unmapped categories under "Other services"', () => {
+    const sections = catalogConsoleCategories(
+      [
+        svc('polaris', { category: 'data-catalog' }),
+        svc('seaweedfs'), // no category
+        svc('mystery', { category: 'unmapped' }), // category has no metadata
+      ],
+      CATEGORIES,
+    );
+    const other = sections.find((s) => s.label === 'Other services');
+    expect(other).toBeDefined();
+    expect(other!.items.map((i) => i.label).sort()).toEqual(['mystery', 'seaweedfs']);
   });
 
-  it('keeps only the non-bespoke services from a mixed catalog', () => {
-    const items = catalogNavItems([
-      { name: 'trino' },
-      { name: 'seaweedfs' },
-      { name: 'superset' },
-      { name: 'spark-operator' },
-    ]);
-    expect(items.map((i) => i.label)).toEqual(['seaweedfs', 'spark-operator']);
-    expect(items.map((i) => i.segment)).toEqual([
-      'services/seaweedfs',
-      'services/spark-operator',
-    ]);
+  it('returns an empty list when the catalog is empty (console keeps only the fixed section)', () => {
+    expect(catalogConsoleCategories([], CATEGORIES)).toEqual([]);
+  });
+
+  it('drops hidden items and the sections they empty', () => {
+    const sections = catalogConsoleCategories(
+      [
+        svc('polaris', { category: 'data-catalog' }),
+        svc('spark-history-server', { category: 'data-processing' }),
+      ],
+      CATEGORIES,
+      (item) => item.label === 'Polaris',
+    );
+    expect(sections.map((s) => s.label)).toEqual(['Data Processing']);
   });
 });

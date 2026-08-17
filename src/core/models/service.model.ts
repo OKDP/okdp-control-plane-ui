@@ -12,6 +12,27 @@ export interface PlatformService {
   // Per-service package repository override (defaults to the Context's global
   // packageRepository when empty). Versions are resolved against this registry.
   repository?: string;
+  // Display name shown in the console menu; the service `name` (its identity
+  // and route) is used when empty.
+  label?: string;
+  // false for infrastructure-only packages (operators, storage backends) with
+  // no console page; undefined when the catalog does not set it, which the
+  // console treats as exposing a UI. Drives whether the service appears in the
+  // catalog-driven project menu.
+  exposesUI?: boolean;
+}
+
+/**
+ * A console navigation section, from the Context (spec.context.okdp.categories,
+ * served by GET /api/platform-categories). It gives a service's `category` key
+ * a display label, an optional section icon and an order, so the project menu
+ * is grouped and ordered from the catalog rather than hardcoded in the UI.
+ */
+export interface MenuCategory {
+  key: string;
+  label: string;
+  icon?: string;
+  order: number;
 }
 
 /**
@@ -30,6 +51,8 @@ export interface PlatformServiceRequest {
   icon?: string;
   category?: string;
   repository?: string;
+  label?: string;
+  exposesUI?: boolean;
 }
 
 export interface DeployServiceRequest {
