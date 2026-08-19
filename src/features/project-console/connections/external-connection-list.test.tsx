@@ -184,6 +184,31 @@ describe('ExternalConnectionList', () => {
     );
   });
 
+  // Typing a password and then naming an existing Secret means the password was
+  // not meant to be stored. Sending it anyway would put credentials under a name
+  // the user did not choose, and hand their lifecycle to the connection.
+  it('leaves the typed credentials out once an existing secret is named', async () => {
+    renderList();
+    await screen.findByText('warehouse');
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/ }));
+
+    await waitFor(() => expect(screen.getByLabelText(/^Host\b/)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Connection name'), { target: { value: 'lake' } });
+    fireEvent.change(screen.getByLabelText(/^Host\b/), { target: { value: 'db.example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password\b/), { target: { value: 's3cret' } });
+
+    fireEvent.click(screen.getByText('Use an existing secret'));
+    await waitFor(() => expect(screen.getByLabelText('Secret name')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Secret name'), { target: { value: 'warehouse-from-vault' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
+
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    const request = create.mock.calls[0][0];
+    expect(request.existingSecret).toBe('warehouse-from-vault');
+    expect(JSON.stringify(request.values)).not.toContain('s3cret');
+  });
+
   it('shows an explicit empty state when nothing is declared', async () => {
     list.mockResolvedValue([]);
 

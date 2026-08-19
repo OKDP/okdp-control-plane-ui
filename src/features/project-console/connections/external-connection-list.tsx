@@ -191,13 +191,26 @@ export function ExternalConnectionList() {
     setDialogVisible(true);
   };
 
+  // Everything the form holds, credentials included. The test endpoint cannot
+  // read a Secret, so it needs them whichever mode is selected.
+  const submittedValues = () =>
+    selectedType
+      ? omitBlankSecrets(selectedType, { ...values, ...credentials })
+      : { ...values, ...credentials };
+
   const buildRequest = (): ConnectionRequest => ({
     name,
     type: typeName,
     description: description || undefined,
-    values: selectedType
-      ? omitBlankSecrets(selectedType, { ...values, ...credentials })
-      : { ...values, ...credentials },
+    // Naming an existing Secret means the credentials stay where they are. Any
+    // value typed before switching mode is left out rather than stored under a
+    // name the user did not choose.
+    values:
+      credentialsMode === 'existing'
+        ? selectedType
+          ? omitBlankSecrets(selectedType, values)
+          : values
+        : submittedValues(),
     existingSecret: credentialsMode === 'existing' ? existingSecret : undefined,
   });
 
@@ -205,7 +218,7 @@ export function ExternalConnectionList() {
     setTesting(true);
     setTestResult(null);
     api
-      .test({ type: typeName, values: buildRequest().values })
+      .test({ type: typeName, values: submittedValues() })
       .then((result) => {
         setTesting(false);
         setTestResult(result);

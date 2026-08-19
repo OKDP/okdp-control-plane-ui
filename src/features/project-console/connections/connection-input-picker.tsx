@@ -258,7 +258,13 @@ function InlineConnectionCreate({
       .create({
         name,
         type: contract.name,
-        values: omitBlankSecrets(contract, { ...values, ...credentials }),
+        // Naming an existing Secret means the credentials stay where they are.
+        // Any value typed before switching mode is left out rather than stored
+        // under a name the user did not choose.
+        values:
+          credentialsMode === 'existing'
+            ? omitBlankSecrets(contract, values)
+            : omitBlankSecrets(contract, { ...values, ...credentials }),
         existingSecret: credentialsMode === 'existing' ? existingSecret : undefined,
       })
       .then(() => {
