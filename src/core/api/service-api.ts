@@ -61,7 +61,6 @@ export const serviceApi = {
     );
   },
 
-   
   /** Connections the service's package declares it needs at deployment. */
   getServiceInputs(serviceName: string, tag?: string): Promise<PackageInput[]> {
     const query = tag ? `?tag=${encodeURIComponent(tag)}` : '';

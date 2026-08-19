@@ -111,7 +111,7 @@ function JsonField({
   const focused = useRef(false);
   useEffect(() => {
     if (!focused.current) setText(serialize(value));
-     
+
   }, [value]);
 
   const commit = (next: string) => {
