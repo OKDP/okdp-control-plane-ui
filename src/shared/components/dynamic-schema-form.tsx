@@ -251,20 +251,33 @@ function ObjectListField({
   const columns = Object.keys(props);
   const [connections, setConnections] = useState<Record<string, SelectableConnection[]>>({});
 
+  // The contracts the columns point at. Keying the lookup on them rather than on
+  // the field name matters when the schema is swapped under the same field, as
+  // a version change does: the options would otherwise stay those of the
+  // previous schema.
+  const contracts = useMemo(
+    () =>
+      [
+        ...new Set(
+          columns
+            .map((c) => props[c]?.['x-kubocd-connection-ref']?.contract)
+            .filter((i): i is string => !!i)
+        ),
+      ].sort(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(field.items?.properties ?? {})]
+  );
+
   // One lookup per contract used by the row, not per row.
   useEffect(() => {
     if (!projectId) return;
-    const contracts = columns
-      .map((c) => props[c]?.['x-kubocd-connection-ref']?.contract)
-      .filter((i): i is string => !!i);
-    [...new Set(contracts)].forEach((contract) => {
+    contracts.forEach((contract) => {
       connectionApi
         .selectable(projectId, contract)
         .then((found) => setConnections((c) => ({ ...c, [contract]: found })))
         .catch(() => setConnections((c) => ({ ...c, [contract]: [] })));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, field.name]);
+  }, [projectId, contracts]);
 
   const patch = (index: number, column: string, columnValue: any) =>
     onChange(value.map((row, i) => (i === index ? { ...row, [column]: columnValue } : row)));
