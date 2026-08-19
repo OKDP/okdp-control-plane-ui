@@ -287,7 +287,7 @@ function ObjectListField({
                     }))}
                     optionLabel="label"
                     optionValue="value"
-                    placeholder={`Connexion ${contract}`}
+                    placeholder={`Select a ${contract} connection`}
                     appendTo={document.body}
                     className="w-full"
                     onChange={(e) => patch(index, column, e.value)}
