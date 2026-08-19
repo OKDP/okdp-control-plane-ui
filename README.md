@@ -61,8 +61,8 @@ build/deploy story.
 - A running **OKDP control plane** reachable at `http://localhost:8093` (the
   development API target — see [okdp-control-plane-server](https://github.com/OKDP/okdp-control-plane-server))
 - Access to the development **OIDC identity provider** (the dev build
-  authenticates against the okdp-sandbox authority
-  `https://keycloak.okdp.sandbox/realms/master`)
+  authenticates against an OIDC provider such as
+  `https://keycloak.example.com/realms/master`)
 
 ### Tested with
 
@@ -98,7 +98,7 @@ The dev server serves no `/config.js`, so the OIDC settings come from a
 git-ignored `.env.local` at the repository root:
 
 ```
-VITE_OIDC_AUTHORITY=https://keycloak.okdp.sandbox/realms/okdp
+VITE_OIDC_AUTHORITY=https://keycloak.example.com/realms/okdp
 VITE_OIDC_CLIENT_ID=okdp-ui
 ```
 
@@ -176,9 +176,9 @@ contributor does while changing the chart itself.
 ```bash
 helm install okdp-control-plane-ui ./chart -n okdp-system \
   --set image.tag=0.8.0 \
-  --set ingress.host=okdp-ui.okdp.sandbox \
+  --set ingress.host=okdp-ui.example.com \
   --set backend.service=okdp-control-plane-server \
-  --set oidc.authority=https://keycloak.okdp.sandbox/realms/master
+  --set oidc.authority=https://keycloak.example.com/realms/master
 ```
 
 `oidc.authority` has no default: the console cannot reach any provider without
