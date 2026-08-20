@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { Dropdown } from 'primereact/dropdown';
 import { useProjectContext } from '../../core/context/project-context';
@@ -16,6 +16,7 @@ import {
 import {
   NAV_CATEGORIES,
   navItemIcon,
+  navPrefKey,
   catalogConsoleCategories,
   type NavCategory,
 } from './nav-config';
@@ -236,13 +237,13 @@ export default function ProjectPage() {
   // only that fixed section shows, so the console always renders.
   const catalog = usePlatformCatalog();
   const menuCategories = useMenuCategories();
-  const consoleCategories = catalogConsoleCategories(catalog, menuCategories, (item) =>
-    isNavItemHidden(item.label, item.defaultHidden),
-  );
-  const fixedCategory = NAV_CATEGORIES.find((category) => category.fixed);
-  const withCatalog: NavCategory[] = fixedCategory
-    ? [...consoleCategories, fixedCategory]
-    : consoleCategories;
+  const withCatalog: NavCategory[] = useMemo(() => {
+    const consoleCategories = catalogConsoleCategories(catalog, menuCategories, (item) =>
+      isNavItemHidden(navPrefKey(item), item.defaultHidden),
+    );
+    const fixedCategory = NAV_CATEGORIES.find((category) => category.fixed);
+    return fixedCategory ? [...consoleCategories, fixedCategory] : consoleCategories;
+  }, [catalog, menuCategories, isNavItemHidden]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
@@ -424,7 +425,7 @@ export default function ProjectPage() {
                 {category.items.map((item) =>
                   item.disabled ? (
                     <DisabledNavLink
-                      key={item.label}
+                      key={navPrefKey(item)}
                       icon={navItemIcon(item)}
                       label={item.label}
                       collapsed={sidebarCollapsed}
@@ -433,7 +434,7 @@ export default function ProjectPage() {
                     />
                   ) : (
                     <SideNavLink
-                      key={item.label}
+                      key={navPrefKey(item)}
                       to={`/projects/${projectName}/${item.segment}`}
                       icon={navItemIcon(item)}
                       label={item.label}

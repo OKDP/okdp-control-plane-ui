@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { catalogConsoleCategories } from './nav-config';
+import { catalogConsoleCategories, navPrefKey } from './nav-config';
 import type { MenuCategory, PlatformService } from '../../core/models/service.model';
 
 function svc(name: string, extra: Partial<PlatformService> = {}): PlatformService {
@@ -101,6 +101,17 @@ describe('catalogConsoleCategories', () => {
 
   it('returns an empty list when the catalog is empty (console keeps only the fixed section)', () => {
     expect(catalogConsoleCategories([], CATEGORIES)).toEqual([]);
+  });
+
+  it('keys the show/hide preference on the stable service name, not the editable label', () => {
+    const sections = catalogConsoleCategories(
+      [svc('trino', { category: 'data-catalog', label: 'Trino SQL' })],
+      CATEGORIES,
+    );
+    const item = sections[0].items[0];
+    expect(item.label).toBe('Trino SQL');
+    // An admin rename of the display label must not detach the preference.
+    expect(navPrefKey(item)).toBe('trino');
   });
 
   it('drops hidden items and the sections they empty', () => {

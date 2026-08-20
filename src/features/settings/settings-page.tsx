@@ -3,7 +3,10 @@ import { useTheme, type ThemeMode } from '../../core/theme/theme-context';
 import { useEnvBar } from '../../core/preferences/env-bar-context';
 import { useNavPrefs, type NavMenuSize } from '../../core/preferences/nav-prefs-context';
 import { useConfirmPrefs } from '../../core/preferences/confirm-prefs-context';
-import { NAV_CATEGORIES } from '../project-console/nav-config';
+import { catalogConsoleCategories, navPrefKey } from '../project-console/nav-config';
+import { usePlatformCatalog } from '../project-console/use-platform-catalog';
+import { useMenuCategories } from '../project-console/use-menu-categories';
+import { useMemo } from 'react';
 import SectionHeading from '../../shared/components/section-heading';
 
 interface PreviewPalette {
@@ -180,14 +183,31 @@ function NavSizePrefs() {
 }
 
 /** Per-category groups of lateral-menu entries with show/hide switches.
- *  Core entries (the world switcher, Project Panel) are not listed: they
- *  always stay in the menu. */
+ *  Built from the same catalog data as the sidebar, so the toggles always
+ *  match what the menu actually shows. Core entries (the world switcher,
+ *  Project Panel) are not listed: they always stay in the menu. */
 function NavMenuPrefs() {
   const { isNavItemHidden, setNavItemHidden } = useNavPrefs();
+  const catalog = usePlatformCatalog();
+  const menuCategories = useMenuCategories();
+  // No isHidden filter: the settings page must list hidden entries too,
+  // otherwise a hidden service could never be re-enabled.
+  const categories = useMemo(
+    () => catalogConsoleCategories(catalog, menuCategories),
+    [catalog, menuCategories],
+  );
+
+  if (categories.length === 0) {
+    return (
+      <p className="text-sm text-fg-muted">
+        The service menu is built from the platform catalog, which is not available right now.
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
-      {NAV_CATEGORIES.filter((category) => !category.fixed).map((category) => (
+      {categories.map((category) => (
         <div
           key={category.key}
           className="flex flex-col gap-3 border-t border-border-light pt-5 first:border-t-0 first:pt-0"
@@ -197,15 +217,14 @@ function NavMenuPrefs() {
             {category.label}
           </span>
           {category.items.map((item) => (
-            <div key={item.label} className="flex items-center justify-between gap-4">
-              <label htmlFor={`nav-item-${item.label}`} className="text-sm text-fg-secondary">
+            <div key={navPrefKey(item)} className="flex items-center justify-between gap-4">
+              <label htmlFor={`nav-item-${navPrefKey(item)}`} className="text-sm text-fg-secondary">
                 {item.label}
-                {item.disabled && <span className="ml-1.5 text-xs text-fg-muted">(preview)</span>}
               </label>
               <InputSwitch
-                inputId={`nav-item-${item.label}`}
-                checked={!isNavItemHidden(item.label, item.defaultHidden)}
-                onChange={(e) => setNavItemHidden(item.label, !(e.value ?? false))}
+                inputId={`nav-item-${navPrefKey(item)}`}
+                checked={!isNavItemHidden(navPrefKey(item), item.defaultHidden)}
+                onChange={(e) => setNavItemHidden(navPrefKey(item), !(e.value ?? false))}
               />
             </div>
           ))}
