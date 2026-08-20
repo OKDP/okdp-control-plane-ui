@@ -320,7 +320,7 @@ function ObjectListField({
             type="button"
             icon="pi pi-times"
             text
-            aria-label="Retirer la ligne"
+            aria-label="Remove row"
             onClick={() => onChange(value.filter((_, i) => i !== index))}
           />
         </div>
