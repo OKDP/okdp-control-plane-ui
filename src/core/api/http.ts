@@ -136,12 +136,18 @@ function cachedGet<T>(url: string, init: RequestInit | undefined, fetcher: () =>
   if (init) {
     return fetcher();
   }
+  const now = Date.now();
   const hit = getCache.get(url);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+  if (hit && now - hit.at < CACHE_TTL_MS) {
     return hit.value as Promise<T>;
   }
+  for (const [key, entry] of getCache) {
+    if (now - entry.at >= CACHE_TTL_MS) {
+      getCache.delete(key);
+    }
+  }
   const value = fetcher();
-  getCache.set(url, { at: Date.now(), value });
+  getCache.set(url, { at: now, value });
   value.catch(() => getCache.delete(url));
   return value;
 }
