@@ -19,7 +19,7 @@ export default function SearchFilter({
   hint,
 }: SearchFilterProps) {
   const [text, setText] = useState(value);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setText(value);
