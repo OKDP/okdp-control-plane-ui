@@ -21,7 +21,7 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
 
   const [lines, setLines] = useState<string[]>([]);
   const pendingRef = useRef<string[]>([]);
-  const flushRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [streamError, setStreamError] = useState('');
   const [selectedPodName, setSelectedPodName] = useState('');
