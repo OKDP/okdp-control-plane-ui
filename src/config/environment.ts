@@ -57,10 +57,8 @@ const development: Environment = {
   apiBaseUrl: 'http://localhost:8093',
 
   oidc: {
-    // Pas de repli sur une autorite en dur: un deploiement qui ne renseigne pas
-    // oidc.authority enverrait sinon ses utilisateurs s'authentifier ailleurs.
-    // La valeur vient de /config.js, ecrit par l'entrypoint depuis les values du
-    // chart. Vide, la console le dit au demarrage plutot que de deriver.
+    // No hardcoded fallback: a deployment that leaves oidc.authority unset gets
+    // a configuration screen, not somebody else's issuer.
     authority: runtime.authority || fromEnv.authority || '',
     clientId: runtime.clientId || fromEnv.clientId || 'okdp-ui',
     redirectUri: window.location.origin,
