@@ -85,9 +85,12 @@ Three structural pieces:
   route quadruple for a service area. The generic `ServicesPage` is driven
   entirely by per-route props (`title`, `deployLabel`, `serviceFilter`,
   `emptyMessage` — the `route.data` equivalent), so jupyterhub,
-  spark/history-server, polaris, trino, airflow and superset all share one
-  component. **Differentiate service areas via the props object, not new
-  components.**
+  spark/history-server, polaris, trino, hive-metastore, airflow and superset
+  all share one component. **Differentiate service areas via the props object,
+  not new components.** A service area is three things that must stay in sync:
+  a `SERVICE_AREAS` entry, a `serviceRoutes()` call on the same base path and
+  the sidebar entry in `NAV_CATEGORIES`. `src/app-routes.test.tsx` asserts that
+  every sidebar segment resolves to a route instead of the `*` catch-all.
 
 ## Authentication
 

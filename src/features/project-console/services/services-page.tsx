@@ -49,6 +49,12 @@ function areaCopy(serviceFilter: string): ServiceAreaCopy {
         subtitle: 'Iceberg-native data catalog. Centralize table metadata across engines.',
         emptyTitle: 'Deploy Polaris',
       };
+    case 'hive-metastore':
+      return {
+        breadcrumbParent: 'Lakehouse',
+        subtitle: 'Hive-compatible metadata service. Share table definitions across engines.',
+        emptyTitle: 'Deploy a Hive Metastore',
+      };
     case 'superset':
       return {
         breadcrumbParent: 'SQL & BI',

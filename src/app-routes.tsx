@@ -173,6 +173,14 @@ export function AppRoutes() {
                 emptyMessage: 'No Trino instances deployed yet.',
               })}
 
+              {/* Hive Metastore (Lakehouse / table metadata) */}
+              {serviceRoutes('hive-metastore', {
+                title: 'Hive Metastore',
+                deployLabel: 'Deploy',
+                serviceFilter: 'hive-metastore',
+                emptyMessage: 'No Hive Metastore instances deployed yet.',
+              })}
+
               {/* Airflow (Data Engineering / orchestration) — kubocd Package: airflow@0.1.0 */}
               {serviceRoutes('airflow', {
                 title: 'Airflow',
