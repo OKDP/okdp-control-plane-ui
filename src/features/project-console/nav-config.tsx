@@ -64,6 +64,10 @@ const siteApachepolaris: BrandGlyph = {
 };
 
 export interface NavItem {
+  /** Stable catalog identity (the service `name`). Keys the user's show/hide
+   *  preference, so an admin renaming the display label cannot detach it.
+   *  Absent for static entries, whose hardcoded label is already stable. */
+  name?: string;
   /** Path under /projects/:projectId — absent for inert placeholders. */
   segment?: string;
   /** primeicons fallback for services without a packaged brand logo. */
@@ -281,12 +285,21 @@ const SERVICE_PRESENTATION: Record<string, ServicePresentation> = {
 function catalogNavItem(svc: PlatformService): NavItem {
   const presentation = SERVICE_PRESENTATION[svc.name] ?? {};
   return {
+    name: svc.name,
     segment: areaBasePath(svc.name).join('/'),
     icon: catalogIconClass(svc.icon),
     brand: presentation.brand,
     brandMono: presentation.brandMono,
     label: svc.label?.trim() || presentation.label || svc.name,
   };
+}
+
+/** The key a NavItem's show/hide preference is stored under: the stable
+ *  catalog `name` when the item comes from the catalog, the hardcoded label
+ *  otherwise. Never the display label of a catalog service — the admin can
+ *  rename it, and the preference must survive the rename. */
+export function navPrefKey(item: NavItem): string {
+  return item.name ?? item.label;
 }
 
 /** Build the console sidebar sections from the catalog: every service that
@@ -319,7 +332,7 @@ export function catalogConsoleCategories(
   const result: NavCategory[] = [];
   const consumed = new Set<string>();
   // Defined categories first, in their configured order.
-  for (const category of [...categories].sort((a, b) => a.order - b.order)) {
+  for (const category of [...categories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
     const items = itemsByCategory.get(category.key);
     if (!items || items.length === 0) continue;
     consumed.add(category.key);

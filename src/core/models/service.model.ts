@@ -32,7 +32,8 @@ export interface MenuCategory {
   key: string;
   label: string;
   icon?: string;
-  order: number;
+  /** Optional on the wire; categories without it sort as 0. */
+  order?: number;
 }
 
 /**
