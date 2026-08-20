@@ -11,7 +11,7 @@ export interface ProjectServicesSummary {
 }
 
 /** Live picture of the project's deployed services: initial REST fetch
- *  merged with SSE updates, plus one metrics request per instance. Shared
+ *  merged with SSE updates, plus one usage request for the whole project. Shared
  *  by the overview KPI strip and the deployed-services table. */
 export function useProjectServicesSummary(projectId: string | undefined): ProjectServicesSummary {
   const { instances, loaded } = useLiveServices(projectId);
