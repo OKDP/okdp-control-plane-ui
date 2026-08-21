@@ -4,7 +4,19 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "component": "okdp-ui"
+      "component": "okdp-ui",
+      "extra-files": [
+        {
+          "type": "yaml",
+          "path": "chart/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "chart/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        }
+      ]
     }
   }
 }
