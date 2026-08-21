@@ -56,7 +56,20 @@ export function useProjectServicesSummary(projectId: string | undefined): Projec
           setMetrics((prev) => ({ ...prev, ...all }));
         }
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        if ((err as { status?: number })?.status !== 404) return;
+        for (const svc of missing) {
+          serviceApi
+            .getServiceMetrics(projectId, svc.name)
+            .then((m) => {
+              writeUiCache(`metrics:${projectId}/${svc.name}`, m);
+              if (fetchedMetricsRef.current === fetched) {
+                setMetrics((prev) => ({ ...prev, [svc.name]: m }));
+              }
+            })
+            .catch(() => undefined);
+        }
+      });
   }, [instances, projectId]);
 
   return { instances, metrics, loaded };
