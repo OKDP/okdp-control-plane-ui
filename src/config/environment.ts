@@ -93,3 +93,11 @@ const production: Environment = {
 };
 
 export const environment: Environment = import.meta.env.PROD ? production : development;
+
+/** Overrides the build-time OIDC config with the platform's runtime config. */
+export function applyRuntimeOidc(oidc?: { authority: string; clientId: string; scope?: string }) {
+  if (!oidc?.authority || !oidc.clientId) return;
+  environment.oidc.authority = oidc.authority;
+  environment.oidc.clientId = oidc.clientId;
+  if (oidc.scope) environment.oidc.scope = oidc.scope;
+}

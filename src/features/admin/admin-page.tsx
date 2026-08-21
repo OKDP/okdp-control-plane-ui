@@ -41,6 +41,11 @@ export default function AdminPage() {
           description="Manage deployable platform services"
         />
       </QuickActions>
+      {userManagement === false && (
+        <p className="page-sub">
+          Users and groups are managed by the platform&apos;s external identity provider.
+        </p>
+      )}
     </section>
   );
 }

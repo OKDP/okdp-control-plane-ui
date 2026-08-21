@@ -1,24 +1,29 @@
 import { environment } from '../../config/environment';
 import { http } from './http';
 
-/** What the platform is wired to, resolved by the server from the Context. */
+export interface IdentityOidcConfig {
+  authority: string;
+  clientId: string;
+  scope?: string;
+}
+
 export interface Capabilities {
   identity: {
-    /** "external" (bring your own OIDC, the default) or "kubauth". */
-    provider: string;
-    /** True when the kubauth user and group management API is served. */
+    provider: string; // "external" (default) or "kubauth"
     userManagement: boolean;
+    oidc?: IdentityOidcConfig;
   };
   oidcProvisioning: {
-    /** "none", "kubauth" or "keycloak". */
-    provider: string;
+    provider: string; // "none" (default), "kubauth" or "keycloak"
   };
 }
 
-const apiUrl = `${environment.apiBaseUrl}/api/capabilities`;
-
 export const capabilitiesApi = {
   get(): Promise<Capabilities> {
-    return http.get<Capabilities>(apiUrl);
+    // Bounded: this call gates the app bootstrap, so a dead server must
+    // degrade to the build-time config rather than hang the UI.
+    return http.get<Capabilities>(`${environment.apiBaseUrl}/api/capabilities`, {
+      signal: AbortSignal.timeout(5000),
+    });
   },
 };
