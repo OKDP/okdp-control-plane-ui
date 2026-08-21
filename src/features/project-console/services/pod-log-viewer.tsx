@@ -73,8 +73,25 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
     clearTimeout(flushRef.current);
     flushRef.current = undefined;
 
+    const flushNow = () => {
+      clearTimeout(flushRef.current);
+      flushRef.current = undefined;
+      const batch = pendingRef.current;
+      pendingRef.current = [];
+      if (batch.length > 0) {
+        setLines((prev) => {
+          const next = [...prev, ...batch];
+          if (next.length > MAX_LOG_LINES) {
+            next.splice(0, next.length - MAX_LOG_LINES);
+          }
+          return next;
+        });
+      }
+      setLoading(false);
+    };
+
     if (followMode) {
-      return serviceApi.streamPodLogs(
+      const unsubscribe = serviceApi.streamPodLogs(
         projectId,
         serviceName,
         selectedPodName,
@@ -82,23 +99,15 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
           next: (line) => {
             pendingRef.current.push(line);
             if (flushRef.current === undefined) {
-              flushRef.current = setTimeout(() => {
-                flushRef.current = undefined;
-                const batch = pendingRef.current;
-                pendingRef.current = [];
-                setLines((prev) => {
-                  const next = [...prev, ...batch];
-                  if (next.length > MAX_LOG_LINES) {
-                    next.splice(0, next.length - MAX_LOG_LINES);
-                  }
-                  return next;
-                });
-                setLoading(false);
-              }, 100);
+              flushRef.current = setTimeout(flushNow, 100);
             }
           },
-          complete: () => setLoading(false),
+          complete: () => {
+            flushNow();
+            setLoading(false);
+          },
           error: (err) => {
+            flushNow();
             setStreamError(err instanceof Error ? err.message : 'log stream interrupted');
             setLoading(false);
           },
@@ -106,6 +115,11 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
         selectedContainer || undefined,
         200,
       );
+      return () => {
+        clearTimeout(flushRef.current);
+        flushRef.current = undefined;
+        unsubscribe();
+      };
     }
 
     let cancelled = false;
