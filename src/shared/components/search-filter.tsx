@@ -22,6 +22,8 @@ export default function SearchFilter({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
+    clearTimeout(timer.current);
+    timer.current = undefined;
     setText(value);
   }, [value]);
 
