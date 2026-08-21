@@ -166,22 +166,34 @@ export const http = {
   },
 
   async post<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
-    clearApiCache();
-    return parseJson<T>(await request(url, { ...jsonInit('POST', body), ...init }));
+    try {
+      return parseJson<T>(await request(url, { ...jsonInit('POST', body), ...init }));
+    } finally {
+      clearApiCache();
+    }
   },
 
   async put<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
-    clearApiCache();
-    return parseJson<T>(await request(url, { ...jsonInit('PUT', body), ...init }));
+    try {
+      return parseJson<T>(await request(url, { ...jsonInit('PUT', body), ...init }));
+    } finally {
+      clearApiCache();
+    }
   },
 
   async patch<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
-    clearApiCache();
-    return parseJson<T>(await request(url, { ...jsonInit('PATCH', body), ...init }));
+    try {
+      return parseJson<T>(await request(url, { ...jsonInit('PATCH', body), ...init }));
+    } finally {
+      clearApiCache();
+    }
   },
 
   async delete(url: string, init?: RequestInit): Promise<void> {
-    clearApiCache();
-    await request(url, { ...init, method: 'DELETE' });
+    try {
+      await request(url, { ...init, method: 'DELETE' });
+    } finally {
+      clearApiCache();
+    }
   },
 };
