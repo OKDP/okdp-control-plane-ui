@@ -4,7 +4,8 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "component": "okdp-ui"
+      "component": "okdp-control-plane-ui",
+      "bump-minor-pre-major": true
     }
   }
 }
