@@ -30,6 +30,7 @@ const CatalogPage = lazy(() => import('./features/admin/catalog/catalog-page'));
 const ProjectPage = lazy(() => import('./features/project-console/project-page'));
 const ProjectHome = lazy(() => import('./features/project-console/home/project-home'));
 const SecretsPage = lazy(() => import('./features/project-console/secret-stores/secrets-page'));
+const ConnectionsPage = lazy(() => import('./features/project-console/connections/connections-page'));
 const ProjectSettingsPage = lazy(
   () => import('./features/project-console/settings/project-settings-page'),
 );
@@ -126,6 +127,7 @@ export function AppRoutes() {
             <Route path=":projectId" element={<ProjectRouteSync />}>
               <Route index element={<ProjectHome />} />
               <Route path="secret-stores" element={<SecretsPage />} />
+              <Route path="connections" element={<ConnectionsPage />} />
               <Route path="settings" element={<ProjectSettingsPage />} />
 
               {/* Views world: the project's view launchers and the rich
@@ -169,6 +171,14 @@ export function AppRoutes() {
                 deployLabel: 'Deploy',
                 serviceFilter: 'trino',
                 emptyMessage: 'No Trino instances deployed yet.',
+              })}
+
+              {/* Hive Metastore (Lakehouse / table metadata) */}
+              {serviceRoutes('hive-metastore', {
+                title: 'Hive Metastore',
+                deployLabel: 'Deploy',
+                serviceFilter: 'hive-metastore',
+                emptyMessage: 'No Hive Metastore instances deployed yet.',
               })}
 
               {/* Airflow (Data Engineering / orchestration) — kubocd Package: airflow@0.1.0 */}

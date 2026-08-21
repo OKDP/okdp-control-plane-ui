@@ -19,7 +19,7 @@ import DeleteConfirmDialog from '../../../../shared/components/delete-confirm-di
 export function GroupList() {
   const { toast, showSuccess, showError } = useToastMessages();
 
-  const { groups, loading, error, refresh: refreshGroups } = useIdentityGroups();
+  const { groups, loading, error, unavailable, refresh: refreshGroups } = useIdentityGroups();
 
   const [globalFilter, setGlobalFilter] = useState('');
   const [groupDialog, setGroupDialog] = useState(false);
@@ -109,14 +109,24 @@ export function GroupList() {
       <PageHeader
         title="Groups"
         actions={
-          <button className="create-btn" onClick={openNew}>
-            <i className="pi pi-plus"></i>
-            <span>Create group</span>
-          </button>
+          // Offering creation for a feature the cluster does not carry only
+          // leads to a dialog that fails on save.
+          unavailable ? null : (
+            <button className="create-btn" onClick={openNew}>
+              <i className="pi pi-plus"></i>
+              <span>Create group</span>
+            </button>
+          )
         }
       />
 
-      {error && groups.length === 0 ? (
+      {unavailable ? (
+        <EmptyState
+          icon="pi pi-info-circle"
+          title="Identity management is not installed"
+          description={`This cluster does not carry ${unavailable}, so groups are managed by the identity provider itself rather than from here.`}
+        />
+      ) : error && groups.length === 0 ? (
         <EmptyState
           icon="pi pi-exclamation-triangle"
           title="Failed to load groups"

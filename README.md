@@ -61,7 +61,8 @@ build/deploy story.
 - A running **OKDP control plane** reachable at `http://localhost:8093` (the
   development API target — see [okdp-control-plane-server](https://github.com/OKDP/okdp-control-plane-server))
 - Access to the development **OIDC identity provider** (the dev build
-  authenticates against the OKDP sandbox authority `https://kubauth.okdp.dev-sandbox`)
+  authenticates against an OIDC provider such as
+  `https://keycloak.example.com/realms/master`)
 
 ### Tested with
 
@@ -77,7 +78,7 @@ within the supported range may work but are untested.
 ## Quick start
 
 Run it directly on your machine, or in the devcontainer (only Docker needed). Both
-talk to the **OKDP dev-sandbox** (see its README for cluster, DNS and CA setup).
+talk to **okdp-sandbox** (see its README for cluster, DNS and CA setup).
 
 **Directly:**
 
@@ -92,6 +93,17 @@ The image ships Node, installs dependencies on create, and publishes port 4200.
 ```bash
 npm start
 ```
+
+The dev server serves no `/config.js`, so the OIDC settings come from a
+git-ignored `.env.local` at the repository root:
+
+```
+VITE_OIDC_AUTHORITY=https://keycloak.example.com/realms/okdp
+VITE_OIDC_CLIENT_ID=okdp-ui
+```
+
+Without an authority the console says so on a configuration screen instead of
+signing you in to somebody else's issuer.
 
 Open `http://localhost:4200/`. The dev server reloads on source changes and
 redirects to the OIDC provider for login.
@@ -115,18 +127,23 @@ VITE v7  ready in NNN ms
 | | Development | Production |
 |---|---|---|
 | API base URL | `http://localhost:8093` | `/api` (same-origin, behind an ingress) |
-| OIDC authority | OKDP sandbox (`https://kubauth.okdp.dev-sandbox`) | inherited from dev (see below) |
-| OIDC client | `okdp-app` | `okdp-app` |
+| OIDC authority | `VITE_OIDC_AUTHORITY` from `.env.local` | `oidc.authority` from the chart, through `/config.js` |
+| OIDC client | `VITE_OIDC_CLIENT_ID`, default `okdp-ui` | `oidc.clientId` from the chart, default `okdp-ui` |
+
+The OIDC settings are read at startup rather than baked into the bundle, so one
+image runs against any cluster: the container entrypoint writes `/config.js`
+from the chart values, and `index.html` loads it before the bundle. Without an
+authority the console shows a configuration screen instead of signing users in
+somewhere else.
 
 Authentication uses the OIDC authorization-code flow (`oidc-client-ts`) with
-silent renew; tokens live in `sessionStorage`. Roles come from the OIDC `groups`
-claim — members of `admins` get the admin pages.
+silent renew, and tokens live in `sessionStorage`. Roles are read from the claim
+named by `identity.rolesClaim` (default `groups`, dotted paths supported), and
+the administration pages are granted by `identity.adminRole` (default
+`platform_admin`).
 
-> **Production note:** the OIDC authority is currently baked into the bundle at
-> build time and inherits the sandbox value; deployments targeting another IdP
-> need a build-time override or runtime config injection. The production image
-> also expects a fronting ingress to route `/api` to the control plane — the
-> nginx in the image serves only the static bundle. See
+> **Production note:** the image expects a fronting ingress to route `/api` to
+> the control plane, since its nginx serves only the static bundle. See
 > [Known limitations](ARCHITECTURE.md#known-limitations--open-decisions).
 
 ## Docker
@@ -146,14 +163,29 @@ must route `/api` to the control plane.
 
 ## Deploy with the Helm chart
 
+The published chart is the normal path:
+
 ```bash
-helm install okdp-ui ./chart -n okdp-system \
-  --set image.tag=0.6.0 \
-  --set ingress.host=console.okdp.dev-sandbox \
-  --set backend.service=okdp-server
+helm install okdp-control-plane-ui oci://quay.io/okdp/charts/okdp-control-plane-ui --version <X>
 ```
 
-The OIDC client and CORS are provided by the platform (okdp-sandbox), not the chart.
+
+The examples below install from `chart/` in this checkout, which is what a
+contributor does while changing the chart itself.
+
+```bash
+helm install okdp-control-plane-ui ./chart -n okdp-system \
+  --set image.tag=0.8.0 \
+  --set ingress.host=okdp-ui.example.com \
+  --set backend.service=okdp-control-plane-server \
+  --set oidc.authority=https://keycloak.example.com/realms/master
+```
+
+`oidc.authority` has no default: the console cannot reach any provider without
+it. `ingress.host` must match the client's redirect URIs in the realm.
+
+The OIDC client itself and CORS are provided by the platform (okdp-sandbox), not
+the chart.
 
 ## OKDP Integration
 

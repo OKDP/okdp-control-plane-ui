@@ -1,23 +1,48 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "okdp-ui.fullname" . }}
+  name: {{ include "okdp-control-plane-ui.fullname" . }}
   labels:
-    {{- include "okdp-ui.labels" . | nindent 4 }}
+    {{- include "okdp-control-plane-ui.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "okdp-ui.selectorLabels" . | nindent 6 }}
+      {{- include "okdp-control-plane-ui.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "okdp-ui.labels" . | nindent 8 }}
+        {{- include "okdp-control-plane-ui.labels" . | nindent 8 }}
     spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Written to /config.js by the entrypoint and read by the bundle at
+          # startup: one image, any cluster, whose issuer it cannot know when built.
+          env:
+            - name: OIDC_AUTHORITY
+              value: {{ required "oidc.authority is required: the console has no issuer to authenticate against without it" .Values.oidc.authority | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: OIDC_ROLES_CLAIM
+              value: {{ .Values.identity.rolesClaim | quote }}
+            - name: OIDC_ADMIN_ROLE
+              value: {{ .Values.identity.adminRole | quote }}
+            {{- with .Values.proxy }}
+            {{- if .httpProxy }}
+            - { name: HTTP_PROXY,  value: {{ .httpProxy | quote }} }
+            - { name: http_proxy,  value: {{ .httpProxy | quote }} }
+            {{- end }}
+            {{- if .httpsProxy }}
+            - { name: HTTPS_PROXY, value: {{ .httpsProxy | quote }} }
+            - { name: https_proxy, value: {{ .httpsProxy | quote }} }
+            {{- end }}
+            {{- if .noProxy }}
+            - { name: NO_PROXY,    value: {{ .noProxy | quote }} }
+            - { name: no_proxy,    value: {{ .noProxy | quote }} }
+            {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

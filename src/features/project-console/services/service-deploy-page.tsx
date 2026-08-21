@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { HttpError } from '../../../core/api/http';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Dropdown } from 'primereact/dropdown';
 import { Toast } from 'primereact/toast';
-import { serviceApi } from '../../../core/api/service-api';
+import { serviceApi, type PackageInput } from '../../../core/api/service-api';
+import { ConnectionInputPicker } from '../connections/connection-input-picker';
 import type { PlatformService } from '../../../core/models/service.model';
 import { DynamicSchemaForm } from '../../../shared/components/dynamic-schema-form';
 import EmptyState from '../../../shared/components/empty-state';
@@ -69,8 +71,52 @@ export default function ServiceDeployPage() {
   const [instanceName, setInstanceName] = useState('');
   const [parameters, setParameters] = useState<Record<string, any>>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  // Connections the package declares it needs. Only inputs carrying a
+  // parameter are offered. The others bind without a user choice.
+  const [packageInputs, setPackageInputs] = useState<PackageInput[]>([]);
+  /** An empty list of inputs and an unread one look the same, and deploying on
+   *  the second means the release waits for a connection nobody was asked for.
+   *  The wizard therefore refuses to advance until this reaches 'loaded'. */
+  const [inputsState, setInputsState] = useState<'loading' | 'error' | 'loaded'>('loading');
+  const [connectionChoices, setConnectionChoices] = useState<Record<string, string>>({});
+
+  // Each fetch carries a token: switching version fast would otherwise let a
+  // slow answer for the previous one land on top of the current inputs.
+  const inputsRequestRef = useRef(0);
+
+  const loadInputs = useCallback((serviceName: string, tag: string) => {
+    const token = ++inputsRequestRef.current;
+    setInputsState('loading');
+    serviceApi
+      .getServiceInputs(serviceName, tag)
+      .then((inputs) => {
+        if (token !== inputsRequestRef.current) return;
+        setPackageInputs(inputs.filter((input) => !!input.parameter));
+        setInputsState('loaded');
+      })
+      .catch((err: unknown) => {
+        if (token !== inputsRequestRef.current) return;
+        setPackageInputs([]);
+        // A package that declares no input answers 404: that is an empty list,
+        // not an unreadable one, and it must not hold the wizard back.
+        setInputsState(err instanceof HttpError && err.status === 404 ? 'loaded' : 'error');
+      });
+  }, []);
 
   const profileEditor = hasProfileEditorWidget(serviceSchema);
+
+  // The parameters claimed by connection inputs get a dedicated picker. Leaving
+  // them in the schema form would render the same choice twice as a raw string.
+  const visibleSchema = useMemo(() => {
+    if (!serviceSchema?.properties || packageInputs.length === 0) {
+      return serviceSchema;
+    }
+    const claimed = new Set(packageInputs.map((input) => input.parameter));
+    const properties = Object.fromEntries(
+      Object.entries(serviceSchema.properties).filter(([key]) => !claimed.has(key)),
+    );
+    return { ...serviceSchema, properties };
+  }, [serviceSchema, packageInputs]);
 
   // Steps are computed from the loaded schema: the "Profiles" step is
   // only meaningful for services that declare a profile-editor widget
@@ -90,22 +136,52 @@ export default function ServiceDeployPage() {
 
   const currentStepKey: StepKey = steps[currentStep]?.key ?? 'basics';
 
+  // An input is answered by a pick, by the package tolerating none, or by the
+  // Environment answering for it through the package default. The last one used
+  // to block the wizard on a service that needed no choice at all.
+  const isInputAnswered = (input: PackageInput) =>
+    input.optional || Boolean(input.default) || !!connectionChoices[input.parameter!];
+
   const nameError = useMemo(() => k8sNameError(instanceName), [instanceName]);
 
   const isFormValid = useMemo(() => {
-    const baseValid = !!selectedTag && !nameError && !!instanceName;
+    // The last gate before Deploy, so it repeats the connection check rather
+    // than trusting that the wizard was walked step by step.
+    const baseValid =
+      !!selectedTag &&
+      !nameError &&
+      !!instanceName &&
+      inputsState === 'loaded' &&
+      packageInputs.every(isInputAnswered);
     if (profileEditor) {
       return baseValid && profiles.length > 0;
     }
     return baseValid;
-  }, [selectedTag, nameError, instanceName, profileEditor, profiles]);
+  }, [
+    selectedTag,
+    nameError,
+    instanceName,
+    profileEditor,
+    profiles,
+    inputsState,
+    packageInputs,
+    connectionChoices,
+  ]);
 
   const canAdvance = (): boolean => {
     switch (currentStepKey) {
       case 'basics':
         return !!instanceName && !nameError && !!selectedTag;
       case 'params':
-        return !schemaLoading && paramsValid;
+        // A required connection input without a selection would fail at
+        // reconciliation. Block it here instead. An unread list of inputs is
+        // not an empty one, so anything but 'loaded' blocks too.
+        return (
+          !schemaLoading &&
+          inputsState === 'loaded' &&
+          paramsValid &&
+          packageInputs.every(isInputAnswered)
+        );
       case 'profiles':
         // Only rendered when the schema declares a profile editor — require
         // at least one profile defined before moving on.
@@ -150,6 +226,7 @@ export default function ServiceDeployPage() {
           setVersionOptions(versionOptionsFor(svc));
           setSelectedTag(svc.defaultVersion);
           loadSchema(svc.name, svc.defaultVersion);
+          loadInputs(svc.name, svc.defaultVersion);
         }
         setLoading(false);
       })
@@ -188,7 +265,9 @@ export default function ServiceDeployPage() {
     setSelectedTag(tag);
     setServiceSchema(null);
     setParameters({});
+    setConnectionChoices({});
     loadSchema(service.name, tag);
+    loadInputs(service.name, tag);
   };
 
   const goBack = () => {
@@ -208,7 +287,25 @@ export default function ServiceDeployPage() {
     setDeploying(true);
     setDeployProgress(0);
 
-    const mergedParams = profileEditor ? { ...parameters, profiles } : { ...parameters };
+    const mergedParams: Record<string, any> = profileEditor
+      ? { ...parameters, profiles }
+      : { ...parameters };
+    // The chosen connections ride the parameters the package declared for
+    // them. None stays an empty string, which the package resolves to no
+    // binding at all.
+    for (const input of packageInputs) {
+      if (!input.parameter) continue;
+      const chosen = connectionChoices[input.parameter];
+      if (chosen) {
+        mergedParams[input.parameter] = chosen;
+        continue;
+      }
+      // Writing an empty string here is not the same as writing nothing: KuboCD
+      // merges the submitted parameters over the package defaults, so the empty
+      // value wins and the default, a template the Environment answers, never
+      // renders. A choice not made is left out.
+      delete mergedParams[input.parameter];
+    }
 
     // Animate progress stages while the request is in flight.
     progressTickRef.current = setInterval(() => {
@@ -393,17 +490,56 @@ export default function ServiceDeployPage() {
                       </div>
                     </div>
                   </div>
-                ) : serviceSchema ? (
-                  <div className="form-section">
-                    <DynamicSchemaForm
-                      schema={serviceSchema}
-                      onParametersChange={setParameters}
-                      onValidityChange={setParamsValid}
-                    />
-                  </div>
                 ) : (
                   <div className="form-section">
-                    <p className="muted-text">No configurable parameters for this version.</p>
+                    {/* Which connections this service needs is not known yet, or
+                        could not be read. Deploying anyway would leave the
+                        release waiting on a connection nobody was asked for. */}
+                    {inputsState === 'loading' && (
+                      <p className="muted-text small">Reading the connections this service needs…</p>
+                    )}
+                    {inputsState === 'error' && (
+                      <div className="form-field">
+                        <small className="field-hint err">
+                          Could not read the connections this service needs. Deploying now could
+                          leave it waiting for one.
+                        </small>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ alignSelf: 'flex-start', marginTop: '8px' }}
+                          onClick={() =>
+                            service && selectedTag && loadInputs(service.name, selectedTag)
+                          }
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                    {packageInputs.map((input) => (
+                      <ConnectionInputPicker
+                        key={input.alias}
+                        projectId={projectId!}
+                        input={input}
+                        value={connectionChoices[input.parameter!] ?? ''}
+                        onChange={(connectionName) =>
+                          setConnectionChoices((choices) => ({
+                            ...choices,
+                            [input.parameter!]: connectionName,
+                          }))
+                        }
+                      />
+                    ))}
+                    {visibleSchema ? (
+                      <DynamicSchemaForm
+                        schema={visibleSchema}
+                        projectId={projectId}
+                        onParametersChange={setParameters}
+                        onValidityChange={setParamsValid}
+                      />
+                    ) : packageInputs.length === 0 ? (
+                      <p className="muted-text">No configurable parameters for this version.</p>
+                    ) : null}
                   </div>
                 ))}
 
@@ -445,6 +581,14 @@ export default function ServiceDeployPage() {
                         <span className="review-value">{profiles.length} configured</span>
                       </div>
                     )}
+                    {packageInputs.map((input) => (
+                      <div key={input.alias} className="review-row">
+                        <span className="review-label">Connection ({input.alias})</span>
+                        <span className="review-value mono">
+                          {connectionChoices[input.parameter!] || 'None'}
+                        </span>
+                      </div>
+                    ))}
                     {reviewParams.map((entry) => (
                       <div key={entry.key} className="review-row">
                         <span className="review-label">{entry.key}</span>

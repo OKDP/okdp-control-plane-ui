@@ -58,11 +58,13 @@ All routes live in `src/app-routes.tsx`. Pages are `lazy()`-loaded and
 | `/home` | `StartPage` | `RequireAuth` |
 | `/admin` | `AdminPage` | `RequireAuth` → `RequireAdmin` |
 | `/identity` | `IdentityPage` | `RequireAuth` → `RequireAdmin` |
+| `/platform-connections` | `PlatformConnectionsPage` | `RequireAuth` → `RequireAdmin` |
 | `/settings` | `SettingsPage` | `RequireAuth` |
 | `/views` | `ViewsRedirect` → `/projects/{current}/views` | `RequireAuth` |
 | `/projects` | `ProjectList` | `RequireAuth` |
 | `/projects/:projectId` | `ProjectRouteSync` → `ProjectHome` (index) | `RequireAuth` |
 | `/projects/:projectId/secret-stores` | `SecretsPage` | same |
+| `/projects/:projectId/connections` | `ConnectionsPage` | same |
 | `/projects/:projectId/settings` | `ProjectSettingsPage` | same |
 | `/projects/:projectId/views` | `CustomViewsPage` | same |
 | `/projects/:projectId/views/sql-editor` | `SqlEditorPage` | same |
@@ -83,9 +85,12 @@ Three structural pieces:
   route quadruple for a service area. The generic `ServicesPage` is driven
   entirely by per-route props (`title`, `deployLabel`, `serviceFilter`,
   `emptyMessage` — the `route.data` equivalent), so jupyterhub,
-  spark/history-server, polaris, trino, airflow and superset all share one
-  component. **Differentiate service areas via the props object, not new
-  components.**
+  spark/history-server, polaris, trino, hive-metastore, airflow and superset
+  all share one component. **Differentiate service areas via the props object,
+  not new components.** A service area is three things that must stay in sync:
+  a `SERVICE_AREAS` entry, a `serviceRoutes()` call on the same base path and
+  the sidebar entry in `NAV_CATEGORIES`. `src/app-routes.test.tsx` asserts that
+  every sidebar segment resolves to a route instead of the `*` catch-all.
 
 ## Authentication
 
@@ -111,8 +116,10 @@ Everything lives in `src/core/auth/`; configuration in
    to `/home`, so the two redirects cannot race. `RequireAuth` re-saves the
    location whenever it bounces an unauthenticated user, which covers the
    silent-renew-expiry path.
-4. **Roles.** Derived from the OIDC `groups` claim. `hasRole('admins')` gates
-   `RequireAdmin`; non-admins are sent to `/home`.
+4. **Roles.** Read from the claim named by `identity.rolesClaim` (default
+   `groups`). `isAdmin`, true when the roles carry `identity.adminRole`
+   (default `platform_admin`), gates `RequireAdmin`, and non-admins are sent to
+   `/home`.
 5. **Token renewal.** Silent renew runs automatically. `silentRenewError` is
    logged (the current token is usually still valid at that point);
    `accessTokenExpired` drops the local session, which routes the user back to
@@ -155,6 +162,7 @@ follow that pattern for new endpoints. Current clients:
 | `identity-api.ts` | `/api/v1/identity` users/groups CRUD (admin) |
 | `secret-store-api.ts` | per-project secret stores CRUD, connection test, status |
 | `external-secret-api.ts` | per-project external secrets CRUD, status |
+| `connection-api.ts` | contract descriptors, per-project external connections CRUD + connectivity test, derived internal connections, and the same external CRUD + test at platform scope (admin) |
 | `sql-api.ts` | `execute(projectId, serviceName, query, maxRows?, signal?)` — POST `/api/projects/{id}/services/{name}/sql` to the control plane's SQL proxy |
 
 `src/core/api/ui-cache.ts` is a deliberate in-memory, per-tab,
@@ -359,7 +367,8 @@ src/
     auth/                # auth-context, auth-redirector, require-auth/admin
     context/             # project-context
     guards/              # project-route (ProjectRouteSync)
-    hooks/               # use-live-services (REST + SSE instance hook)
+    hooks/               # use-live-services (REST + SSE instance hook),
+                         # use-polled-resources (poll a list while any row is transient)
     models/              # service.model.ts, spark.model.ts
     preferences/         # localStorage-backed preference contexts
     services/            # logger.ts, project-colors.ts
@@ -367,11 +376,13 @@ src/
     theme/               # theme-context
   features/
     landing/ start/      # /login landing, /home entry
-    admin/               # admin page, identity (users/groups), project list
+    admin/               # admin page, identity (users/groups), project list,
+                         # connections (platform-wide external connections)
     custom-views/        # views world: launchers, SQL editor
     settings/            # global user settings
     project-console/     # console shell, nav-config, home dashboard,
-                         # services (generic pages), spark, secret-stores, settings
+                         # services (generic pages), spark, secret-stores,
+                         # connections (external + internal tabs), settings
   shared/
     components/          # page-header, status-tag, empty-state, dynamic-schema-form,
                          # profile-list-editor, console-shell, brand-icon, …
@@ -391,11 +402,12 @@ under `src/core/`, reusable presentational pieces under
   bearer-protected. Closing this requires backend coordination (a short-lived
   stream ticket, or replacing `EventSource` with a fetch-based SSE reader once
   the control plane enforces auth on stream endpoints).
-- **Production OIDC config is baked in at build time** and currently inherits
-  the dev-sandbox authority (`https://kubauth.okdp.dev-sandbox`, client
-  `okdp-app`). Any non-sandbox deployment needs either build-time
-  `VITE_*` variables or a runtime `window.__ENV` injection (entrypoint-templated
-  script in `index.html`) — to be decided.
+- **OIDC config is read at startup, not baked into the bundle.** The container
+  entrypoint writes `/config.js`, which `index.html` loads before the bundle:
+  authority, client id, the claim carrying the roles, and the role granting
+  administration. One image therefore runs against any
+  cluster. The values in `src/config/environment.ts` are only the fallback for
+  `npm run dev`, and point at okdp-sandbox.
 - **Production API base path.** `environment.apiBaseUrl` is `/api` in
   production while every client appends `/api/...`, so requests leave the
   browser as `/api/api/...`. This assumes the fronting ingress strips the first

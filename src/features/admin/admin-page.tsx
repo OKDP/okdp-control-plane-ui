@@ -1,10 +1,11 @@
 import { ActionCard, QuickActions } from '../../shared/components/action-card';
-import { useUserManagementEnabled } from '../../core/capabilities/use-capabilities';
+import { useCapabilities } from '../../core/context/capabilities-context';
 
 /** /admin — control plane administration zone. Tiles fan out to the
  *  individual administration areas. */
 export default function AdminPage() {
-  const userManagement = useUserManagementEnabled();
+  // Identity is served by kubauth only.
+  const { userManagement } = useCapabilities();
 
   return (
     <section className="flex animate-[fadeInUp_0.4s_ease-out] flex-col gap-7">

@@ -19,7 +19,7 @@ import { apiErrorMessage, formatMediumDateTime } from '../services/service-utils
 import { statusTone } from './secret-status';
 import { StatusTag } from '../../../shared/components/status-tag';
 import { StatusDialog } from './status-dialog';
-import { usePolledResources } from './use-polled-resources';
+import { usePolledResources } from '../../../shared/hooks/use-polled-resources';
 import { useStatusDialog } from './use-status-dialog';
 import { SECTION_TITLE_CLASS, DIVIDER_CLASS } from './constants';
 import SearchFilter from '../../../shared/components/search-filter';
@@ -84,6 +84,7 @@ export function ExternalSecretList() {
   const {
     items: secrets,
     loading,
+    unavailable,
     reload: loadSecrets,
     merge: mergeSecrets,
   } = usePolledResources(projectId, externalSecretApi.list, isSecretChanged, () =>
@@ -282,8 +283,17 @@ export function ExternalSecretList() {
             <div className="flex items-center justify-center gap-2 p-8 text-[14px] text-fg-secondary">
               <i className="pi pi-key text-[1.2rem] opacity-50"></i>
               <span>
-                No external secrets configured. Click <strong>Add external secret</strong> to create
-                one.
+                {unavailable ? (
+                  <>
+                    Vault integration is not installed on this cluster ({unavailable}), so external
+                    secrets cannot be created from here.
+                  </>
+                ) : (
+                  <>
+                    No external secrets configured. Click <strong>Add external secret</strong> to
+                    create one.
+                  </>
+                )}
               </span>
             </div>
           }

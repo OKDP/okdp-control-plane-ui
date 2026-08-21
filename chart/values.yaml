@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: quay.io/okdp/images/okdp-ui
+  repository: quay.io/okdp/images/okdp-control-plane-ui
   # Defaults to the chart appVersion.
   tag: ""
   pullPolicy: IfNotPresent
@@ -12,6 +12,27 @@ backend:
   service: okdp-server
   port: 8093
 
+# OIDC provider the console redirects to. Injected at container startup, not
+# baked into the bundle, so one image serves any cluster.
+oidc:
+  authority: ""
+  clientId: okdp-ui
+
+# Which claim of the ID token carries the caller's roles, and which role opens
+# the administration screens.
+#
+# It must be a claim of the ID token, not of the access token: the console reads
+# the profile oidc-client-ts builds from the ID token. Keycloak keeps its realm
+# roles (realm_access.roles) out of the ID token, so the default points at the
+# groups claim, which OKDP realms publish with the same values. A dotted path is
+# resolved for a provider that nests them.
+identity:
+  rolesClaim: groups
+  # The role that opens the administration pages. A platform whose admins carry
+  # another role name sets it here, there is no second name checked as a
+  # fallback.
+  adminRole: platform_admin
+
 service:
   type: ClusterIP
   port: 4200
@@ -19,8 +40,16 @@ service:
 # Public exposure of the console.
 ingress:
   className: nginx
-  host: console.okdp.dev-sandbox
+  host: okdp-ui.example.com
   clusterIssuer: default-issuer
   tlsSecretName: okdp-ui-tls
 
 resources: {}
+
+# Forward proxy the pod must go through to reach anything outside the cluster.
+# Empty means no proxy, which is the case on any sandbox. Rendered as the three
+# environment variables every HTTP client reads.
+proxy:
+  httpProxy: ""
+  httpsProxy: ""
+  noProxy: ""

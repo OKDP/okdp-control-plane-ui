@@ -29,11 +29,23 @@ export interface AuthContextValue extends AuthState {
   forceLogout: () => void;
   token: () => Promise<string | undefined>;
   hasRole: (role: string) => boolean;
+  /** Whether the caller holds the role the cluster designates as its
+   *  administrator one. Callers must not name that role themselves: it differs
+   *  from realm to realm, which is exactly what made the hardcoded one wrong. */
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function createUserManager(): UserManager {
+  if (!environment.oidc.authority) {
+    throw new Error(
+      'oidc.authority is not configured. The container entrypoint writes /config.js ' +
+        'from the chart values: set oidc.authority. The console fails here rather ' +
+        'than drifting toward an authority that is not yours.',
+    );
+  }
+
   if (!environment.production && environment.oidc.logLevel.toLowerCase() === 'debug') {
     Log.setLogger(console);
     Log.setLevel(Log.DEBUG);
@@ -56,6 +68,28 @@ function isOidcCallback(): boolean {
   return params.has('state') && (params.has('code') || params.has('error'));
 }
 
+/** Read the configured claim out of the ID token, following dots. It must be an
+ *  ID token claim: Keycloak keeps realm_access.roles in the access token only,
+ *  which the console never sees. */
+export function readRoles(claims: unknown, path: string): string[] {
+  let current: unknown = claims;
+  for (const segment of path.split('.')) {
+    if (!current || typeof current !== 'object') {
+      logger.warn(
+        `No "${path}" claim in the ID token, so every role check fails. Claims present: ` +
+          (claims && typeof claims === 'object' ? Object.keys(claims).join(', ') : '(none)'),
+      );
+      return [];
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  if (!Array.isArray(current)) {
+    logger.warn(`The "${path}" claim is not a list of roles, so no role is granted.`);
+    return [];
+  }
+  return current.filter((r): r is string => typeof r === 'string');
+}
+
 function toAuthState(user: User | null): Pick<AuthState, 'isAuthenticated' | 'profile' | 'roles'> {
   if (!user || user.expired) {
     return { isAuthenticated: false, profile: null, roles: [] };
@@ -67,10 +101,35 @@ function toAuthState(user: User | null): Pick<AuthState, 'isAuthenticated' | 'pr
     firstName: (userData.given_name || userData.firstName || userData.name) as string | undefined,
     lastName: userData.family_name || userData.lastName,
   };
-  return { isAuthenticated: true, profile, roles: userData.groups || [] };
+  return {
+    isAuthenticated: true,
+    profile,
+    roles: readRoles(userData, environment.identity.rolesClaim),
+  };
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+/** Shown instead of the console when there is no authority to authenticate
+ *  against. Throwing here would leave the operator with a blank page and the
+ *  reason buried in the browser console. */
+function MissingAuthority() {
+  return (
+    <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '42rem' }}>
+      <h1 style={{ fontSize: '1.25rem' }}>The console is not configured</h1>
+      <p>
+        No OIDC authority was provided, so there is nowhere to sign in. The container entrypoint
+        writes <code>/config.js</code> from the chart values: set <code>oidc.authority</code>.
+      </p>
+      <p>
+        Running from a source checkout, put it in a <code>.env.local</code> file as{' '}
+        <code>VITE_OIDC_AUTHORITY</code>.
+      </p>
+    </div>
+  );
+}
+
+/** The provider proper. Only rendered once there is an authority to build a
+ *  UserManager from, so every hook below can count on it. */
+function AuthProviderInner({ children }: { children: ReactNode }) {
   const userManagerRef = useRef<UserManager | null>(null);
   if (!userManagerRef.current) {
     userManagerRef.current = createUserManager();
@@ -224,6 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       forceLogout,
       token,
       hasRole: (role: string) => state.roles.includes(role),
+      isAdmin: state.roles.includes(environment.identity.adminRole),
     }),
     [state, login, logout, forceLogout, token],
   );
@@ -237,4 +297,11 @@ export function useAuth(): AuthContextValue {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return ctx;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  if (!environment.oidc.authority) {
+    return <MissingAuthority />;
+  }
+  return <AuthProviderInner>{children}</AuthProviderInner>;
 }

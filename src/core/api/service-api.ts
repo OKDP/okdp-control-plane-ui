@@ -13,6 +13,21 @@ import type {
 const baseUrl = environment.apiBaseUrl;
 const seg = encodeURIComponent;
 
+/** One connection a service's package declares it needs. The deploy form
+ *  offers a choice for each entry carrying a parameter. */
+export interface PackageInput {
+  alias: string;
+  contract: string;
+  /** Package parameter carrying the chosen connection name. Absent when the
+   *  package binds some other way, nothing to choose then. */
+  parameter?: string;
+  optional: boolean;
+  /** Template the package falls back to, rendered against the Environment. Its
+   *  presence means "not choosing" is a real answer, not an empty one. */
+  default?: string;
+  description?: string;
+}
+
 export const serviceApi = {
   // --- Platform services (managed by OKDP) ---
 
@@ -46,7 +61,14 @@ export const serviceApi = {
     );
   },
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  /** Connections the service's package declares it needs at deployment. */
+  getServiceInputs(serviceName: string, tag?: string): Promise<PackageInput[]> {
+    const query = tag ? `?tag=${encodeURIComponent(tag)}` : '';
+    return http.getList<PackageInput>(
+      `${environment.apiBaseUrl}/api/platform-services/${encodeURIComponent(serviceName)}/inputs${query}`,
+    );
+  },
+
   getServiceSchema(serviceName: string, tag?: string): Promise<any> {
     const params = tag ? `?tag=${encodeURIComponent(tag)}` : '';
     return http.get(`${baseUrl}/api/platform-services/${seg(serviceName)}/schema${params}`);
