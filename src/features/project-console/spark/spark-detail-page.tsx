@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
@@ -49,6 +49,8 @@ export default function SparkDetailPage() {
 
   // Driver logs: snapshot fetch or follow-mode stream (starts once the app
   // details have loaded)
+  const pendingRef = useRef<string[]>([]);
+  const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [logReloadTick, setLogReloadTick] = useState(0);
   const reloadLogs = useCallback(() => setLogReloadTick((t) => t + 1), []);
 
@@ -57,16 +59,43 @@ export default function SparkDetailPage() {
 
     if (followMode) {
       setLogLines([]);
-      return sparkApi.streamDriverLogs(projectId, appName, {
-        next: (line) =>
-          setLogLines((prev) => {
-            const next = [...prev, line];
-            if (next.length > MAX_LOG_LINES) {
-              next.splice(0, next.length - MAX_LOG_LINES);
-            }
-            return next;
-          }),
+      pendingRef.current = [];
+      clearTimeout(flushRef.current);
+      flushRef.current = undefined;
+
+      // One render per flush instead of one per streamed line: a chatty driver
+      // emits thousands of lines a second, and joining the whole buffer on each
+      // one saturates the main thread until the page stops responding.
+      const flushNow = () => {
+        clearTimeout(flushRef.current);
+        flushRef.current = undefined;
+        const batch = pendingRef.current;
+        pendingRef.current = [];
+        if (batch.length === 0) return;
+        setLogLines((prev) => {
+          const next = [...prev, ...batch];
+          if (next.length > MAX_LOG_LINES) {
+            next.splice(0, next.length - MAX_LOG_LINES);
+          }
+          return next;
+        });
+      };
+
+      const unsubscribe = sparkApi.streamDriverLogs(projectId, appName, {
+        next: (line) => {
+          pendingRef.current.push(line);
+          if (flushRef.current === undefined) {
+            flushRef.current = setTimeout(flushNow, 100);
+          }
+        },
+        complete: flushNow,
+        error: flushNow,
       });
+      return () => {
+        clearTimeout(flushRef.current);
+        flushRef.current = undefined;
+        unsubscribe();
+      };
     }
 
     let cancelled = false;
