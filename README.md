@@ -175,7 +175,7 @@ contributor does while changing the chart itself.
 
 ```bash
 helm install okdp-control-plane-ui ./chart -n okdp-system \
-  --set image.tag=0.8.0 \
+  --set image.tag=0.7.0 \
   --set ingress.host=okdp-ui.example.com \
   --set backend.service=okdp-control-plane-server \
   --set oidc.authority=https://keycloak.example.com/realms/master
