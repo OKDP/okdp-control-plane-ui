@@ -1,65 +1,75 @@
 import { describe, it, expect } from 'vitest';
-import type { SecretStoreRequest, VaultAuthType } from '../../../core/api/secret-store-api';
+import { buildStoreRequest, EMPTY_FORM, type StoreForm } from './store-request';
 
 /**
- * Mirrors the request the form builds, so the mapping is covered without
- * mounting the whole dialog. The list component keeps the shape inline; this
- * pins the part that decides which identity Vault sees.
+ * Exercises the real mapping the dialog uses, so removing a field from
+ * buildStoreRequest fails here instead of shipping.
  */
-function buildAuthConfig(form: {
-  authType: VaultAuthType;
-  authToken: string;
-  authMountPath: string;
-  authRole: string;
-  authServiceAccount: string;
-}): SecretStoreRequest['auth'] {
-  return {
-    type: form.authType,
-    config: {
-      token: form.authType === 'token' ? form.authToken : undefined,
-      mountPath: form.authType === 'kubernetes' ? form.authMountPath || undefined : undefined,
-      role: form.authType === 'kubernetes' ? form.authRole || undefined : undefined,
-      serviceAccount:
-        form.authType === 'kubernetes' ? form.authServiceAccount || undefined : undefined,
-    },
-  };
-}
-
-const KUBERNETES = {
-  authType: 'kubernetes' as VaultAuthType,
-  authToken: '',
+const KUBERNETES: StoreForm = {
+  ...EMPTY_FORM,
+  storeName: 'store',
+  vaultServer: 'https://vault.example.com:8200',
+  vaultPath: 'secret',
+  authType: 'kubernetes',
   authMountPath: 'kubernetes',
   authRole: 'demo-role',
-  authServiceAccount: '',
 };
 
-describe('secret store kubernetes auth', () => {
+describe('buildStoreRequest, kubernetes auth', () => {
   // Vault matches the role's bound_service_account_names against this account,
   // so a project must be able to name one instead of borrowing the namespace
   // default that every workload already shares.
   it('sends the chosen ServiceAccount', () => {
-    const auth = buildAuthConfig({ ...KUBERNETES, authServiceAccount: 'vault-reader' });
-    expect(auth.config.serviceAccount).toBe('vault-reader');
+    const request = buildStoreRequest({ ...KUBERNETES, authServiceAccount: 'vault-reader' });
+    expect(request.auth.config.serviceAccount).toBe('vault-reader');
   });
 
   // Empty must stay absent rather than travel as an empty string, so the server
   // applies its own fallback and stores created before the field are unaffected.
   it('omits the ServiceAccount when left empty', () => {
-    const auth = buildAuthConfig(KUBERNETES);
-    expect(auth.config.serviceAccount).toBeUndefined();
+    const request = buildStoreRequest(KUBERNETES);
+    expect(request.auth.config.serviceAccount).toBeUndefined();
+    expect('serviceAccount' in request.auth.config).toBe(true);
   });
+
+  // The role and mount path belong to this method and must reach the server.
+  it('carries the role and mount path', () => {
+    const request = buildStoreRequest(KUBERNETES);
+    expect(request.auth.config.role).toBe('demo-role');
+    expect(request.auth.config.mountPath).toBe('kubernetes');
+    expect(request.auth.config.token).toBeUndefined();
+  });
+});
+
+describe('buildStoreRequest, token auth', () => {
+  const TOKEN: StoreForm = {
+    ...EMPTY_FORM,
+    storeName: 'store',
+    vaultServer: 'https://vault.example.com:8200',
+    vaultPath: 'secret',
+    authType: 'token',
+    authToken: 'hvs.example',
+  };
 
   // Token auth has no service account to report; sending one would describe an
   // identity Vault never sees.
-  it('never sends a ServiceAccount for token auth', () => {
-    const auth = buildAuthConfig({
-      authType: 'token',
-      authToken: 'hvs.example',
-      authMountPath: '',
-      authRole: '',
+  it('never sends kubernetes fields', () => {
+    const request = buildStoreRequest({
+      ...TOKEN,
       authServiceAccount: 'vault-reader',
+      authRole: 'demo-role',
+      authMountPath: 'kubernetes',
     });
-    expect(auth.config.serviceAccount).toBeUndefined();
-    expect(auth.config.token).toBe('hvs.example');
+    expect(request.auth.config.serviceAccount).toBeUndefined();
+    expect(request.auth.config.role).toBeUndefined();
+    expect(request.auth.config.mountPath).toBeUndefined();
+    expect(request.auth.config.token).toBe('hvs.example');
+  });
+
+  // An empty CA must be omitted so the server falls back to the system roots,
+  // rather than being handed a blank bundle to parse.
+  it('omits an empty CA bundle', () => {
+    const request = buildStoreRequest(TOKEN);
+    expect(request.vault.caBundle).toBeUndefined();
   });
 });

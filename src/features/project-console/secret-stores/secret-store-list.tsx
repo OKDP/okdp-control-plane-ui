@@ -21,6 +21,7 @@ import { StatusTag } from '../../../shared/components/status-tag';
 import { StatusDialog } from './status-dialog';
 import { usePolledResources } from '../../../shared/hooks/use-polled-resources';
 import { useStatusDialog } from './use-status-dialog';
+import { buildStoreRequest, EMPTY_FORM, type StoreForm } from './store-request';
 import { SECTION_TITLE_CLASS, DIVIDER_CLASS } from './constants';
 import SearchFilter from '../../../shared/components/search-filter';
 import { PageHeader } from '../../../shared/components/page-header';
@@ -44,34 +45,6 @@ const AUTH_TYPE_OPTIONS: { label: string; value: VaultAuthType }[] = [
   { label: 'Token', value: 'token' },
   { label: 'Kubernetes', value: 'kubernetes' },
 ];
-
-interface StoreForm {
-  storeName: string;
-  vaultServer: string;
-  vaultPath: string;
-  vaultVersion: 'v1' | 'v2';
-  caBundle: string;
-  authType: VaultAuthType;
-  authToken: string;
-  authMountPath: string;
-  authRole: string;
-  authServiceAccount: string;
-  isDefault: boolean;
-}
-
-const EMPTY_FORM: StoreForm = {
-  storeName: '',
-  vaultServer: '',
-  vaultPath: '',
-  vaultVersion: 'v2',
-  caBundle: '',
-  authType: 'token',
-  authToken: '',
-  authMountPath: '',
-  authRole: '',
-  authServiceAccount: '',
-  isDefault: false,
-};
 
 const getStatusTone = (status: string) => statusTone(status, 'Ready');
 
@@ -168,27 +141,7 @@ export function SecretStoreList() {
     setDialogVisible(true);
   };
 
-  const buildRequest = (): SecretStoreRequest => ({
-    name: form.storeName,
-    provider: 'vault',
-    vault: {
-      server: form.vaultServer,
-      path: form.vaultPath,
-      version: form.vaultVersion,
-      caBundle: form.caBundle || undefined,
-    },
-    auth: {
-      type: form.authType,
-      config: {
-        token: form.authType === 'token' ? form.authToken || undefined : undefined,
-        mountPath: form.authType === 'kubernetes' ? form.authMountPath || undefined : undefined,
-        role: form.authType === 'kubernetes' ? form.authRole || undefined : undefined,
-        serviceAccount:
-          form.authType === 'kubernetes' ? form.authServiceAccount || undefined : undefined,
-      },
-    },
-    isDefault: form.isDefault,
-  });
+  const buildRequest = (): SecretStoreRequest => buildStoreRequest(form);
 
   const testConnection = () => {
     setTesting(true);
