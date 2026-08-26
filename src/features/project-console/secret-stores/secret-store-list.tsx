@@ -519,7 +519,7 @@ export function SecretStoreList() {
                   className="w-full dialog-input"
                   placeholder="default"
                 />
-                <small className="mt-1 block text-[12px] text-muted">
+                <small className="mt-1 block text-[12px] text-fg-muted">
                   The Vault role must bind this account. Empty borrows the
                   namespace default, shared by every workload.
                 </small>

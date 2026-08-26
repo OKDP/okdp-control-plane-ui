@@ -56,7 +56,11 @@ export function buildStoreRequest(form: StoreForm): SecretStoreRequest {
         token: token ? form.authToken || undefined : undefined,
         mountPath: kubernetes ? form.authMountPath || undefined : undefined,
         role: kubernetes ? form.authRole || undefined : undefined,
-        serviceAccount: kubernetes ? form.authServiceAccount || undefined : undefined,
+        // Sent even when empty, unlike the fields above. The server reads an
+        // absent account as "keep the one already stored", so dropping the
+        // empty string would make the default account unreachable: a store
+        // given its own identity could never be handed back to default.
+        serviceAccount: kubernetes ? form.authServiceAccount : undefined,
       },
     },
     isDefault: form.isDefault,

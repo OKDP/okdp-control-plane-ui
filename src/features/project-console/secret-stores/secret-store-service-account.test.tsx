@@ -24,12 +24,14 @@ describe('buildStoreRequest, kubernetes auth', () => {
     expect(request.auth.config.serviceAccount).toBe('vault-reader');
   });
 
-  // Empty must stay absent rather than travel as an empty string, so the server
-  // applies its own fallback and stores created before the field are unaffected.
-  it('omits the ServiceAccount when left empty', () => {
+  // An emptied field must travel as an empty string, not vanish. The server
+  // reads an absent account as "keep the stored one", so dropping it would make
+  // the default unreachable: a store given its own identity could never be
+  // handed back to the namespace default.
+  it('sends an empty ServiceAccount rather than dropping it', () => {
     const request = buildStoreRequest(KUBERNETES);
-    expect(request.auth.config.serviceAccount).toBeUndefined();
-    expect('serviceAccount' in request.auth.config).toBe(true);
+    expect(request.auth.config.serviceAccount).toBe('');
+    expect(JSON.parse(JSON.stringify(request)).auth.config).toHaveProperty('serviceAccount', '');
   });
 
   // The role and mount path belong to this method and must reach the server.
