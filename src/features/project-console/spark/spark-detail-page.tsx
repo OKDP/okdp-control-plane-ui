@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
@@ -10,6 +10,7 @@ import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import EmptyState from '../../../shared/components/empty-state';
 import { StatusTag } from '../../../shared/components/status-tag';
 import { getExecutorTone, getStatusTone, isTerminalStatus } from './spark-utils';
+import { useLogBatch, appendCapped } from '../../../shared/hooks/use-log-batch';
 
 const MAX_LOG_LINES = 10000;
 
@@ -49,9 +50,11 @@ export default function SparkDetailPage() {
 
   // Driver logs: snapshot fetch or follow-mode stream (starts once the app
   // details have loaded)
-  const pendingRef = useRef<string[]>([]);
-  const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [logReloadTick, setLogReloadTick] = useState(0);
+  const batch = useLogBatch(
+    (lines) => setLogLines((prev) => appendCapped(prev, lines, MAX_LOG_LINES)),
+    MAX_LOG_LINES,
+  );
   const reloadLogs = useCallback(() => setLogReloadTick((t) => t + 1), []);
 
   useEffect(() => {
@@ -59,41 +62,21 @@ export default function SparkDetailPage() {
 
     if (followMode) {
       setLogLines([]);
-      pendingRef.current = [];
-      clearTimeout(flushRef.current);
-      flushRef.current = undefined;
-
-      // One render per flush instead of one per streamed line: a chatty driver
-      // emits thousands of lines a second, and joining the whole buffer on each
-      // one saturates the main thread until the page stops responding.
-      const flushNow = () => {
-        clearTimeout(flushRef.current);
-        flushRef.current = undefined;
-        const batch = pendingRef.current;
-        pendingRef.current = [];
-        if (batch.length === 0) return;
-        setLogLines((prev) => {
-          const next = [...prev, ...batch];
-          if (next.length > MAX_LOG_LINES) {
-            next.splice(0, next.length - MAX_LOG_LINES);
-          }
-          return next;
-        });
-      };
+      batch.reset();
 
       const unsubscribe = sparkApi.streamDriverLogs(projectId, appName, {
-        next: (line) => {
-          pendingRef.current.push(line);
-          if (flushRef.current === undefined) {
-            flushRef.current = setTimeout(flushNow, 100);
-          }
+        next: batch.push,
+        complete: batch.flush,
+        error: (err) => {
+          // The stream is closed for good at this point. Flushing alone would
+          // leave the view frozen on its last lines, indistinguishable from a
+          // job that simply finished.
+          batch.flush();
+          showError(err instanceof Error ? err.message : 'log stream interrupted');
         },
-        complete: flushNow,
-        error: flushNow,
       });
       return () => {
-        clearTimeout(flushRef.current);
-        flushRef.current = undefined;
+        batch.reset();
         unsubscribe();
       };
     }
@@ -110,7 +93,7 @@ export default function SparkDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [app, projectId, appName, followMode, logReloadTick]);
+  }, [app, projectId, appName, followMode, logReloadTick, batch, showError]);
 
   const openSparkLink = (
     field: 'uiAddress' | 'historyServerUrl',
