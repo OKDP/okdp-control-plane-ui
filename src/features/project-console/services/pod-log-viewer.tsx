@@ -3,6 +3,8 @@ import { Button } from 'primereact/button';
 import { Dropdown } from 'primereact/dropdown';
 import { Checkbox } from 'primereact/checkbox';
 import { serviceApi } from '../../../core/api/service-api';
+import { StreamServerError } from '../../../core/api/sse';
+import { useLogBatch, appendCapped } from '../../../shared/hooks/use-log-batch';
 import type { Pod } from '../../../core/models/service.model';
 
 const MAX_LOG_LINES = 10000;
@@ -20,8 +22,10 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
   const stickToBottomRef = useRef(true);
 
   const [lines, setLines] = useState<string[]>([]);
-  const pendingRef = useRef<string[]>([]);
-  const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const batch = useLogBatch((batched) => {
+    setLines((prev) => appendCapped(prev, batched, MAX_LOG_LINES));
+    setLoading(false);
+  }, MAX_LOG_LINES);
   const [loading, setLoading] = useState(true);
   const [streamError, setStreamError] = useState('');
   const [selectedPodName, setSelectedPodName] = useState('');
@@ -69,26 +73,7 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
     setLoading(true);
     setLines([]);
     setStreamError('');
-    pendingRef.current = [];
-    clearTimeout(flushRef.current);
-    flushRef.current = undefined;
-
-    const flushNow = () => {
-      clearTimeout(flushRef.current);
-      flushRef.current = undefined;
-      const batch = pendingRef.current;
-      pendingRef.current = [];
-      if (batch.length > 0) {
-        setLines((prev) => {
-          const next = [...prev, ...batch];
-          if (next.length > MAX_LOG_LINES) {
-            next.splice(0, next.length - MAX_LOG_LINES);
-          }
-          return next;
-        });
-      }
-      setLoading(false);
-    };
+    batch.reset();
 
     if (followMode) {
       const unsubscribe = serviceApi.streamPodLogs(
@@ -96,19 +81,17 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
         serviceName,
         selectedPodName,
         {
-          next: (line) => {
-            pendingRef.current.push(line);
-            if (flushRef.current === undefined) {
-              flushRef.current = setTimeout(flushNow, 100);
-            }
-          },
+          next: batch.push,
           complete: () => {
-            flushNow();
+            batch.flush();
             setLoading(false);
           },
           error: (err) => {
-            flushNow();
-            setStreamError(err instanceof Error ? err.message : 'log stream interrupted');
+            batch.flush();
+            // A pod whose logs simply run out lands here too: the stream
+            // carries no end marker, so the browser reports the close as an
+            // error. Only a failure the server described deserves the banner.
+            if (err instanceof StreamServerError) setStreamError(err.message);
             setLoading(false);
           },
         },
@@ -116,8 +99,7 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
         200,
       );
       return () => {
-        clearTimeout(flushRef.current);
-        flushRef.current = undefined;
+        batch.reset();
         unsubscribe();
       };
     }
@@ -138,7 +120,7 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
     return () => {
       cancelled = true;
     };
-  }, [projectId, serviceName, selectedPodName, selectedContainer, followMode]);
+  }, [projectId, serviceName, selectedPodName, selectedContainer, followMode, batch]);
 
   // Keep the view pinned to the bottom while new lines stream in
   useEffect(() => {

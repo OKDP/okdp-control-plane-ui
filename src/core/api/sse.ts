@@ -12,6 +12,24 @@ export interface ListEvent<T> {
 }
 
 /**
+ * A failure the server itself described, as opposed to a connection that
+ * merely stopped.
+ *
+ * The distinction is not cosmetic. A log stream carries no end marker: when
+ * the driver finishes, the handler returns and the browser, unable to tell a
+ * finished stream from a dropped one, schedules a reconnect and fires `error`.
+ * A caller that reports every `error` to the user would raise a failure at the
+ * end of every successful job. Only this type means something actually went
+ * wrong.
+ */
+export class StreamServerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StreamServerError';
+  }
+}
+
+/**
  * Apply a watch-style ADDED/MODIFIED/DELETED event to an immutable list,
  * upserting by key. Shared by every SSE-backed list in the app.
  */
@@ -81,7 +99,7 @@ export function subscribeTextStream(url: string, subscriber: StreamSubscriber<st
     const closedByServer = eventSource.readyState === EventSource.CLOSED;
     eventSource.close();
     if (typeof data === 'string' && data.length > 0) {
-      subscriber.error?.(new Error(data));
+      subscriber.error?.(new StreamServerError(data));
       return;
     }
     if (closedByServer) {

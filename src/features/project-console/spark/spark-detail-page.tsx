@@ -4,6 +4,7 @@ import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { InputSwitch } from 'primereact/inputswitch';
 import { sparkApi } from '../../../core/api/spark-api';
+import { StreamServerError } from '../../../core/api/sse';
 import type { SparkAppInstance } from '../../../core/models/spark.model';
 import { formatMediumDateTime, openInNewTab } from '../services/service-utils';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
@@ -68,11 +69,13 @@ export default function SparkDetailPage() {
         next: batch.push,
         complete: batch.flush,
         error: (err) => {
-          // The stream is closed for good at this point. Flushing alone would
-          // leave the view frozen on its last lines, indistinguishable from a
-          // job that simply finished.
+          // The tail is shown whatever ended the stream, so the view never
+          // freezes on the lines before the last flush window.
           batch.flush();
-          showError(err instanceof Error ? err.message : 'log stream interrupted');
+          // Only a failure the server described is worth reporting. A driver
+          // that simply finishes also lands here, and reporting that would
+          // raise an error at the end of every successful job.
+          if (err instanceof StreamServerError) showError(err.message);
         },
       });
       return () => {
