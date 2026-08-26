@@ -55,6 +55,7 @@ interface StoreForm {
   authToken: string;
   authMountPath: string;
   authRole: string;
+  authServiceAccount: string;
   isDefault: boolean;
 }
 
@@ -68,6 +69,7 @@ const EMPTY_FORM: StoreForm = {
   authToken: '',
   authMountPath: '',
   authRole: '',
+  authServiceAccount: '',
   isDefault: false,
 };
 
@@ -160,6 +162,7 @@ export function SecretStoreList() {
       authToken: '',
       authMountPath: store.auth?.config?.mountPath ?? '',
       authRole: store.auth?.config?.role ?? '',
+      authServiceAccount: store.auth?.config?.serviceAccount ?? '',
       isDefault: store.isDefault,
     });
     setDialogVisible(true);
@@ -180,6 +183,8 @@ export function SecretStoreList() {
         token: form.authType === 'token' ? form.authToken || undefined : undefined,
         mountPath: form.authType === 'kubernetes' ? form.authMountPath || undefined : undefined,
         role: form.authType === 'kubernetes' ? form.authRole || undefined : undefined,
+        serviceAccount:
+          form.authType === 'kubernetes' ? form.authServiceAccount || undefined : undefined,
       },
     },
     isDefault: form.isDefault,
@@ -549,6 +554,22 @@ export function SecretStoreList() {
                   className="w-full dialog-input"
                   placeholder="e.g., my-app-role"
                 />
+              </div>
+              <div className="field">
+                <label htmlFor="authServiceAccount">
+                  ServiceAccount <span className="optional">(optional)</span>
+                </label>
+                <InputText
+                  id="authServiceAccount"
+                  value={form.authServiceAccount}
+                  onChange={(e) => patchForm({ authServiceAccount: e.target.value })}
+                  className="w-full dialog-input"
+                  placeholder="default"
+                />
+                <small className="mt-1 block text-[12px] text-muted">
+                  The Vault role must bind this account. Empty borrows the
+                  namespace default, shared by every workload.
+                </small>
               </div>
             </>
           )}

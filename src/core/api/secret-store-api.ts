@@ -15,6 +15,11 @@ export interface VaultAuthConfig {
   role?: string;
   secretId?: string;
   roleId?: string;
+  /**
+   * ServiceAccount the store authenticates as under Kubernetes auth. Empty
+   * keeps the namespace default account, which every workload already shares.
+   */
+  serviceAccount?: string;
 }
 
 export interface VaultProviderConfig {
