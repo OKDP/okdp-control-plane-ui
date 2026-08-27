@@ -1,4 +1,5 @@
 import type { ExternalSecretStatusDetail } from '../../../core/api/external-secret-api';
+import { logger } from '../../../core/services/logger';
 
 /** How often the status is asked for while waiting on the first sync. */
 export const SYNC_POLL_MS = 1500;
@@ -8,6 +9,10 @@ export const SYNC_POLL_MS = 1500;
  * Long enough for the controller to have tried once on a healthy cluster,
  * short enough that a dialog does not hold someone hostage: past it the import
  * exists and its row carries the answer.
+ *
+ * Measured on the clock, reads included. Counting attempts instead made this
+ * figure a floor rather than a bound: ten reads and nine pauses came to 23s at
+ * one second of latency and 33s at two, for a number that announced 15.
  */
 export const SYNC_TIMEOUT_MS = 15000;
 
@@ -137,13 +142,16 @@ export async function waitForSyncOutcome(
      * has just fixed. Passing the previous status makes the wait skip past it.
      */
     ignoreUntilChanged?: ExternalSecretStatusDetail | null;
+    /** Reads the clock, so a test drives the deadline instead of waiting it out. */
+    now?: () => number;
   } = {},
 ): Promise<ExternalSecretStatusDetail | null> {
   const pollMs = options.pollMs ?? SYNC_POLL_MS;
   const timeoutMs = options.timeoutMs ?? SYNC_TIMEOUT_MS;
   const sleep = options.sleep ?? wait;
+  const now = options.now ?? (() => Date.now());
 
-  const attempts = Math.max(1, Math.ceil(timeoutMs / pollMs));
+  const started = now();
   let last: ExternalSecretStatusDetail | null = null;
   // Once anything other than the previous status has been seen, the controller
   // has acted and every reading after it describes the new attempt. Without
@@ -152,16 +160,24 @@ export async function waitForSyncOutcome(
   // unreported.
   let moved = false;
 
-  for (let i = 0; i < attempts; i++) {
+  for (;;) {
     try {
       last = await getStatus();
       if (!isSameStatus(last, options.ignoreUntilChanged)) moved = true;
-      if (isSettled(last.status) && (moved || !isSameStatus(last, options.ignoreUntilChanged))) return last;
-    } catch {
+      if (isSettled(last.status) && moved) return last;
+    } catch (error) {
       // Deliberately keeps `last`: a failing read is not a verdict, and
-      // forgetting a status already seen would report less than was known.
+      // forgetting a status already seen would report less than was known. Said
+      // out loud all the same, or a fault in the read itself reads on screen
+      // exactly like an import that has simply not synced yet.
+      logger.warn('the status of an external secret could not be read while waiting', error);
     }
-    if (i < attempts - 1) await sleep(pollMs);
+    // Read after the request, so the round trips count against the wait like
+    // the pauses do. That is what makes SYNC_TIMEOUT_MS a bound rather than a
+    // floor, and the last pause is shortened so the wait ends on a reading.
+    const left = timeoutMs - (now() - started);
+    if (left <= 0) break;
+    await sleep(Math.min(pollMs, left));
   }
   // Skipping the previous status inside the loop is not enough: handing it back
   // here would report the pre-edit failure all the same, just later. Nothing
