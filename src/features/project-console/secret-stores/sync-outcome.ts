@@ -42,18 +42,27 @@ export function describeSyncOutcome(
   /** The status before the write, when there was one. */
   previous?: ExternalSecretStatusDetail | null,
 ): SyncOutcome {
-  // Unchanged and already failing: the controller either has not retried yet or
-  // retried and failed the same way, and nothing in the status tells the two
-  // apart. Saying it has not synced would hide a failure the user is looking
-  // at; naming it is true either way.
-  if (detail && previous && !statusMoved(detail, previous) && detail.status === 'Error') {
-    const reason = detail.lastError?.trim().replace(/\.+$/, '');
+  // Unchanged: the controller either has not acted on the new generation yet or
+  // acted and landed on the same status, and nothing it publishes tells the two
+  // apart. Neither reading is a confirmation, so this never reports success.
+  if (detail && previous && !statusMoved(detail, previous)) {
+    if (detail.status === 'Error') {
+      const reason = detail.lastError?.trim().replace(/\.+$/, '');
+      return {
+        settled: true,
+        synced: false,
+        message: reason
+          ? `Import "${name}" ${action}. Its status has not changed and still reports: ${reason}. Check the remote key.`
+          : `Import "${name}" ${action}. Its status has not changed and still reports a failure. Check the remote key.`,
+      };
+    }
+    // Still Synced from before the write is not proof this write synced: the
+    // controller may simply not have reached it yet. Claiming success here was
+    // the false green this whole path exists to remove.
     return {
-      settled: true,
+      settled: false,
       synced: false,
-      message: reason
-        ? `Import "${name}" ${action}. Its status has not changed and still reports: ${reason}. Check the remote key.`
-        : `Import "${name}" ${action}. Its status has not changed and still reports a failure. Check the remote key.`,
+      message: `Import "${name}" ${action}. Its status has not changed yet, its row will say when it does.`,
     };
   }
   if (!detail || !isSettled(detail.status)) {

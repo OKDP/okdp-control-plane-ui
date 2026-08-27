@@ -269,3 +269,38 @@ describe('waitForSyncOutcome, a reconcile that repeats the same message', () => 
     expect(statusMoved(before, null)).toBe(true);
   });
 });
+
+describe('describeSyncOutcome, an unchanged status is never a confirmation', () => {
+  // Editing an import that was already Synced: if the controller has not
+  // reached the new generation within the wait, the status read back is the one
+  // from before the write. Reporting "updated and synced" claimed a success
+  // nobody observed.
+  it('does not call an unchanged Synced a success', () => {
+    const before = detail('Synced');
+    const o = describeSyncOutcome('my-import', before, 'updated', before);
+    expect(o.synced).toBe(false);
+    expect(o.settled).toBe(false);
+    expect(o.message).not.toContain('and synced');
+  });
+
+  // A status that did move to Synced is a real confirmation.
+  it('confirms a Synced that differs from the one before', () => {
+    const before = detail('Error', 'boom');
+    const o = describeSyncOutcome('my-import', detail('Synced'), 'updated', before);
+    expect(o.synced).toBe(true);
+    expect(o.message).toContain('and synced');
+  });
+
+  // With no previous status there is nothing to compare, so a creation still
+  // reports its own result.
+  it('still confirms a creation, which has no previous status', () => {
+    expect(describeSyncOutcome('my-import', detail('Synced'), 'created').synced).toBe(true);
+  });
+
+  it('still names an unchanged failure', () => {
+    const before = detail('Error', 'could not get secret data');
+    const o = describeSyncOutcome('my-import', before, 'updated', before);
+    expect(o.synced).toBe(false);
+    expect(o.message).toContain('has not changed');
+  });
+});
