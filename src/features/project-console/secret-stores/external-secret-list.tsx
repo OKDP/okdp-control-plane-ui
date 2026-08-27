@@ -109,10 +109,9 @@ export function ExternalSecretList() {
   // so a stale green never sits under a key that has since been edited.
   const [keyChecks, setKeyChecks] = useState<Record<number, CheckDisplay>>({});
   const [checkingKeys, setCheckingKeys] = useState(false);
-  // The status the import carried before an edit. Kept so the wait that
-  // follows does not read it as the outcome of the edit itself.
-  // Read by the in-flight checks when their answers come back, so a store
-  // changed meanwhile is seen without re-arming them.
+  // The store currently selected, read by the in-flight checks when their
+  // answers come back: an answer about the store that was selected when the
+  // question left says nothing about the one selected now.
   const storeAtAnswerRef = useRef(selectedStoreRefName);
   storeAtAnswerRef.current = selectedStoreRefName;
 
