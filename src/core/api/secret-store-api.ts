@@ -16,8 +16,15 @@ export interface VaultAuthConfig {
   secretId?: string;
   roleId?: string;
   /**
-   * ServiceAccount the store authenticates as under Kubernetes auth. Empty
-   * keeps the namespace default account, which every workload already shares.
+   * ServiceAccount the store authenticates as under Kubernetes auth.
+   *
+   * Three states, and the server tells them apart:
+   * - absent keeps whatever account the store already uses
+   * - an empty string asks for the namespace default account back
+   * - a name selects that account
+   *
+   * The form therefore sends an empty string rather than omitting the field,
+   * or a store given its own identity could never be handed back to default.
    */
   serviceAccount?: string;
 }
