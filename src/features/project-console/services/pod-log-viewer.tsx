@@ -28,6 +28,11 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
   }, MAX_LOG_LINES);
   const [loading, setLoading] = useState(true);
   const [streamError, setStreamError] = useState('');
+  // Set when a followed stream stops without the server saying why. The pod's
+  // logs may have run out or the connection may have dropped, and nothing
+  // distinguishes the two, so this states the fact rather than guessing.
+  // Without it a dropped connection froze the view in silence.
+  const [streamStopped, setStreamStopped] = useState(false);
   const [selectedPodName, setSelectedPodName] = useState('');
   const [selectedContainer, setSelectedContainer] = useState('');
   const [followMode, setFollowMode] = useState(true);
@@ -73,6 +78,7 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
     setLoading(true);
     setLines([]);
     setStreamError('');
+    setStreamStopped(false);
     batch.reset();
 
     if (followMode) {
@@ -84,14 +90,17 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
           next: batch.push,
           complete: () => {
             batch.flush();
+            setStreamStopped(true);
             setLoading(false);
           },
           error: (err) => {
             batch.flush();
             // A pod whose logs simply run out lands here too: the stream
             // carries no end marker, so the browser reports the close as an
-            // error. Only a failure the server described deserves the banner.
+            // error. Only a failure the server described deserves the banner;
+            // anything else is announced as what it is, the stream stopping.
             if (err instanceof StreamServerError) setStreamError(err.message);
+            else setStreamStopped(true);
             setLoading(false);
           },
         },
@@ -210,6 +219,11 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
           <div className="log-block log-muted sticky top-0 z-10 flex items-center justify-center gap-2 p-4 text-[13px]">
             <i className="pi pi-exclamation-triangle text-[16px]"></i>
             {streamError}. The logs above may be incomplete.
+          </div>
+        ) : followMode && streamStopped ? (
+          <div className="log-block log-muted sticky top-0 z-10 flex items-center justify-center gap-2 p-4 text-[13px]">
+            <i className="pi pi-info-circle text-[16px]"></i>
+            The log stream stopped. The pod may have finished, or the connection may have dropped.
           </div>
         ) : null}
         {loading ? (

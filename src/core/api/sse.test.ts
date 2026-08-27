@@ -189,3 +189,41 @@ describe('applyListEvent', () => {
     expect(list).toEqual([{ name: 'a' }]);
   });
 });
+
+describe('subscribeTextStream, a stream that stops without a reason', () => {
+  // The half that was silent. A dropped connection closes the EventSource,
+  // which kills the browser's own reconnection, and raises an error carrying no
+  // server message. Reported as nothing at all, Follow mode froze with no
+  // notice and no way to tell it had stopped.
+  it('always tells the caller the stream ended, one way or the other', () => {
+    const error = vi.fn();
+    const complete = vi.fn();
+    subscribeTextStream('/logs', { next: vi.fn(), error, complete });
+
+    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
+
+    expect(error.mock.calls.length + complete.mock.calls.length).toBe(1);
+  });
+
+  // The distinction the viewers key off: a message from the server is a
+  // failure, anything else is just the end of the stream.
+  it('separates a server failure from a stream that merely stopped', () => {
+    const error = vi.fn();
+    subscribeTextStream('/logs', { next: vi.fn(), error });
+    FakeEventSource.last.emitError(FakeEventSource.CONNECTING, 'pod not found');
+    expect(error.mock.calls[0][0]).toBeInstanceOf(StreamServerError);
+
+    const other = vi.fn();
+    subscribeTextStream('/logs', { next: vi.fn(), error: other });
+    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
+    expect(other.mock.calls[0][0]).not.toBeInstanceOf(StreamServerError);
+  });
+
+  // Closing is deliberate: left open the browser reconnects and replays a
+  // finished log from the top. The caller is told instead.
+  it('closes rather than reconnecting, so the caller decides what to do', () => {
+    subscribeTextStream('/logs', { next: vi.fn(), error: vi.fn() });
+    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
+    expect(FakeEventSource.last.closeCalls).toBeGreaterThan(0);
+  });
+});
