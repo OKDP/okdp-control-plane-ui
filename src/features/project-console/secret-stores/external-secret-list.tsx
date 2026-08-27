@@ -564,7 +564,13 @@ export function ExternalSecretList() {
                 id="storeRef"
                 options={readyStores}
                 value={selectedStoreRefName}
-                onChange={(e) => setSelectedStoreRefName(e.value)}
+                onChange={(e) => {
+                  setSelectedStoreRefName(e.value);
+                  // A verdict belongs to the store it was asked of. Left on screen it
+                  // would sit under another store as a green nobody established, and
+                  // an import could be created on the strength of it.
+                  setKeyChecks({});
+                }}
                 optionLabel="name"
                 optionValue="name"
                 placeholder="Select a secret store"
