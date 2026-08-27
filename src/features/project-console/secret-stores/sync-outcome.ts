@@ -125,11 +125,18 @@ export async function waitForSyncOutcome(
 
   const attempts = Math.max(1, Math.ceil(timeoutMs / pollMs));
   let last: ExternalSecretStatusDetail | null = null;
+  // Once anything other than the previous status has been seen, the controller
+  // has acted and every reading after it describes the new attempt. Without
+  // this, an Error that repeats verbatim after a Pending is compared to the
+  // status from before the edit and ignored, and a real reconcile goes
+  // unreported.
+  let moved = false;
 
   for (let i = 0; i < attempts; i++) {
     try {
       last = await getStatus();
-      if (isSettled(last.status) && !isSameStatus(last, options.ignoreUntilChanged)) return last;
+      if (!isSameStatus(last, options.ignoreUntilChanged)) moved = true;
+      if (isSettled(last.status) && (moved || !isSameStatus(last, options.ignoreUntilChanged))) return last;
     } catch {
       // Deliberately keeps `last`: a failing read is not a verdict, and
       // forgetting a status already seen would report less than was known.
@@ -139,6 +146,6 @@ export async function waitForSyncOutcome(
   // Skipping the previous status inside the loop is not enough: handing it back
   // here would report the pre-edit failure all the same, just later. Nothing
   // new was seen, so nothing is the honest answer.
-  if (isSameStatus2(last, options.ignoreUntilChanged)) return null;
+  if (!moved && isSameStatus2(last, options.ignoreUntilChanged)) return null;
   return last;
 }
