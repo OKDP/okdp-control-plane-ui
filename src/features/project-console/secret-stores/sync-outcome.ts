@@ -140,6 +140,12 @@ export async function waitForSyncOutcome(
      * or Error, so the first read returns the state from BEFORE the edit.
      * Taken as the answer, correcting a broken import reports the failure it
      * has just fixed. Passing the previous status makes the wait skip past it.
+     *
+     * Skipped until something else has been seen, and not for the whole wait: a
+     * reading that differs, a Pending among them, is proof the controller has
+     * acted, so a status identical to this one after it describes the new
+     * attempt and is returned. Whether the status ever ended up differing from
+     * this one is a separate question, and statusMoved is what answers it.
      */
     ignoreUntilChanged?: ExternalSecretStatusDetail | null;
     /** Reads the clock, so a test drives the deadline instead of waiting it out. */
