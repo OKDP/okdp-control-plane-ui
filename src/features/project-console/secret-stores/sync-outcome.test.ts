@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { isSettled, describeSyncOutcome, waitForSyncOutcome } from './sync-outcome';
+import { isSettled, describeSyncOutcome, waitForSyncOutcome, statusMoved } from './sync-outcome';
 import type { ExternalSecretStatusDetail } from '../../../core/api/external-secret-api';
 
 const detail = (
@@ -156,10 +156,13 @@ describe('waitForSyncOutcome, editing an import that already has a status', () =
     expect(describeSyncOutcome('my-import', result, 'updated').synced).toBe(true);
   });
 
-  // A status that never moves must not be reported as the edit's outcome
-  // either: unsettled is the honest answer, and the row carries the rest.
-  it('reports nothing settled when the status never moves', async () => {
-    const before = detail('Error', 'boom');
+  // A status that never moves is not proof the edit worked, and not proof it
+  // failed either: external-secrets does not move refreshTime on a failed sync,
+  // so a retry that fails identically looks like no retry at all. Saying it has
+  // not synced would hide a failure sitting on screen; naming it is true in
+  // both cases.
+  it('names the unchanged failure instead of hiding it', async () => {
+    const before = detail('Error', 'could not get secret data from provider');
     const getStatus = vi.fn().mockResolvedValue(before);
 
     const result = await waitForSyncOutcome(getStatus, {
@@ -169,7 +172,10 @@ describe('waitForSyncOutcome, editing an import that already has a status', () =
       ignoreUntilChanged: before,
     });
 
-    expect(describeSyncOutcome('my-import', result, 'updated').settled).toBe(false);
+    const outcome = describeSyncOutcome('my-import', result, 'updated', before);
+    expect(outcome.synced).toBe(false);
+    expect(outcome.message).toContain('has not changed');
+    expect(outcome.message).toContain('could not get secret data from provider');
   });
 
   // Creation has no previous status, so nothing is skipped.
@@ -253,18 +259,13 @@ describe('waitForSyncOutcome, a reconcile that repeats the same message', () => 
     expect(describeSyncOutcome('my-import', result, 'updated').synced).toBe(true);
   });
 
-  // Nothing moving at all still reports nothing, so a status untouched by the
-  // edit is never presented as its result.
-  it('still reports nothing when the status never moves', async () => {
+  // statusMoved is what tells the caller the difference, so it must say false
+  // for a status that never budged and true as soon as anything differs.
+  it('reports whether the status ever moved', async () => {
     const before = detail('Error', 'boom');
-    const getStatus = vi.fn().mockResolvedValue(before);
-
-    const result = await waitForSyncOutcome(getStatus, {
-      pollMs: 1,
-      timeoutMs: 3,
-      sleep: noSleep,
-      ignoreUntilChanged: before,
-    });
-    expect(result).toBeNull();
+    expect(statusMoved(before, before)).toBe(false);
+    expect(statusMoved(detail('Synced'), before)).toBe(true);
+    expect(statusMoved(null, before)).toBe(false);
+    expect(statusMoved(before, null)).toBe(true);
   });
 });
