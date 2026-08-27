@@ -128,3 +128,81 @@ describe('waitForSyncOutcome', () => {
     expect(getStatus).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('waitForSyncOutcome, editing an import that already has a status', () => {
+  const noSleep = () => Promise.resolve();
+
+  // The regression this guards. On an update the object already exists and its
+  // status is already settled, so the first read returns the state from BEFORE
+  // the edit. Taken as the answer, correcting a broken import reported the
+  // failure it had just fixed.
+  it('does not take the pre-edit status for the result of the edit', async () => {
+    const before = detail('Error', 'could not get secret data from provider');
+    const after = detail('Synced');
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+
+    const result = await waitForSyncOutcome(getStatus, {
+      pollMs: 1,
+      timeoutMs: 100,
+      sleep: noSleep,
+      ignoreUntilChanged: before,
+    });
+
+    expect(result?.status).toBe('Synced');
+    expect(describeSyncOutcome('my-import', result, 'updated').synced).toBe(true);
+  });
+
+  // A status that never moves must not be reported as the edit's outcome
+  // either: unsettled is the honest answer, and the row carries the rest.
+  it('reports nothing settled when the status never moves', async () => {
+    const before = detail('Error', 'boom');
+    const getStatus = vi.fn().mockResolvedValue(before);
+
+    const result = await waitForSyncOutcome(getStatus, {
+      pollMs: 1,
+      timeoutMs: 3,
+      sleep: noSleep,
+      ignoreUntilChanged: before,
+    });
+
+    expect(describeSyncOutcome('my-import', result, 'updated').settled).toBe(false);
+  });
+
+  // Creation has no previous status, so nothing is skipped.
+  it('still settles immediately when there is no previous status', async () => {
+    const getStatus = vi.fn().mockResolvedValue(detail('Synced'));
+    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 100, sleep: noSleep });
+    expect(result?.status).toBe('Synced');
+    expect(getStatus).toHaveBeenCalledTimes(1);
+  });
+
+  // A failing read is not a verdict, so a status already seen must survive it.
+  it('keeps the last status it managed to read', async () => {
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce(detail('Pending'))
+      .mockRejectedValue(new Error('network'));
+
+    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 4, sleep: noSleep });
+    expect(result?.status).toBe('Pending');
+  });
+});
+
+describe('describeSyncOutcome, wording and punctuation', () => {
+  it('says updated for an update and created for a creation', () => {
+    expect(describeSyncOutcome('x', detail('Synced'), 'updated').message).toContain('updated');
+    expect(describeSyncOutcome('x', detail('Synced'), 'updated').message).not.toContain('created');
+    expect(describeSyncOutcome('x', detail('Error', 'e'), 'updated').message).toContain('was updated');
+  });
+
+  // The controller's message sometimes ends with a period of its own.
+  it('does not double the punctuation after the controller message', () => {
+    const m = describeSyncOutcome('x', detail('Error', 'connection timed out.'), 'created').message;
+    expect(m).not.toContain('..');
+    expect(m).toContain('connection timed out. Check');
+  });
+});
