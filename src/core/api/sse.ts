@@ -13,6 +13,22 @@ export interface ListEvent<T> {
 }
 
 /**
+ * A failure the server itself described, as opposed to a connection that merely
+ * stopped.
+ *
+ * The distinction is not cosmetic. A caller that reports every error to the
+ * user would raise a failure every time a proxy cuts an idle stream, or every
+ * time a job finishes. Only this type means something actually went wrong, and
+ * the log viewers show only this one.
+ */
+export class StreamServerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StreamServerError';
+  }
+}
+
+/**
  * Apply a watch-style ADDED/MODIFIED/DELETED event to an immutable list,
  * upserting by key. Shared by every SSE-backed list in the app.
  */
@@ -255,7 +271,7 @@ export function subscribeTextStream(url: string, subscriber: StreamSubscriber<st
       // The server reports a failure it has already started answering as a
       // named event, so the reason reaches the screen instead of a blank pane.
       if (event.type === 'error') {
-        subscriber.error?.(new Error(event.data || 'log stream interrupted'));
+        subscriber.error?.(new StreamServerError(event.data || 'log stream interrupted'));
         return false;
       }
       if (event.type === 'message') {

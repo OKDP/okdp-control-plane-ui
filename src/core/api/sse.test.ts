@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { subscribeJsonStream, subscribeTextStream, applyListEvent } from './sse';
+import {
+  subscribeJsonStream,
+  subscribeTextStream,
+  applyListEvent,
+  StreamServerError,
+} from './sse';
 import { authToken, reportUnauthorized } from './http';
 
 vi.mock('./http', () => ({
@@ -177,6 +182,8 @@ describe('subscribeJsonStream', () => {
     expect(complete).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledTimes(1);
     expect((error.mock.calls[0][0] as Error).message).toContain('interrupted');
+    // A drop is not a failure the server described, and must not read as one.
+    expect(error.mock.calls[0][0]).not.toBeInstanceOf(StreamServerError);
     stop();
   });
 
@@ -286,6 +293,9 @@ describe('subscribeTextStream', () => {
 
     expect(error).toHaveBeenCalledTimes(1);
     expect((error.mock.calls[0][0] as Error).message).toBe('pod is gone');
+    // Typed, so a caller can show a failure the server described and stay quiet
+    // about a connection that merely stopped.
+    expect(error.mock.calls[0][0]).toBeInstanceOf(StreamServerError);
     expect(next).not.toHaveBeenCalled();
     stop();
   });
