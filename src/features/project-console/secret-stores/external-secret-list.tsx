@@ -28,7 +28,14 @@ import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { useRowActionsMenu } from '../../../shared/hooks/use-row-actions-menu';
 import { k8sNameError } from '../../../shared/utils/k8s-names';
 import { DialogFooter } from '../../../shared/components/dialog-footer';
-import { describeCheck, describeCheckFailure, type CheckDisplay } from './remote-key-check';
+import {
+  describeCheck,
+  describeCheckFailure,
+  applyCheckResults,
+  groupByRemoteRef,
+  CHECKING,
+  type CheckDisplay,
+} from './remote-key-check';
 import { describeSyncOutcome, waitForSyncOutcome } from './sync-outcome';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 
@@ -102,6 +109,9 @@ export function ExternalSecretList() {
   // so a stale green never sits under a key that has since been edited.
   const [keyChecks, setKeyChecks] = useState<Record<number, CheckDisplay>>({});
   const [checkingKeys, setCheckingKeys] = useState(false);
+  // The status the import carried before an edit. Kept so the wait that
+  // follows does not read it as the outcome of the edit itself.
+  const [statusBeforeEdit, setStatusBeforeEdit] = useState<ExternalSecretStatusDetail | null>(null);
 
   const {
     items: secrets,
@@ -162,6 +172,7 @@ export function ExternalSecretList() {
     setShowAdvanced(false);
     setDataMappings([EMPTY_MAPPING()]);
     setKeyChecks({});
+    setStatusBeforeEdit(null);
   };
 
   const showCreateDialog = () => {
@@ -188,6 +199,12 @@ export function ExternalSecretList() {
         : [EMPTY_MAPPING()],
     );
     setKeyChecks({});
+    setStatusBeforeEdit({
+      status: es.status,
+      conditions: [],
+      lastSyncedAt: es.lastSyncedAt,
+      lastError: es.lastError,
+    });
     setDialogVisible(true);
   };
 
@@ -231,22 +248,35 @@ export function ExternalSecretList() {
     if (rows.length === 0) return;
 
     setCheckingKeys(true);
-    setKeyChecks({});
+    // Each row is marked as being checked up front, and a result is only kept
+    // for a row that still carries that mark. Without it an edit made while
+    // the requests are in flight would have its entry deleted by patchMapping
+    // and then put back by the answer, showing a verdict on a value that has
+    // since changed.
+    setKeyChecks(Object.fromEntries(rows.map(({ index }) => [index, CHECKING])));
+
+    // One request per distinct remote reference rather than per row: rows
+    // sharing one share an answer, and each request costs the server a
+    // credentials read and a Vault round trip.
+    const groups = groupByRemoteRef(
+      rows.map(({ m, index }) => ({ index, key: m.remoteRef.key, property: m.remoteRef.property || undefined })),
+    );
+
     Promise.all(
-      rows.map(({ m, index }) =>
+      groups.map((g) =>
         externalSecretApi
           .checkRemoteKey(projectId, {
             secretStoreRef: selectedStoreRefName,
-            remoteRef: { key: m.remoteRef.key, property: m.remoteRef.property || undefined },
+            remoteRef: { key: g.key, property: g.property },
           })
-          .then((result) => ({ index, display: describeCheck(result) }))
+          .then((result) => ({ indexes: g.indexes, display: describeCheck(result) }))
           .catch((err) => ({
-            index,
+            indexes: g.indexes,
             display: describeCheckFailure(apiErrorMessage(err, 'The key could not be checked')),
           })),
       ),
     ).then((results) => {
-      setKeyChecks(Object.fromEntries(results.map((r) => [r.index, r.display])));
+      setKeyChecks((current) => applyCheckResults(current, results));
       setCheckingKeys(false);
     });
   };
@@ -274,7 +304,18 @@ export function ExternalSecretList() {
       ? externalSecretApi.update(projectId, secretName, request)
       : externalSecretApi.create(projectId, request);
 
+    const wasEdit = editMode;
+    const previous = statusBeforeEdit;
+
     save
+      // Scoped to the write itself. Covering the wait as well reported a
+      // failure to create for an object that was created, and the caller then
+      // tried again and hit a conflict.
+      .catch((err) => {
+        setSaving(false);
+        showError(apiErrorMessage(err, `Failed to ${wasEdit ? 'update' : 'create'} external secret`));
+        throw err;
+      })
       .then(async () => {
         setSaving(false);
         setDialogVisible(false);
@@ -282,27 +323,28 @@ export function ExternalSecretList() {
 
         // A 201 says the object was written, not that it can read its key: the
         // controller finds that out on its first sync. Announcing success on
-        // the 201 alone is what let a broken import look created and fine.
+        // the write alone is what let a broken import look created and fine.
         // This is also the only honest report for a store the key check cannot
         // question ahead of time.
-        const detail = await waitForSyncOutcome(() =>
-          externalSecretApi.getStatus(projectId, secretName),
+        //
+        // On an update the previous status is already settled, so it is handed
+        // over to be skipped: taken as the answer, it would report the failure
+        // the edit has just fixed.
+        const detail = await waitForSyncOutcome(
+          () => externalSecretApi.getStatus(projectId, secretName),
+          { ignoreUntilChanged: previous },
         );
-        const outcome = describeSyncOutcome(secretName, detail);
+        const outcome = describeSyncOutcome(secretName, detail, wasEdit ? 'updated' : 'created');
         loadSecrets();
         if (outcome.settled && !outcome.synced) {
           showError(outcome.message);
-        } else if (editMode) {
-          showSuccess(`External secret "${secretName}" updated successfully`);
         } else {
           showSuccess(outcome.message);
         }
       })
-      .catch((err) => {
-        setSaving(false);
-        showError(
-          apiErrorMessage(err, `Failed to ${editMode ? 'update' : 'create'} external secret`),
-        );
+      .catch(() => {
+        // Already reported above, or raised by the wait after a successful
+        // write. Either way the object's row now carries the truth.
       });
   };
 

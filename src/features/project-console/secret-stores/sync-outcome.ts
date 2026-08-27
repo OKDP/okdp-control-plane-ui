@@ -37,27 +37,55 @@ export interface SyncOutcome {
 export function describeSyncOutcome(
   name: string,
   detail: ExternalSecretStatusDetail | null,
+  /** What just happened, so an update is never reported as a creation. */
+  action: 'created' | 'updated' = 'created',
 ): SyncOutcome {
   if (!detail || !isSettled(detail.status)) {
     return {
       settled: false,
       synced: false,
-      message: `Import "${name}" created. It has not synced yet, its row will say when it does.`,
+      message: `Import "${name}" ${action}. It has not synced yet, its row will say when it does.`,
     };
   }
   if (detail.status === 'Synced') {
-    return { settled: true, synced: true, message: `Import "${name}" created and synced.` };
+    return { settled: true, synced: true, message: `Import "${name}" ${action} and synced.` };
   }
   // The controller's own message is short and rarely names the cause, so the
   // sentence points at the field that does.
-  const reason = detail.lastError?.trim();
+  // The controller's message sometimes ends with a period of its own, which
+  // would render as "timeout.. Check" once this sentence adds its own.
+  const reason = detail.lastError?.trim().replace(/\.+$/, '');
   return {
     settled: true,
     synced: false,
     message: reason
-      ? `Import "${name}" was created but could not sync: ${reason}. Check the remote key.`
-      : `Import "${name}" was created but could not sync. Check the remote key.`,
+      ? `Import "${name}" was ${action} but could not sync: ${reason}. Check the remote key.`
+      : `Import "${name}" was ${action} but could not sync. Check the remote key.`,
   };
+}
+
+/**
+ * Whether a status is indistinguishable from one seen before the operation.
+ *
+ * The transition timestamp is what moves when the controller acts, so two
+ * readings that agree on it describe the same attempt.
+ */
+/** Same comparison, tolerating a null left-hand side at the end of the wait. */
+function isSameStatus2(
+  a: ExternalSecretStatusDetail | null,
+  b: ExternalSecretStatusDetail | null | undefined,
+): boolean {
+  return a !== null && isSameStatus(a, b);
+}
+
+function isSameStatus(
+  a: ExternalSecretStatusDetail,
+  b: ExternalSecretStatusDetail | null | undefined,
+): boolean {
+  if (!b) return false;
+  return (
+    a.status === b.status && a.lastSyncedAt === b.lastSyncedAt && a.lastError === b.lastError
+  );
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -75,7 +103,21 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
  */
 export async function waitForSyncOutcome(
   getStatus: () => Promise<ExternalSecretStatusDetail>,
-  options: { pollMs?: number; timeoutMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+  options: {
+    pollMs?: number;
+    timeoutMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+    /**
+     * A status already settled before the call, which must not be mistaken for
+     * the result of what just happened.
+     *
+     * On an update the object already exists and its status is already Synced
+     * or Error, so the first read returns the state from BEFORE the edit.
+     * Taken as the answer, correcting a broken import reports the failure it
+     * has just fixed. Passing the previous status makes the wait skip past it.
+     */
+    ignoreUntilChanged?: ExternalSecretStatusDetail | null;
+  } = {},
 ): Promise<ExternalSecretStatusDetail | null> {
   const pollMs = options.pollMs ?? SYNC_POLL_MS;
   const timeoutMs = options.timeoutMs ?? SYNC_TIMEOUT_MS;
@@ -87,11 +129,16 @@ export async function waitForSyncOutcome(
   for (let i = 0; i < attempts; i++) {
     try {
       last = await getStatus();
-      if (isSettled(last.status)) return last;
+      if (isSettled(last.status) && !isSameStatus(last, options.ignoreUntilChanged)) return last;
     } catch {
-      last = null;
+      // Deliberately keeps `last`: a failing read is not a verdict, and
+      // forgetting a status already seen would report less than was known.
     }
     if (i < attempts - 1) await sleep(pollMs);
   }
+  // Skipping the previous status inside the loop is not enough: handing it back
+  // here would report the pre-edit failure all the same, just later. Nothing
+  // new was seen, so nothing is the honest answer.
+  if (isSameStatus2(last, options.ignoreUntilChanged)) return null;
   return last;
 }
