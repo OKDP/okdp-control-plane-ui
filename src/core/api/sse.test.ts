@@ -54,15 +54,32 @@ afterEach(() => {
 });
 
 describe('applyListEvent', () => {
-  const key = (x: { id: string }) => x.id;
+  const key = (x: { id: string; v?: number }) => x.id;
 
-  it('adds, replaces and removes by key', () => {
-    let list = applyListEvent<{ id: string }>([], { type: 'ADDED', object: { id: 'a' } }, key);
+  it('appends an object it has never seen', () => {
+    expect(applyListEvent([], { type: 'ADDED', object: { id: 'a' } }, key)).toEqual([{ id: 'a' }]);
+  });
+
+  it('replaces in place when the key is already there', () => {
+    const list = [{ id: 'a', v: 1 }, { id: 'b' }];
+    expect(applyListEvent(list, { type: 'MODIFIED', object: { id: 'a', v: 2 } }, key)).toEqual([
+      { id: 'a', v: 2 },
+      { id: 'b' },
+    ]);
+  });
+
+  it('removes on DELETED and ignores an unknown key', () => {
+    const list = [{ id: 'a' }, { id: 'b' }];
+    expect(applyListEvent(list, { type: 'DELETED', object: { id: 'a' } }, key)).toEqual([
+      { id: 'b' },
+    ]);
+    expect(applyListEvent(list, { type: 'DELETED', object: { id: 'z' } }, key)).toBe(list);
+  });
+
+  it('leaves the input untouched', () => {
+    const list = [{ id: 'a' }];
+    applyListEvent(list, { type: 'ADDED', object: { id: 'b' } }, key);
     expect(list).toEqual([{ id: 'a' }]);
-    list = applyListEvent(list, { type: 'MODIFIED', object: { id: 'a' } }, key);
-    expect(list).toHaveLength(1);
-    list = applyListEvent(list, { type: 'DELETED', object: { id: 'a' } }, key);
-    expect(list).toEqual([]);
   });
 });
 
@@ -298,6 +315,51 @@ describe('subscribeTextStream', () => {
     expect(error.mock.calls[0][0]).toBeInstanceOf(StreamServerError);
     expect(next).not.toHaveBeenCalled();
     stop();
+  });
+
+  // A job that finishes ends its log stream. Reported as a failure, every
+  // successful run would raise one on the way out.
+  it('does not raise a server failure when the stream merely ends', async () => {
+    const s = openBody();
+    fetchMock.mockResolvedValue(respondWith(s.body));
+    const error = vi.fn();
+    const complete = vi.fn();
+
+    const stop = subscribeTextStream('/logs', { next: vi.fn(), error, complete });
+    await settle();
+    s.send('data: last line\n\n');
+    await settle();
+    s.close();
+    await settle();
+
+    expect(error).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  // However it ends, the caller is told once, so a viewer never waits on a
+  // stream that has already stopped.
+  it('always tells the caller the stream ended, one way or the other', async () => {
+    for (const ending of ['close', 'server-error', 'transport'] as const) {
+      const s = openBody();
+      fetchMock.mockReset();
+      if (ending === 'transport') {
+        fetchMock.mockRejectedValue(new Error('network down'));
+      } else {
+        fetchMock.mockResolvedValue(respondWith(s.body));
+      }
+      const error = vi.fn();
+      const complete = vi.fn();
+
+      const stop = subscribeTextStream('/logs', { next: vi.fn(), error, complete });
+      await settle();
+      if (ending === 'close') s.close();
+      if (ending === 'server-error') s.send('event: error\ndata: boom\n\n');
+      await settle();
+
+      expect(error.mock.calls.length + complete.mock.calls.length).toBe(1);
+      stop();
+    }
   });
 
   // Following a log that ended and reopening it would replay it from the top,
