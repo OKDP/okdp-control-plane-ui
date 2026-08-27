@@ -39,7 +39,23 @@ export function describeSyncOutcome(
   detail: ExternalSecretStatusDetail | null,
   /** What just happened, so an update is never reported as a creation. */
   action: 'created' | 'updated' = 'created',
+  /** The status before the write, when there was one. */
+  previous?: ExternalSecretStatusDetail | null,
 ): SyncOutcome {
+  // Unchanged and already failing: the controller either has not retried yet or
+  // retried and failed the same way, and nothing in the status tells the two
+  // apart. Saying it has not synced would hide a failure the user is looking
+  // at; naming it is true either way.
+  if (detail && previous && !statusMoved(detail, previous) && detail.status === 'Error') {
+    const reason = detail.lastError?.trim().replace(/\.+$/, '');
+    return {
+      settled: true,
+      synced: false,
+      message: reason
+        ? `Import "${name}" ${action}. Its status has not changed and still reports: ${reason}. Check the remote key.`
+        : `Import "${name}" ${action}. Its status has not changed and still reports a failure. Check the remote key.`,
+    };
+  }
   if (!detail || !isSettled(detail.status)) {
     return {
       settled: false,
@@ -70,14 +86,6 @@ export function describeSyncOutcome(
  * The transition timestamp is what moves when the controller acts, so two
  * readings that agree on it describe the same attempt.
  */
-/** Same comparison, tolerating a null left-hand side at the end of the wait. */
-function isSameStatus2(
-  a: ExternalSecretStatusDetail | null,
-  b: ExternalSecretStatusDetail | null | undefined,
-): boolean {
-  return a !== null && isSameStatus(a, b);
-}
-
 function isSameStatus(
   a: ExternalSecretStatusDetail,
   b: ExternalSecretStatusDetail | null | undefined,
@@ -146,6 +154,20 @@ export async function waitForSyncOutcome(
   // Skipping the previous status inside the loop is not enough: handing it back
   // here would report the pre-edit failure all the same, just later. Nothing
   // new was seen, so nothing is the honest answer.
-  if (!moved && isSameStatus2(last, options.ignoreUntilChanged)) return null;
   return last;
+}
+
+/**
+ * Whether the wait ever saw anything other than the status handed to it.
+ *
+ * external-secrets does not move refreshTime on a failed sync, so a reconcile
+ * that fails exactly as before is indistinguishable from one that has not run.
+ * Rather than guess, the caller is told the status never moved and says so.
+ */
+export function statusMoved(
+  observed: ExternalSecretStatusDetail | null,
+  previous: ExternalSecretStatusDetail | null | undefined,
+): boolean {
+  if (!observed) return false;
+  return !isSameStatus(observed, previous);
 }

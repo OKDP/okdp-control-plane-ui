@@ -344,7 +344,7 @@ export function ExternalSecretList() {
           () => externalSecretApi.getStatus(projectId, secretName),
           { ignoreUntilChanged: previous },
         );
-        const outcome = describeSyncOutcome(secretName, detail, wasEdit ? 'updated' : 'created');
+        const outcome = describeSyncOutcome(secretName, detail, wasEdit ? 'updated' : 'created', previous);
         loadSecrets();
         if (outcome.settled && !outcome.synced) {
           showError(outcome.message);
