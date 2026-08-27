@@ -1,11 +1,40 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isSettled, describeSyncOutcome, waitForSyncOutcome, statusMoved } from './sync-outcome';
+import { logger } from '../../../core/services/logger';
 import type { ExternalSecretStatusDetail } from '../../../core/api/external-secret-api';
 
 const detail = (
   status: ExternalSecretStatusDetail['status'],
   lastError?: string,
 ): ExternalSecretStatusDetail => ({ status, conditions: [], lastError });
+
+/**
+ * A clock the wait drives itself: sleeping advances it instead of waiting on
+ * it, so a deadline written in milliseconds is reached in no time at all. The
+ * wait bounds itself on this clock, so handing it a sleep that never advances
+ * anything would leave it turning until the real one caught up.
+ */
+function fakeClock() {
+  let t = 0;
+  return {
+    now: () => t,
+    sleep: (ms: number) => {
+      t += ms;
+      return Promise.resolve();
+    },
+  };
+}
+
+// A failing status read is expected in several of these, and its warning is
+// what the code under test is meant to emit. Silenced here so the run stays
+// readable; the test that cares asserts on the spy.
+let warned: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  warned = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+});
+afterEach(() => {
+  warned.mockRestore();
+});
 
 describe('isSettled', () => {
   it('waits past the states the controller passes through before trying', () => {
@@ -59,8 +88,6 @@ describe('describeSyncOutcome', () => {
 });
 
 describe('waitForSyncOutcome', () => {
-  const noSleep = () => Promise.resolve();
-
   it('stops as soon as the status settles', async () => {
     const getStatus = vi
       .fn()
@@ -70,7 +97,7 @@ describe('waitForSyncOutcome', () => {
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 100,
-      sleep: noSleep,
+      ...fakeClock(),
     });
 
     expect(result?.status).toBe('Synced');
@@ -85,11 +112,13 @@ describe('waitForSyncOutcome', () => {
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 10,
       timeoutMs: 30,
-      sleep: noSleep,
+      ...fakeClock(),
     });
 
     expect(result?.status).toBe('Pending');
-    expect(getStatus).toHaveBeenCalledTimes(3);
+    // Four, not three: the wait is bounded by the clock, so it reads once more
+    // when the deadline itself falls on a poll instead of stopping short of it.
+    expect(getStatus).toHaveBeenCalledTimes(4);
   });
 
   // The status read can race the object's creation. A failure there is not a
@@ -103,7 +132,7 @@ describe('waitForSyncOutcome', () => {
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 100,
-      sleep: noSleep,
+      ...fakeClock(),
     });
 
     expect(result?.status).toBe('Synced');
@@ -115,7 +144,7 @@ describe('waitForSyncOutcome', () => {
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 3,
-      sleep: noSleep,
+      ...fakeClock(),
     });
 
     expect(result).toBeNull();
@@ -124,14 +153,12 @@ describe('waitForSyncOutcome', () => {
 
   it('always asks at least once, whatever the timings say', async () => {
     const getStatus = vi.fn().mockResolvedValue(detail('Pending'));
-    await waitForSyncOutcome(getStatus, { pollMs: 100, timeoutMs: 0, sleep: noSleep });
+    await waitForSyncOutcome(getStatus, { pollMs: 100, timeoutMs: 0, ...fakeClock() });
     expect(getStatus).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('waitForSyncOutcome, editing an import that already has a status', () => {
-  const noSleep = () => Promise.resolve();
-
   // The regression this guards. On an update the object already exists and its
   // status is already settled, so the first read returns the state from BEFORE
   // the edit. Taken as the answer, correcting a broken import reported the
@@ -148,7 +175,7 @@ describe('waitForSyncOutcome, editing an import that already has a status', () =
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 100,
-      sleep: noSleep,
+      ...fakeClock(),
       ignoreUntilChanged: before,
     });
 
@@ -168,7 +195,7 @@ describe('waitForSyncOutcome, editing an import that already has a status', () =
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 3,
-      sleep: noSleep,
+      ...fakeClock(),
       ignoreUntilChanged: before,
     });
 
@@ -181,7 +208,7 @@ describe('waitForSyncOutcome, editing an import that already has a status', () =
   // Creation has no previous status, so nothing is skipped.
   it('still settles immediately when there is no previous status', async () => {
     const getStatus = vi.fn().mockResolvedValue(detail('Synced'));
-    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 100, sleep: noSleep });
+    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 100, ...fakeClock() });
     expect(result?.status).toBe('Synced');
     expect(getStatus).toHaveBeenCalledTimes(1);
   });
@@ -193,7 +220,7 @@ describe('waitForSyncOutcome, editing an import that already has a status', () =
       .mockResolvedValueOnce(detail('Pending'))
       .mockRejectedValue(new Error('network'));
 
-    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 4, sleep: noSleep });
+    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 4, ...fakeClock() });
     expect(result?.status).toBe('Pending');
   });
 });
@@ -214,8 +241,6 @@ describe('describeSyncOutcome, wording and punctuation', () => {
 });
 
 describe('waitForSyncOutcome, a reconcile that repeats the same message', () => {
-  const noSleep = () => Promise.resolve();
-
   // Error(old) then Pending then Error(new) with the same wording: the second
   // Error is indistinguishable from the first by content, so comparing it to
   // the pre-edit status ignored a reconcile that really happened, and the wait
@@ -231,7 +256,7 @@ describe('waitForSyncOutcome, a reconcile that repeats the same message', () => 
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 100,
-      sleep: noSleep,
+      ...fakeClock(),
       ignoreUntilChanged: before,
     });
 
@@ -253,7 +278,7 @@ describe('waitForSyncOutcome, a reconcile that repeats the same message', () => 
     const result = await waitForSyncOutcome(getStatus, {
       pollMs: 1,
       timeoutMs: 100,
-      sleep: noSleep,
+      ...fakeClock(),
       ignoreUntilChanged: before,
     });
     expect(describeSyncOutcome('my-import', result, 'updated').synced).toBe(true);
@@ -302,5 +327,45 @@ describe('describeSyncOutcome, an unchanged status is never a confirmation', () 
     const o = describeSyncOutcome('my-import', before, 'updated', before);
     expect(o.synced).toBe(false);
     expect(o.message).toContain('has not changed');
+  });
+});
+
+describe('waitForSyncOutcome, what the wait costs', () => {
+  // The regression this guards. The wait counted attempts, so the reads were
+  // free: ten of them at one second each plus nine pauses of 1.5s came to 23.5s
+  // for a figure that announced 15, and 33.5s at two seconds of latency.
+  it('bounds itself on the clock, reads included', async () => {
+    let t = 0;
+    const latencyMs = 1000;
+    const getStatus = vi.fn().mockImplementation(() => {
+      t += latencyMs;
+      return Promise.resolve(detail('Pending'));
+    });
+
+    await waitForSyncOutcome(getStatus, {
+      pollMs: 1500,
+      timeoutMs: 15000,
+      now: () => t,
+      sleep: (ms: number) => {
+        t += ms;
+        return Promise.resolve();
+      },
+    });
+
+    // No read starts past the deadline, so the wait overruns by at most the one
+    // already in flight when it arrives.
+    expect(t).toBeLessThanOrEqual(15000 + latencyMs);
+  });
+
+  // A read that fails for a reason of its own reads on screen exactly like an
+  // import that has not synced yet, so it must not go by in silence.
+  it('does not swallow a failing read without a word', async () => {
+    const getStatus = vi.fn().mockRejectedValue(new TypeError('getStatus is not a function'));
+
+    const result = await waitForSyncOutcome(getStatus, { pollMs: 1, timeoutMs: 1, ...fakeClock() });
+
+    expect(result).toBeNull();
+    expect(warned).toHaveBeenCalled();
+    expect(warned.mock.calls[0][1]).toBeInstanceOf(TypeError);
   });
 });
