@@ -185,9 +185,11 @@ export async function waitForSyncOutcome(
     if (left <= 0) break;
     await sleep(Math.min(pollMs, left));
   }
-  // Skipping the previous status inside the loop is not enough: handing it back
-  // here would report the pre-edit failure all the same, just later. Nothing
-  // new was seen, so nothing is the honest answer.
+  // The last reading, and not nothing: on a creation it is the only answer
+  // there is, and on an update describeSyncOutcome is handed the previous
+  // status as well and refuses to call one that has not moved a confirmation.
+  // Dropping it here would throw away a status that really was read, and the
+  // dialog would say less than it knew.
   return last;
 }
 
