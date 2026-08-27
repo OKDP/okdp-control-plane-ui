@@ -154,7 +154,14 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
         if (stopped || controller.signal.aborted) {
           return;
         }
-        logger.error(`${label} error`, err);
+        // A drop on a stream that reopens is expected traffic, not a fault: a
+        // proxy will cut an idle stream on its own, and this reconnects. Only a
+        // stream that gives up here is an error.
+        if (handlers.reconnect) {
+          logger.warn(`${label} dropped, reopening`, err);
+        } else {
+          logger.error(`${label} failed`, err);
+        }
         handlers.onFailure(err);
         if (!handlers.reconnect) {
           return;
