@@ -160,18 +160,53 @@ describe('subscribeJsonStream', () => {
     stop();
   });
 
-  it('reports completion when the server closes the stream', async () => {
+  // complete is terminal. A stream that reopens and keeps emitting after it
+  // would break the contract every subscriber is written against, so a drop it
+  // means to recover from is reported as the interruption it is.
+  it('reports an interruption, not a completion, when it means to reopen', async () => {
     const s = openBody();
     fetchMock.mockResolvedValue(respondWith(s.body));
     const complete = vi.fn();
+    const error = vi.fn();
 
-    const stop = subscribeJsonStream('/api/projects/stream', { next: vi.fn(), complete });
+    const stop = subscribeJsonStream('/api/projects/stream', { next: vi.fn(), complete, error });
     await settle();
     s.close();
     await settle();
 
-    expect(complete).toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect((error.mock.calls[0][0] as Error).message).toContain('interrupted');
     stop();
+  });
+
+  // And it does reopen, rather than reporting a fault and giving up.
+  it('reopens the stream after the server drops it', async () => {
+    const first = openBody();
+    const second = openBody();
+    fetchMock
+      .mockResolvedValueOnce(respondWith(first.body))
+      .mockResolvedValueOnce(respondWith(second.body));
+    const next = vi.fn();
+
+    vi.useFakeTimers();
+    try {
+      const stop = subscribeJsonStream<{ n: number }>('/api/projects/stream', { next });
+      await vi.advanceTimersByTimeAsync(1);
+      first.close();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      second.send('data: {"n":42}\n\n');
+      await vi.advanceTimersByTimeAsync(1);
+      expect(next).toHaveBeenCalledWith({ n: 42 });
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

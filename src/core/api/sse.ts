@@ -82,7 +82,7 @@ function decodeFrame(frame: string): StreamEvent | null {
 interface StreamHandlers {
   /** Called for every event the server sends. Returning false ends the stream. */
   onEvent: (event: StreamEvent) => boolean;
-  /** The server closed the stream of its own accord. */
+  /** The server closed the stream, and it will not be reopened. */
   onClose: () => void;
   /** The stream could not be read, or could not be opened. */
   onFailure: (err: unknown) => void;
@@ -139,11 +139,17 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
         if (stopped || ended) {
           return;
         }
-        // The server closed the stream of its own accord.
-        handlers.onClose();
+        // The server closed the stream of its own accord. On a stream that
+        // reopens, that is an interruption and not an ending: complete is a
+        // terminal signal, and reporting one before emitting again would break
+        // the contract the subscribers are written against. EventSource drew
+        // the same line, raising an error while it still meant to reconnect and
+        // completing only once it had given up for good.
         if (!handlers.reconnect) {
+          handlers.onClose();
           return;
         }
+        handlers.onFailure(new Error(`${label} was interrupted, reopening`));
       } catch (err) {
         if (stopped || controller.signal.aborted) {
           return;
