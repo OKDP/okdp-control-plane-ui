@@ -130,3 +130,44 @@ describe('useLogBatch, bounded buffer', () => {
     expect(onFlush.mock.calls[0][0]).toHaveLength(300);
   });
 });
+
+describe('useLogBatch, the cost of staying bounded', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // splice moves the whole array, so trimming one line at a time cost the cap
+  // on every push past it and turned a chatty driver into the freeze this hook
+  // exists to prevent. The buffer may overshoot between trims; what reaches the
+  // caller is still capped.
+  it('hands over no more than the cap however far the buffer overshot', () => {
+    const onFlush = vi.fn();
+    const { result } = renderHook(() => useLogBatch(onFlush, 100));
+
+    act(() => {
+      for (let i = 0; i < 5000; i++) result.current.push(`line ${i}`);
+    });
+    act(() => vi.advanceTimersByTime(LOG_FLUSH_MS));
+
+    const batch = onFlush.mock.calls[0][0];
+    expect(batch).toHaveLength(100);
+    expect(batch[batch.length - 1]).toBe('line 4999');
+    expect(batch[0]).toBe('line 4900');
+  });
+
+  // The trimming must not run on every line: a burst well past the cap is
+  // allowed to sit in the buffer until it is worth moving.
+  it('does not trim on every line past the cap', () => {
+    const onFlush = vi.fn();
+    const { result } = renderHook(() => useLogBatch(onFlush, 100));
+
+    const spliced = vi.spyOn(Array.prototype, 'splice');
+    act(() => {
+      for (let i = 0; i < 1000; i++) result.current.push(`line ${i}`);
+    });
+    const calls = spliced.mock.calls.length;
+    spliced.mockRestore();
+
+    // One trim per half-cap of overshoot at worst, nowhere near one per line.
+    expect(calls).toBeLessThan(50);
+  });
+});

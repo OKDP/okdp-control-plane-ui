@@ -31,12 +31,19 @@ export function useLogBatch(onFlush: (lines: string[]) => void, cap?: number): L
   // batch on every render.
   const onFlushRef = useRef(onFlush);
   onFlushRef.current = onFlush;
+  const capRef = useRef(cap);
+  capRef.current = cap;
 
   const flush = useCallback(() => {
     clearTimeout(timerRef.current);
     timerRef.current = undefined;
-    const batch = pendingRef.current;
+    let batch = pendingRef.current;
     pendingRef.current = [];
+    // The buffer is allowed to overshoot between trims, so the excess is
+    // dropped here instead. The newest lines are the ones worth keeping.
+    if (capRef.current !== undefined && batch.length > capRef.current) {
+      batch = batch.slice(batch.length - capRef.current);
+    }
     if (batch.length > 0) onFlushRef.current(batch);
   }, []);
 
@@ -46,8 +53,14 @@ export function useLogBatch(onFlush: (lines: string[]) => void, cap?: number): L
       // A background tab throttles setTimeout to a minute, so a chatty stream
       // would pile up lines the flush is about to discard anyway. Trimming
       // here keeps the buffer bounded whatever the browser does with timers.
-      if (cap !== undefined && pendingRef.current.length > cap) {
-        pendingRef.current.splice(0, pendingRef.current.length - cap);
+      //
+      // Trimmed in blocks rather than on every line past the cap: splice moves
+      // the whole array, so trimming one line at a time costs the cap on each
+      // push and turns a chatty driver into the freeze this hook exists to
+      // prevent. Letting it overshoot by half amortises that to a constant.
+      const pending = pendingRef.current;
+      if (cap !== undefined && pending.length > cap + Math.ceil(cap / 2)) {
+        pending.splice(0, pending.length - cap);
       }
       if (timerRef.current === undefined) {
         timerRef.current = setTimeout(flush, LOG_FLUSH_MS);
