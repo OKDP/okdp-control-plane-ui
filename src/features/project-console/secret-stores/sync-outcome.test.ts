@@ -206,3 +206,65 @@ describe('describeSyncOutcome, wording and punctuation', () => {
     expect(m).toContain('connection timed out. Check');
   });
 });
+
+describe('waitForSyncOutcome, a reconcile that repeats the same message', () => {
+  const noSleep = () => Promise.resolve();
+
+  // Error(old) then Pending then Error(new) with the same wording: the second
+  // Error is indistinguishable from the first by content, so comparing it to
+  // the pre-edit status ignored a reconcile that really happened, and the wait
+  // reported nothing at all.
+  it('reports the new failure once a transition has been seen', async () => {
+    const before = detail('Error', 'could not get secret data from provider');
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(detail('Pending'))
+      .mockResolvedValueOnce(detail('Error', 'could not get secret data from provider'));
+
+    const result = await waitForSyncOutcome(getStatus, {
+      pollMs: 1,
+      timeoutMs: 100,
+      sleep: noSleep,
+      ignoreUntilChanged: before,
+    });
+
+    expect(result?.status).toBe('Error');
+    const outcome = describeSyncOutcome('my-import', result, 'updated');
+    expect(outcome.settled).toBe(true);
+    expect(outcome.synced).toBe(false);
+  });
+
+  // A transition through Pending that ends in success is reported too.
+  it('reports a success reached after a transition', async () => {
+    const before = detail('Error', 'boom');
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(detail('Pending'))
+      .mockResolvedValueOnce(detail('Synced'));
+
+    const result = await waitForSyncOutcome(getStatus, {
+      pollMs: 1,
+      timeoutMs: 100,
+      sleep: noSleep,
+      ignoreUntilChanged: before,
+    });
+    expect(describeSyncOutcome('my-import', result, 'updated').synced).toBe(true);
+  });
+
+  // Nothing moving at all still reports nothing, so a status untouched by the
+  // edit is never presented as its result.
+  it('still reports nothing when the status never moves', async () => {
+    const before = detail('Error', 'boom');
+    const getStatus = vi.fn().mockResolvedValue(before);
+
+    const result = await waitForSyncOutcome(getStatus, {
+      pollMs: 1,
+      timeoutMs: 3,
+      sleep: noSleep,
+      ignoreUntilChanged: before,
+    });
+    expect(result).toBeNull();
+  });
+});

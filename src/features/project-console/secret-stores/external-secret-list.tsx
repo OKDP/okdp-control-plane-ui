@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -111,7 +111,10 @@ export function ExternalSecretList() {
   const [checkingKeys, setCheckingKeys] = useState(false);
   // The status the import carried before an edit. Kept so the wait that
   // follows does not read it as the outcome of the edit itself.
-  const [statusBeforeEdit, setStatusBeforeEdit] = useState<ExternalSecretStatusDetail | null>(null);
+  // Read by the in-flight checks when their answers come back, so a store
+  // changed meanwhile is seen without re-arming them.
+  const storeAtAnswerRef = useRef(selectedStoreRefName);
+  storeAtAnswerRef.current = selectedStoreRefName;
 
   const {
     items: secrets,
@@ -172,7 +175,6 @@ export function ExternalSecretList() {
     setShowAdvanced(false);
     setDataMappings([EMPTY_MAPPING()]);
     setKeyChecks({});
-    setStatusBeforeEdit(null);
   };
 
   const showCreateDialog = () => {
@@ -199,12 +201,6 @@ export function ExternalSecretList() {
         : [EMPTY_MAPPING()],
     );
     setKeyChecks({});
-    setStatusBeforeEdit({
-      status: es.status,
-      conditions: [],
-      lastSyncedAt: es.lastSyncedAt,
-      lastError: es.lastError,
-    });
     setDialogVisible(true);
   };
 
@@ -247,6 +243,7 @@ export function ExternalSecretList() {
       .filter(({ m }) => m.remoteRef.key.trim() !== '');
     if (rows.length === 0) return;
 
+    const askedOf = selectedStoreRefName;
     setCheckingKeys(true);
     // Each row is marked as being checked up front, and a result is only kept
     // for a row that still carries that mark. Without it an edit made while
@@ -276,6 +273,12 @@ export function ExternalSecretList() {
           })),
       ),
     ).then((results) => {
+      // The store can change while the requests are in flight, and an answer
+      // about the previous one says nothing about this one.
+      if (askedOf !== storeAtAnswerRef.current) {
+        setCheckingKeys(false);
+        return;
+      }
       setKeyChecks((current) => applyCheckResults(current, results));
       setCheckingKeys(false);
     });
@@ -297,15 +300,22 @@ export function ExternalSecretList() {
       })),
   });
 
-  const saveSecret = () => {
+  const saveSecret = async () => {
     setSaving(true);
     const request = buildRequest();
-    const save = editMode
+    const wasEdit = editMode;
+
+    // Read immediately before the write, not when the dialog opened. The list
+    // refreshes every ten seconds, so a status copied at opening can be stale
+    // by the time Save is pressed, and the first read afterwards would differ
+    // from it and be taken as the outcome of an edit it actually precedes.
+    const previous = wasEdit
+      ? await externalSecretApi.getStatus(projectId, secretName).catch(() => null)
+      : null;
+
+    const save = wasEdit
       ? externalSecretApi.update(projectId, secretName, request)
       : externalSecretApi.create(projectId, request);
-
-    const wasEdit = editMode;
-    const previous = statusBeforeEdit;
 
     save
       // Scoped to the write itself. Covering the wait as well reported a
