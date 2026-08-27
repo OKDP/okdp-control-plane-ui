@@ -83,8 +83,11 @@ export function describeSyncOutcome(
 /**
  * Whether a status is indistinguishable from one seen before the operation.
  *
- * The transition timestamp is what moves when the controller acts, so two
- * readings that agree on it describe the same attempt.
+ * Compared on what the controller actually publishes: the phase, the refresh
+ * time behind lastSyncedAt, and the error text. There is no transition counter
+ * to lean on, which is why a failure repeating verbatim cannot be told from one
+ * that has not run again, and why the caller is told the status did not move
+ * rather than given a verdict.
  */
 function isSameStatus(
   a: ExternalSecretStatusDetail,
