@@ -42,6 +42,31 @@ export interface ExternalSecret {
   createdAt?: string;
 }
 
+/**
+ * What the control plane could establish about a remote key, asked before an
+ * import exists.
+ *
+ * `verifiable` carries its own weight: false is not a verdict on the key, it
+ * means the answer is unknown, and must never be shown as a success. A store
+ * using Kubernetes auth answers that way, because the control plane cannot
+ * borrow the store's identity to ask Vault.
+ */
+export interface RemoteKeyCheck {
+  verifiable: boolean;
+  found: boolean;
+  /** Property NAMES the key holds. The server never returns the values. */
+  properties?: string[];
+  message: string;
+}
+
+export interface RemoteKeyCheckRequest {
+  secretStoreRef: string;
+  remoteRef: {
+    key: string;
+    property?: string;
+  };
+}
+
 export interface ExternalSecretRequest {
   name: string;
   secretStoreRef: string;
@@ -77,5 +102,9 @@ export const externalSecretApi = {
 
   getStatus(projectId: string, name: string): Promise<ExternalSecretStatusDetail> {
     return http.get<ExternalSecretStatusDetail>(`${baseUrl(projectId)}/${seg(name)}/status`);
+  },
+
+  checkRemoteKey(projectId: string, request: RemoteKeyCheckRequest): Promise<RemoteKeyCheck> {
+    return http.post<RemoteKeyCheck>(`${baseUrl(projectId)}/check`, request);
   },
 };
