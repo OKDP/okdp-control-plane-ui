@@ -16,7 +16,8 @@ export interface VaultAuthConfig {
   secretId?: string;
   roleId?: string;
   /**
-   * ServiceAccount the store authenticates as under Kubernetes auth.
+   * The name of the ServiceAccount the store authenticates as when it uses the
+   * Kubernetes auth method. Ignored by every other method.
    *
    * Three states, and the server tells them apart:
    * - absent keeps whatever account the store already uses
