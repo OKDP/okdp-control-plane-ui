@@ -124,6 +124,28 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
     controller.abort();
   };
 
+  /**
+   * Waits out the reconnect delay, or gives up the moment the stream is closed.
+   *
+   * A plain timer would keep the loop alive for the whole delay after
+   * unsubscribing, and leave a pending timer behind with it.
+   */
+  const pause = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const signal = controller.signal;
+      if (signal.aborted) {
+        resolve();
+        return;
+      }
+      const done = () => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      signal.addEventListener('abort', done);
+    });
+
   const run = async () => {
     while (!stopped) {
       try {
@@ -185,7 +207,7 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
       }
 
       if (!stopped) {
-        await new Promise((resolve) => setTimeout(resolve, RECONNECT_MS));
+        await pause(RECONNECT_MS);
       }
     }
   };

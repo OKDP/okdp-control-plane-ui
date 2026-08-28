@@ -395,6 +395,31 @@ describe('unsubscribing', () => {
     expect(signal.aborted).toBe(true);
   });
 
+  // The reconnect delay is a timer. Left running after unsubscribing, it keeps
+  // the loop alive for its whole duration and outlives the page that opened it.
+  it('gives up the reconnect delay instead of waiting it out', async () => {
+    const s = openBody();
+    fetchMock.mockResolvedValue(respondWith(s.body));
+
+    vi.useFakeTimers();
+    try {
+      const stop = subscribeJsonStream('/api/projects/stream', { next: vi.fn(), error: vi.fn() });
+      await vi.advanceTimersByTimeAsync(1);
+      s.close();
+      await vi.advanceTimersByTimeAsync(1);
+      // Now waiting on the backoff.
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      stop();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(vi.getTimerCount()).toBe(0);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // A closed stream must not report a failure on its way out: the caller has
   // already moved on, and the message would land on another page.
   it('says nothing after it has been closed', async () => {
