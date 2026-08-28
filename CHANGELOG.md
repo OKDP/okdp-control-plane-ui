@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.8.0](https://github.com/OKDP/okdp-control-plane-ui/compare/v0.7.0...v0.8.0) (2026-08-28)
+
+
+### Features
+
+* **external-secrets:** check a remote key, and say whether the import synced ([8c16343](https://github.com/OKDP/okdp-control-plane-ui/commit/8c163436403ce90700ce832895082db5dd762aca))
+* **secret-stores:** let the form set the Kubernetes ServiceAccount ([#97](https://github.com/OKDP/okdp-control-plane-ui/issues/97)) ([c8a0611](https://github.com/OKDP/okdp-control-plane-ui/commit/c8a06115bf2fe4c54cf1d28bc7d6d68353f8dcce))
+
+
+### Bug Fixes
+
+* **docs:** align the README image tag with the released 0.7.0 ([cef5f96](https://github.com/OKDP/okdp-control-plane-ui/commit/cef5f96fd06b8b7f73eb2caaf9b14aa233792b2c))
+* **external-secrets:** an unchanged status is never a confirmation ([46aa175](https://github.com/OKDP/okdp-control-plane-ui/commit/46aa175f6b6abaa93366f62dd05671991a5fdf1f))
+* **external-secrets:** bound the sync wait on the clock, and say when a read fails ([49aaf07](https://github.com/OKDP/okdp-control-plane-ui/commit/49aaf071d6661128af7f747769ac7ad3d7d72881))
+* **external-secrets:** clear the key verdicts when the store changes ([67d03f4](https://github.com/OKDP/okdp-control-plane-ui/commit/67d03f4a201cee69d5feaaaeb978cd6c8985db16))
+* **external-secrets:** name a failure that has not changed instead of hiding it ([60ea394](https://github.com/OKDP/okdp-control-plane-ui/commit/60ea3943ad8c44016bd17506cc943ed569f8ea8b))
+* **external-secrets:** report the outcome of an edit, not the state before it ([4ebfd07](https://github.com/OKDP/okdp-control-plane-ui/commit/4ebfd070be179a59f1354d6de3be175bd7212bcf))
+* **external-secrets:** tie a key verdict to its store, and read the reference status late ([ce7e0c3](https://github.com/OKDP/okdp-control-plane-ui/commit/ce7e0c35b9ec9aab6def69e21bb5a75ebe610375))
+* **logs:** say when a followed stream stops instead of freezing in silence ([0041667](https://github.com/OKDP/okdp-control-plane-ui/commit/004166717b6e6fe534d142298c86cdf9196988de))
+* **logs:** stop paying the cap on every line once the buffer is full ([af659d6](https://github.com/OKDP/okdp-control-plane-ui/commit/af659d605ce34e760fbbcd98ec857b5a8f47d540))
+* **logs:** stop reporting the end of a stream as a failure ([897a3b8](https://github.com/OKDP/okdp-control-plane-ui/commit/897a3b82b1e56d383c8b2b0382172d6a428befd1))
+* **spark:** batch streamed driver log lines so follow mode stays responsive ([23d07e1](https://github.com/OKDP/okdp-control-plane-ui/commit/23d07e1bcd49e9b98bf2a3ccb832d4b3f4b26b1d))
+* **spark:** bound the pending buffer and surface stream failures ([af0e7ad](https://github.com/OKDP/okdp-control-plane-ui/commit/af0e7ad8f988a80109093f6d092e7ad25dd3f010))
+
+
+### Documentation
+
+* **external-secrets:** describe what the comparison and the ref actually hold ([34770e2](https://github.com/OKDP/okdp-control-plane-ui/commit/34770e268af893851d9e46b04f3c08004c140228))
+* **external-secrets:** say how far ignoreUntilChanged actually reaches ([f7effa2](https://github.com/OKDP/okdp-control-plane-ui/commit/f7effa2699ddfa396d54beaac20d56b5e09174c0))
+* **external-secrets:** the comment on the return said the opposite of the code ([3848b61](https://github.com/OKDP/okdp-control-plane-ui/commit/3848b61265e9f0dd10515c9120a883f4f253acfb))
+
 ## [0.7.0](https://github.com/OKDP/okdp-control-plane-ui/compare/v0.6.0...v0.7.0) (2026-08-22)
 
 
