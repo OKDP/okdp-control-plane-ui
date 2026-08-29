@@ -8,7 +8,7 @@ vi.mock('../../../core/api/external-secret-api', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   externalSecretApi: {
     list: vi.fn(async () => []),
-    checkRemoteRef: vi.fn(() => new Promise(() => undefined)),
+    checkRemoteKey: vi.fn(() => new Promise(() => undefined)),
     getStatus: vi.fn(async () => ({ status: 'Synced', conditions: [] })),
   },
 }));
@@ -66,5 +66,6 @@ describe('the dialog while Check keys is running', () => {
     });
 
     expect(create).toHaveProperty('disabled', true);
+    expect(vi.mocked((await import('../../../core/api/external-secret-api')).externalSecretApi.checkRemoteKey)).toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { PodLogViewer } from './pod-log-viewer';
 import { serviceApi } from '../../../core/api/service-api';
@@ -19,6 +19,7 @@ const pods: Pod[] = [
 let subscriber: StreamSubscriber<string>;
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.mocked(serviceApi.streamPodLogs).mockImplementation(
     (_p: string, _s: string, _pod: string, sub: StreamSubscriber<string>) => {
       subscriber = sub;
@@ -27,15 +28,19 @@ beforeEach(() => {
   );
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 async function renderStreaming() {
   const view = render(
     <PodLogViewer projectId="demo" serviceName="svc" pods={pods} initialPodName="pod-a" />,
   );
   await act(async () => {
     subscriber.next('a first line');
-    await new Promise((r) => setTimeout(r, 150));
+    await vi.advanceTimersByTimeAsync(200);
   });
-  expect(await screen.findByText('streaming')).toBeTruthy();
+  expect(screen.getByText('streaming')).toBeTruthy();
   return view;
 }
 
