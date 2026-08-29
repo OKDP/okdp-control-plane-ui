@@ -309,7 +309,7 @@ export function ExternalSecretList() {
     // by the time Save is pressed, and the first read afterwards would differ
     // from it and be taken as the outcome of an edit it actually precedes.
     const previous = wasEdit
-      ? await externalSecretApi.getStatus(projectId, secretName).catch(() => null)
+      ? await externalSecretApi.getStatus(projectId, secretName).catch(() => 'unknown' as const)
       : null;
 
     const save = wasEdit
@@ -341,7 +341,7 @@ export function ExternalSecretList() {
         // the edit has just fixed.
         const detail = await waitForSyncOutcome(
           () => externalSecretApi.getStatus(projectId, secretName),
-          { ignoreUntilChanged: previous },
+          { ignoreUntilChanged: previous === 'unknown' ? null : previous },
         );
         const outcome = describeSyncOutcome(secretName, detail, wasEdit ? 'updated' : 'created', previous);
         loadSecrets();
@@ -382,7 +382,7 @@ export function ExternalSecretList() {
       onCancel={() => setDialogVisible(false)}
       onConfirm={saveSecret}
       confirmLabel={editMode ? 'Save' : 'Create'}
-      confirmDisabled={!formValid}
+      confirmDisabled={!formValid || checkingKeys}
       busy={saving}
       leading={
         <Button

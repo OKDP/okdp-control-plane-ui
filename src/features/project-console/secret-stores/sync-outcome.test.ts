@@ -369,3 +369,26 @@ describe('waitForSyncOutcome, what the wait costs', () => {
     expect(warned.mock.calls[0][1]).toBeInstanceOf(TypeError);
   });
 });
+
+describe('describeSyncOutcome, the pre-edit status could not be read', () => {
+  // The pre-write read fails, the first read after the write returns the
+  // pre-edit Synced, and nothing tells the two apart. Claiming success here is
+  // the false green this module exists to remove.
+  it('never claims success on an edit with no status to compare against', () => {
+    const o = describeSyncOutcome('mon-import', detail('Synced'), 'updated', 'unknown');
+    expect(o.synced).toBe(false);
+    expect(o.settled).toBe(false);
+    expect(o.message).not.toContain('and synced');
+    expect(o.message).toContain('could not be read');
+  });
+
+  it('does not blame the import for a pre-edit failure either', () => {
+    const o = describeSyncOutcome('mon-import', detail('Error', 'old failure'), 'updated', 'unknown');
+    expect(o.synced).toBe(false);
+    expect(o.message).not.toContain('old failure');
+  });
+
+  it('a creation still reports its own result', () => {
+    expect(describeSyncOutcome('mon-import', detail('Synced'), 'created', null).synced).toBe(true);
+  });
+});

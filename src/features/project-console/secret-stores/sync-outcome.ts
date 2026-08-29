@@ -44,9 +44,19 @@ export function describeSyncOutcome(
   detail: ExternalSecretStatusDetail | null,
   /** What just happened, so an update is never reported as a creation. */
   action: 'created' | 'updated' = 'created',
-  /** The status before the write, when there was one. */
-  previous?: ExternalSecretStatusDetail | null,
+  /** The status before the write: a detail, null on a creation, or 'unknown'
+   *  when the pre-write read failed. */
+  previous?: ExternalSecretStatusDetail | 'unknown' | null,
 ): SyncOutcome {
+  // With no pre-change status to compare against, any settled status seen now
+  // is indistinguishable from the one before the change.
+  if (previous === 'unknown') {
+    return {
+      settled: false,
+      synced: false,
+      message: `Import "${name}" ${action}. The status before the change could not be read, its row will say how the sync went.`,
+    };
+  }
   // Unchanged: the controller either has not acted on the new generation yet or
   // acted and landed on the same status, and nothing it publishes tells the two
   // apart. Neither reading is a confirmation, so this never reports success.

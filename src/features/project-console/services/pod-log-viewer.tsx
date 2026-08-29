@@ -248,7 +248,7 @@ export function PodLogViewer({ projectId, serviceName, pods, initialPodName }: P
                 <span className="flex-1">{line}</span>
               </div>
             ))}
-            {followMode && (
+            {followMode && !streamStopped && !streamError && (
               <div className="flex gap-4 px-4 pt-1.5 pb-0.5">
                 <span className="min-w-8 shrink-0 text-right select-none"></span>
                 <span className="log-live inline-flex items-center gap-2 font-medium">
