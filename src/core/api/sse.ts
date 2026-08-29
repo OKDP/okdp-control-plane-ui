@@ -14,12 +14,7 @@ export interface ListEvent<T> {
 
 /**
  * A failure the server itself described, as opposed to a connection that merely
- * stopped.
- *
- * The distinction is not cosmetic. A caller that reports every error to the
- * user would raise a failure every time a proxy cuts an idle stream, or every
- * time a job finishes. Only this type means something actually went wrong, and
- * the log viewers show only this one.
+ * stopped. The log viewers surface only this one.
  */
 export class StreamServerError extends Error {
   constructor(message: string) {
@@ -53,7 +48,7 @@ export function applyListEvent<T>(list: T[], event: ListEvent<T>, key: (item: T)
   }
 }
 
-/** What EventSource waited before reconnecting, kept so nothing else changes. */
+/** EventSource's reconnect delay, kept. */
 const RECONNECT_MS = 3000;
 
 /** One decoded server-sent event. `type` is "message" unless the frame names one. */
@@ -63,10 +58,8 @@ interface StreamEvent {
 }
 
 /**
- * Splits a server-sent event stream into events, per the text/event-stream
- * grammar: fields one per line, `data:` repeatable and joined with newlines, a
- * blank line ending the event. Written out here because the transport below no
- * longer gets it from the browser.
+ * text/event-stream grammar: fields one per line, `data:` repeatable and joined
+ * with newlines, a blank line ending the event.
  */
 function decodeFrame(frame: string): StreamEvent | null {
   let type = 'message';
@@ -78,8 +71,7 @@ function decodeFrame(frame: string): StreamEvent | null {
     }
     const colon = line.indexOf(':');
     const field = colon === -1 ? line : line.slice(0, colon);
-    // One optional space after the colon belongs to the delimiter, not the
-    // value: a log line starting with a space would lose it otherwise.
+    // One space after the colon belongs to the delimiter, not the value.
     let value = colon === -1 ? '' : line.slice(colon + 1);
     if (value.startsWith(' ')) {
       value = value.slice(1);
@@ -107,13 +99,8 @@ interface StreamHandlers {
 }
 
 /**
- * Opens a server-sent event stream over fetch, and returns a function that
- * closes it.
- *
- * Not EventSource: that API cannot carry an Authorization header, by design and
- * with no way around it. Once the control plane authenticates its API, every
- * stream it serves would answer 401 forever, and the lists they feed would
- * quietly stop moving while the pages still rendered.
+ * Opens a server-sent event stream over fetch, which takes headers where
+ * EventSource cannot carry an Authorization header at all.
  */
 function openEventStream(url: string, label: string, handlers: StreamHandlers): () => void {
   const controller = new AbortController();
@@ -124,12 +111,8 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
     controller.abort();
   };
 
-  /**
-   * Waits out the reconnect delay, or gives up the moment the stream is closed.
-   *
-   * A plain timer would keep the loop alive for the whole delay after
-   * unsubscribing, and leave a pending timer behind with it.
-   */
+  // Resolves on abort as well as on time, so unsubscribing does not leave the
+  // loop or a timer alive for the rest of the delay.
   const pause = (ms: number) =>
     new Promise<void>((resolve) => {
       const signal = controller.signal;
@@ -162,9 +145,7 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
         });
 
         if (response.status === 401 || response.status === 403) {
-          // Deliberately not retried. The session is what is wrong, and a
-          // reconnecting stream would ask again every few seconds for as long
-          // as the tab stays open, against a server that will keep refusing.
+          // Not retried: the session is what is wrong.
           reportUnauthorized(response.status);
           handlers.onFailure(new Error(`${label} refused: the session is no longer valid`));
           return;
@@ -177,12 +158,8 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
         if (stopped || ended) {
           return;
         }
-        // The server closed the stream of its own accord. On a stream that
-        // reopens, that is an interruption and not an ending: complete is a
-        // terminal signal, and reporting one before emitting again would break
-        // the contract the subscribers are written against. EventSource drew
-        // the same line, raising an error while it still meant to reconnect and
-        // completing only once it had given up for good.
+        // complete is terminal: a stream that means to reopen reports an
+        // interruption instead, as EventSource did.
         if (!handlers.reconnect) {
           handlers.onClose();
           return;
@@ -192,9 +169,8 @@ function openEventStream(url: string, label: string, handlers: StreamHandlers): 
         if (stopped || controller.signal.aborted) {
           return;
         }
-        // A drop on a stream that reopens is expected traffic, not a fault: a
-        // proxy will cut an idle stream on its own, and this reconnects. Only a
-        // stream that gives up here is an error.
+        // A drop this loop recovers from is not an error; proxies cut idle
+        // streams on their own.
         if (handlers.reconnect) {
           logger.warn(`${label} dropped, reopening`, err);
         } else {
@@ -229,19 +205,15 @@ async function pump(body: ReadableStream<Uint8Array>, handlers: StreamHandlers):
     for (;;) {
       const { done, value } = await reader.read();
       if (done) {
-        // Flush what the decoder still holds. It cannot complete a dispatchable
-        // event, an event only exists once its blank line has arrived and that
-        // line is ASCII, but the invariant should not rest on whoever edits the
-        // loop knowing that.
+        // Flush the decoder; a partial character cannot complete a
+        // dispatchable event, but the invariant should not rest on that.
         buffer += decoder.decode();
         return false;
       }
-      // A chunk can split a multi-byte character, so the decoder is told the
-      // text continues.
+      // stream: true, a chunk can split a multi-byte character.
       buffer += decoder.decode(value, { stream: true });
 
-      // \r\n\r\n is as valid a separator as \n\n, and a proxy may rewrite one
-      // into the other.
+      // Proxies may rewrite \n\n into \r\n\r\n.
       buffer = buffer.replace(/\r\n/g, '\n');
       let cut = buffer.indexOf('\n\n');
       while (cut !== -1) {
@@ -275,15 +247,13 @@ export function subscribeJsonStream<T>(
       try {
         subscriber.next(JSON.parse(event.data) as T);
       } catch (e) {
-        // A message that does not parse is one message lost, not a dead
-        // stream: the next one may well be fine.
+        // One unparseable message is one message lost, not a dead stream.
         logger.error(`Failed to parse ${label} message`, e);
       }
       return true;
     },
     onClose: () => subscriber.complete?.(),
     onFailure: (err) => subscriber.error?.(err),
-    // These feed lists that must keep moving, which is what EventSource did.
     reconnect: true,
   });
 }
@@ -295,8 +265,7 @@ export function subscribeJsonStream<T>(
 export function subscribeTextStream(url: string, subscriber: StreamSubscriber<string>): () => void {
   return openEventStream(url, 'log stream', {
     onEvent: (event) => {
-      // The server reports a failure it has already started answering as a
-      // named event, so the reason reaches the screen instead of a blank pane.
+      // A named error event carries the server's reason.
       if (event.type === 'error') {
         subscriber.error?.(new StreamServerError(event.data || 'log stream interrupted'));
         return false;
@@ -308,8 +277,7 @@ export function subscribeTextStream(url: string, subscriber: StreamSubscriber<st
     },
     onClose: () => subscriber.complete?.(),
     onFailure: (err) => subscriber.error?.(err),
-    // A log stream that ended has ended: reopening it would replay the log
-    // from the top, which is not what following it means.
+    // Reopening a finished log would replay it from the top.
     reconnect: false,
   });
 }

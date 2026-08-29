@@ -35,11 +35,7 @@ function isSecureRoute(url: string): boolean {
   return url.includes('/api/');
 }
 
-/**
- * The bearer token a secure route should carry, or undefined when there is
- * none. Exposed for the SSE transport, which builds its own request and must
- * attach the very same credential this module attaches to every other call.
- */
+/** The bearer token a secure route should carry. Shared with the SSE transport. */
 export async function authToken(url: string): Promise<string | undefined> {
   if (!isSecureRoute(url) || !tokenProvider) {
     return undefined;
@@ -47,10 +43,7 @@ export async function authToken(url: string): Promise<string | undefined> {
   return tokenProvider();
 }
 
-/**
- * Routes a 401 or 403 to the registered handler, exactly as a failed request
- * does. A stream that is refused ends the session as surely as a call that is.
- */
+/** Routes a 401 or 403 to the registered handler. Shared with the SSE transport. */
 export function reportUnauthorized(status: number): void {
   unauthorizedHandler?.(status);
 }
@@ -58,8 +51,6 @@ export function reportUnauthorized(status: number): void {
 async function request(url: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
 
-  // Through the same helpers the SSE transport uses, so the two cannot drift
-  // apart on which credential is sent or on what a refusal does.
   const token = await authToken(url);
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
