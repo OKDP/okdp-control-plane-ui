@@ -165,21 +165,25 @@ must route `/api` to the control plane.
 
 The published chart is the normal path:
 
+<!-- x-release-please-start-version -->
 ```bash
-helm install okdp-control-plane-ui oci://quay.io/okdp/charts/okdp-control-plane-ui --version <X>
+helm install okdp-control-plane-ui oci://quay.io/okdp/charts/okdp-control-plane-ui --version 0.7.0
 ```
+<!-- x-release-please-end -->
 
 
 The examples below install from `chart/` in this checkout, which is what a
 contributor does while changing the chart itself.
 
+<!-- x-release-please-start-version -->
 ```bash
 helm install okdp-control-plane-ui ./chart -n okdp-system \
-  --set image.tag=0.8.0 \
+  --set image.tag=0.7.0 \
   --set ingress.host=okdp-ui.example.com \
   --set backend.service=okdp-control-plane-server \
   --set oidc.authority=https://keycloak.example.com/realms/master
 ```
+<!-- x-release-please-end -->
 
 `oidc.authority` has no default: the console cannot reach any provider without
 it. `ingress.host` must match the client's redirect URIs in the realm.

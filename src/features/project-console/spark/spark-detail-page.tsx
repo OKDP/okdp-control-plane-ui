@@ -4,12 +4,14 @@ import { Button } from 'primereact/button';
 import { Toast } from 'primereact/toast';
 import { InputSwitch } from 'primereact/inputswitch';
 import { sparkApi } from '../../../core/api/spark-api';
+import { StreamServerError } from '../../../core/api/sse';
 import type { SparkAppInstance } from '../../../core/models/spark.model';
 import { formatMediumDateTime, openInNewTab } from '../services/service-utils';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import EmptyState from '../../../shared/components/empty-state';
 import { StatusTag } from '../../../shared/components/status-tag';
 import { getExecutorTone, getStatusTone, isTerminalStatus } from './spark-utils';
+import { useLogBatch, appendCapped } from '../../../shared/hooks/use-log-batch';
 
 const MAX_LOG_LINES = 10000;
 
@@ -23,6 +25,11 @@ export default function SparkDetailPage() {
   const [logLines, setLogLines] = useState<string[]>([]);
   const [followMode, setFollowMode] = useState(false);
   const [sparkUILoading, setSparkUILoading] = useState(false);
+  // Set when a followed stream stops without the server saying why. The job may
+  // have finished or the connection may have dropped, and nothing distinguishes
+  // the two, so this states the fact rather than guessing at a cause. Without
+  // it a dropped connection froze the view in silence.
+  const [streamStopped, setStreamStopped] = useState(false);
 
   useEffect(() => {
     if (!projectId || !appName) {
@@ -50,6 +57,10 @@ export default function SparkDetailPage() {
   // Driver logs: snapshot fetch or follow-mode stream (starts once the app
   // details have loaded)
   const [logReloadTick, setLogReloadTick] = useState(0);
+  const batch = useLogBatch(
+    (lines) => setLogLines((prev) => appendCapped(prev, lines, MAX_LOG_LINES)),
+    MAX_LOG_LINES,
+  );
   const reloadLogs = useCallback(() => setLogReloadTick((t) => t + 1), []);
 
   useEffect(() => {
@@ -57,16 +68,31 @@ export default function SparkDetailPage() {
 
     if (followMode) {
       setLogLines([]);
-      return sparkApi.streamDriverLogs(projectId, appName, {
-        next: (line) =>
-          setLogLines((prev) => {
-            const next = [...prev, line];
-            if (next.length > MAX_LOG_LINES) {
-              next.splice(0, next.length - MAX_LOG_LINES);
-            }
-            return next;
-          }),
+      batch.reset();
+      setStreamStopped(false);
+
+      const unsubscribe = sparkApi.streamDriverLogs(projectId, appName, {
+        next: batch.push,
+        complete: () => {
+          batch.flush();
+          setStreamStopped(true);
+        },
+        error: (err) => {
+          // The tail is shown whatever ended the stream, so the view never
+          // freezes on the lines before the last flush window.
+          batch.flush();
+          // Only a failure the server described is worth an error. A driver
+          // that simply finishes lands here too, and reporting that would
+          // raise one at the end of every successful job. Everything else is
+          // announced as what it is: the stream stopped.
+          if (err instanceof StreamServerError) showError(err.message);
+          else setStreamStopped(true);
+        },
       });
+      return () => {
+        batch.reset();
+        unsubscribe();
+      };
     }
 
     let cancelled = false;
@@ -81,7 +107,7 @@ export default function SparkDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [app, projectId, appName, followMode, logReloadTick]);
+  }, [app, projectId, appName, followMode, logReloadTick, batch, showError]);
 
   const openSparkLink = (
     field: 'uiAddress' | 'historyServerUrl',
@@ -300,6 +326,15 @@ export default function SparkDetailPage() {
                   />
                 </div>
               </div>
+              {followMode && streamStopped && (
+                <div className="mb-2 flex items-center gap-2 rounded-md border border-border-light bg-surface-secondary px-3 py-2 text-[12px] text-fg-secondary">
+                  <i className="pi pi-info-circle text-[13px]"></i>
+                  <span>
+                    The log stream stopped. The driver may have finished, or the
+                    connection may have dropped. Refresh to pick it up again.
+                  </span>
+                </div>
+              )}
               <div className="log-block max-h-[500px] overflow-auto rounded-md p-3">
                 <pre className="m-0 font-[inherit] break-all whitespace-pre-wrap">
                   {logLines.join('\n') || 'No logs available.'}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -28,6 +28,15 @@ import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { useRowActionsMenu } from '../../../shared/hooks/use-row-actions-menu';
 import { k8sNameError } from '../../../shared/utils/k8s-names';
 import { DialogFooter } from '../../../shared/components/dialog-footer';
+import {
+  describeCheck,
+  describeCheckFailure,
+  applyCheckResults,
+  groupByRemoteRef,
+  CHECKING,
+  type CheckDisplay,
+} from './remote-key-check';
+import { describeSyncOutcome, waitForSyncOutcome } from './sync-outcome';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 
 const REFRESH_OPTIONS = [
@@ -39,6 +48,22 @@ const REFRESH_OPTIONS = [
   { label: '6 hours', value: '6h' },
   { label: '24 hours', value: '24h' },
 ];
+
+// An unverifiable answer is neither green nor red: the control plane could not
+// ask, so nothing about the key was established.
+const CHECK_TONE_CLASS: Record<CheckDisplay['tone'], string> = {
+  found: 'text-success',
+  absent: 'text-danger',
+  unknown: 'text-fg-secondary',
+  checking: 'text-fg-secondary',
+};
+
+const CHECK_TONE_ICON: Record<CheckDisplay['tone'], string> = {
+  found: 'pi pi-check-circle',
+  absent: 'pi pi-times-circle',
+  unknown: 'pi pi-info-circle',
+  checking: 'pi pi-spin pi-spinner',
+};
 
 const EMPTY_MAPPING = (): ExternalSecretDataRef => ({
   secretKey: '',
@@ -80,6 +105,15 @@ export function ExternalSecretList() {
   const [refreshInterval, setRefreshInterval] = useState('1h');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [dataMappings, setDataMappings] = useState<ExternalSecretDataRef[]>([EMPTY_MAPPING()]);
+  // Keyed by mapping index. A result is dropped as soon as its row changes,
+  // so a stale green never sits under a key that has since been edited.
+  const [keyChecks, setKeyChecks] = useState<Record<number, CheckDisplay>>({});
+  const [checkingKeys, setCheckingKeys] = useState(false);
+  // The store currently selected, read by the in-flight checks when their
+  // answers come back: an answer about the store that was selected when the
+  // question left says nothing about the one selected now.
+  const storeAtAnswerRef = useRef(selectedStoreRefName);
+  storeAtAnswerRef.current = selectedStoreRefName;
 
   const {
     items: secrets,
@@ -123,6 +157,8 @@ export function ExternalSecretList() {
   // --- Name validation ---
   const nameError = k8sNameError(secretName);
 
+  const hasKeyToCheck = dataMappings.some((m) => m.remoteRef.key.trim() !== '');
+
   const formValid = (() => {
     if (!secretName || !selectedStoreRefName) return false;
     if (nameError) return false;
@@ -137,6 +173,7 @@ export function ExternalSecretList() {
     setRefreshInterval('1h');
     setShowAdvanced(false);
     setDataMappings([EMPTY_MAPPING()]);
+    setKeyChecks({});
   };
 
   const showCreateDialog = () => {
@@ -162,23 +199,89 @@ export function ExternalSecretList() {
           }))
         : [EMPTY_MAPPING()],
     );
+    setKeyChecks({});
     setDialogVisible(true);
   };
 
   const addMapping = () => setDataMappings((list) => [...list, EMPTY_MAPPING()]);
 
-  const removeMapping = (index: number) =>
+  const removeMapping = (index: number) => {
     setDataMappings((list) => {
       const next = list.filter((_, i) => i !== index);
       return next.length === 0 ? [EMPTY_MAPPING()] : next;
     });
+    // The results are held by index, so removing a row would leave every
+    // result below it under the wrong key.
+    setKeyChecks({});
+  };
 
-  const patchMapping = (index: number, patch: Partial<ExternalSecretDataRef>) =>
+  const patchMapping = (index: number, patch: Partial<ExternalSecretDataRef>) => {
     setDataMappings((list) =>
       list.map((m, i) =>
         i === index ? { ...m, ...patch, remoteRef: { ...m.remoteRef, ...patch.remoteRef } } : m,
       ),
     );
+    // Editing a row answers a question that was asked about its previous
+    // value, so its result goes.
+    setKeyChecks((checks) => {
+      if (!(index in checks)) return checks;
+      const next = { ...checks };
+      delete next[index];
+      return next;
+    });
+  };
+
+  /**
+   * Asks the server about every remote key in the form, before anything is
+   * created. Without it the only way to learn that a key is wrong is to create
+   * the import and wait for the controller to fail its first sync.
+   */
+  const checkKeys = () => {
+    const rows = dataMappings
+      .map((m, index) => ({ m, index }))
+      .filter(({ m }) => m.remoteRef.key.trim() !== '');
+    if (rows.length === 0) return;
+
+    const askedOf = selectedStoreRefName;
+    setCheckingKeys(true);
+    // Each row is marked as being checked up front, and a result is only kept
+    // for a row that still carries that mark. Without it an edit made while
+    // the requests are in flight would have its entry deleted by patchMapping
+    // and then put back by the answer, showing a verdict on a value that has
+    // since changed.
+    setKeyChecks(Object.fromEntries(rows.map(({ index }) => [index, CHECKING])));
+
+    // One request per distinct remote reference rather than per row: rows
+    // sharing one share an answer, and each request costs the server a
+    // credentials read and a Vault round trip.
+    const groups = groupByRemoteRef(
+      rows.map(({ m, index }) => ({ index, key: m.remoteRef.key, property: m.remoteRef.property || undefined })),
+    );
+
+    Promise.all(
+      groups.map((g) =>
+        externalSecretApi
+          .checkRemoteKey(projectId, {
+            secretStoreRef: selectedStoreRefName,
+            remoteRef: { key: g.key, property: g.property },
+          })
+          .then((result) => ({ indexes: g.indexes, display: describeCheck(result) }))
+          .catch((err) => ({
+            indexes: g.indexes,
+            display: describeCheckFailure(apiErrorMessage(err, 'The key could not be checked')),
+          })),
+      ),
+    ).then((results) => {
+      // The store can change while the requests are in flight, and an answer
+      // about the previous one says nothing about this one.
+      if (askedOf !== storeAtAnswerRef.current) {
+        setCheckingKeys(false);
+        return;
+      }
+      setKeyChecks((current) => applyCheckResults(current, results));
+      setCheckingKeys(false);
+    });
+  };
 
   const buildRequest = (): ExternalSecretRequest => ({
     name: secretName,
@@ -196,27 +299,61 @@ export function ExternalSecretList() {
       })),
   });
 
-  const saveSecret = () => {
+  const saveSecret = async () => {
     setSaving(true);
     const request = buildRequest();
-    const save = editMode
+    const wasEdit = editMode;
+
+    // Read immediately before the write, not when the dialog opened. The list
+    // refreshes every ten seconds, so a status copied at opening can be stale
+    // by the time Save is pressed, and the first read afterwards would differ
+    // from it and be taken as the outcome of an edit it actually precedes.
+    const previous = wasEdit
+      ? await externalSecretApi.getStatus(projectId, secretName).catch(() => null)
+      : null;
+
+    const save = wasEdit
       ? externalSecretApi.update(projectId, secretName, request)
       : externalSecretApi.create(projectId, request);
 
     save
-      .then(() => {
-        setSaving(false);
-        setDialogVisible(false);
-        showSuccess(
-          `External secret "${secretName}" ${editMode ? 'updated' : 'created'} successfully`,
-        );
-        loadSecrets();
-      })
+      // Scoped to the write itself. Covering the wait as well reported a
+      // failure to create for an object that was created, and the caller then
+      // tried again and hit a conflict.
       .catch((err) => {
         setSaving(false);
-        showError(
-          apiErrorMessage(err, `Failed to ${editMode ? 'update' : 'create'} external secret`),
+        showError(apiErrorMessage(err, `Failed to ${wasEdit ? 'update' : 'create'} external secret`));
+        throw err;
+      })
+      .then(async () => {
+        setSaving(false);
+        setDialogVisible(false);
+        loadSecrets();
+
+        // A 201 says the object was written, not that it can read its key: the
+        // controller finds that out on its first sync. Announcing success on
+        // the write alone is what let a broken import look created and fine.
+        // This is also the only honest report for a store the key check cannot
+        // question ahead of time.
+        //
+        // On an update the previous status is already settled, so it is handed
+        // over to be skipped: taken as the answer, it would report the failure
+        // the edit has just fixed.
+        const detail = await waitForSyncOutcome(
+          () => externalSecretApi.getStatus(projectId, secretName),
+          { ignoreUntilChanged: previous },
         );
+        const outcome = describeSyncOutcome(secretName, detail, wasEdit ? 'updated' : 'created', previous);
+        loadSecrets();
+        if (outcome.settled && !outcome.synced) {
+          showError(outcome.message);
+        } else {
+          showSuccess(outcome.message);
+        }
+      })
+      .catch(() => {
+        // Already reported above, or raised by the wait after a successful
+        // write. Either way the object's row now carries the truth.
       });
   };
 
@@ -247,6 +384,16 @@ export function ExternalSecretList() {
       confirmLabel={editMode ? 'Save' : 'Create'}
       confirmDisabled={!formValid}
       busy={saving}
+      leading={
+        <Button
+          severity="secondary"
+          outlined
+          icon={checkingKeys ? 'pi pi-spin pi-spinner' : 'pi pi-search'}
+          label="Check keys"
+          disabled={saving || checkingKeys || !selectedStoreRefName || !hasKeyToCheck}
+          onClick={checkKeys}
+        />
+      }
     />
   );
 
@@ -416,7 +563,13 @@ export function ExternalSecretList() {
                 id="storeRef"
                 options={readyStores}
                 value={selectedStoreRefName}
-                onChange={(e) => setSelectedStoreRefName(e.value)}
+                onChange={(e) => {
+                  setSelectedStoreRefName(e.value);
+                  // A verdict belongs to the store it was asked of. Left on screen it
+                  // would sit under another store as a green nobody established, and
+                  // an import could be created on the strength of it.
+                  setKeyChecks({});
+                }}
                 optionLabel="name"
                 optionValue="name"
                 placeholder="Select a secret store"
@@ -512,6 +665,25 @@ export function ExternalSecretList() {
                     aria-label="Remove mapping"
                   />
                 </div>
+                {keyChecks[index] && (
+                  <div
+                    className={`mt-1.5 flex items-start gap-1.5 text-[12px] ${CHECK_TONE_CLASS[keyChecks[index].tone]}`}
+                    role="status"
+                  >
+                    <i className={`${CHECK_TONE_ICON[keyChecks[index].tone]} mt-0.5 text-[11px]`}></i>
+                    <span>
+                      {keyChecks[index].message}
+                      {keyChecks[index].properties.length > 0 && (
+                        <>
+                          {' '}
+                          <span className="text-fg-muted">
+                            Available: {keyChecks[index].properties.join(', ')}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
