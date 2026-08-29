@@ -58,18 +58,18 @@ export function reportUnauthorized(status: number): void {
 async function request(url: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
 
-  if (isSecureRoute(url) && tokenProvider) {
-    const token = await tokenProvider();
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
+  // Through the same helpers the SSE transport uses, so the two cannot drift
+  // apart on which credential is sent or on what a refusal does.
+  const token = await authToken(url);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(url, { ...init, headers });
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      unauthorizedHandler?.(response.status);
+      reportUnauthorized(response.status);
     }
     const body = await response.text().catch(() => '');
     throw new HttpError(response.status, response.statusText, body, url);

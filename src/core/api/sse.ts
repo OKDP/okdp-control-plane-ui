@@ -229,6 +229,11 @@ async function pump(body: ReadableStream<Uint8Array>, handlers: StreamHandlers):
     for (;;) {
       const { done, value } = await reader.read();
       if (done) {
+        // Flush what the decoder still holds. It cannot complete a dispatchable
+        // event, an event only exists once its blank line has arrived and that
+        // line is ASCII, but the invariant should not rest on whoever edits the
+        // loop knowing that.
+        buffer += decoder.decode();
         return false;
       }
       // A chunk can split a multi-byte character, so the decoder is told the
