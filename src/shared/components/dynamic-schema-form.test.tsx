@@ -136,3 +136,43 @@ describe('the key-value widget', () => {
     expect(last.roleMapping).toEqual({ 'data-team': 'reader' });
   });
 });
+
+// A free-form map whose values keep the type they are typed as, so a boolean
+// reaches the chart as a boolean and a number as a number, without freezing the
+// keys or their types.
+describe('the key-value-scalar widget', () => {
+  const gitSync = {
+    properties: {
+      dagsGitSync: {
+        type: 'object',
+        additionalProperties: true,
+        'x-ui-widget': 'key-value-scalar',
+        title: 'Git sync',
+      },
+    },
+  };
+
+  it('offers a free-form key/value editor, no frozen options', () => {
+    render(<DynamicSchemaForm schema={gitSync} onParametersChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /Add parameter/ })).toBeTruthy();
+  });
+
+  it.each([
+    ['true', true],
+    ['false', false],
+    ['42', 42],
+    ['1.5', 1.5],
+    ['60s', '60s'],
+    ['"true"', 'true'],
+  ])('parses the typed value %s by its syntax', (typed, expected) => {
+    const onParametersChange = vi.fn();
+    render(<DynamicSchemaForm schema={gitSync} onParametersChange={onParametersChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Add parameter/ }));
+    fireEvent.change(screen.getByPlaceholderText('parameter'), { target: { value: 'k' } });
+    fireEvent.change(screen.getByPlaceholderText(/true, 42/), { target: { value: typed } });
+
+    const last = onParametersChange.mock.calls.at(-1)![0];
+    expect(last.dagsGitSync).toEqual({ k: expected });
+  });
+});

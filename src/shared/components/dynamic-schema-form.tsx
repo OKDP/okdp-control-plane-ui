@@ -9,6 +9,7 @@ import { Password } from 'primereact/password';
 import { Button } from 'primereact/button';
 import { connectionApi, type SelectableConnection } from '../../core/api/connection-api';
 import { formatLabel } from '../utils/format-label';
+import { parseScalarValue, scalarValueToText } from '../utils/scalar-value';
 
 /* The dsf-root class scopes the .field-invalid PrimeReact-input override in
    the PrimeReact overrides section of styles.css. */
@@ -555,6 +556,14 @@ const FieldWidget = memo(function FieldWidget({
               onChange={(next) => setValue(field.name, next)}
             />
           );
+        case 'key-value-scalar':
+          return (
+            <ScalarKeyValueField
+              value={value && typeof value === 'object' ? (value as Record<string, unknown>) : {}}
+              placeholder={field['x-ui-placeholder']}
+              onChange={(next) => setValue(field.name, next)}
+            />
+          );
         case 'key-value':
           return (
             <KeyValueField
@@ -651,6 +660,86 @@ const FieldWidget = memo(function FieldWidget({
           );
       }
 });
+
+/** A free-form parameter map whose values keep the type they are typed as
+ *  (see parseScalarValue): a boolean stays a boolean, a number a number, and a
+ *  quoted value a string. The keys are not fixed, so any chart parameter can be
+ *  added, and no set of options is frozen. */
+function ScalarKeyValueField({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: Record<string, unknown>;
+  placeholder?: string;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const toRows = (v: Record<string, unknown>): [string, string][] =>
+    Object.entries(v).map(([k, val]) => [k, scalarValueToText(val)]);
+
+  const [rows, setRows] = useState<[string, string][]>(() => toRows(value));
+  const emittedRef = useRef<Record<string, unknown>>(value);
+
+  // Content compare, not identity: the parent recomputes this map on every
+  // keystroke elsewhere, and an identity check would wipe a half-typed row.
+  useEffect(() => {
+    if (JSON.stringify(value) !== JSON.stringify(emittedRef.current)) {
+      setRows(toRows(value));
+      emittedRef.current = value;
+    }
+  }, [value]);
+
+  const emit = (next: [string, string][]) => {
+    setRows(next);
+    const object: Record<string, unknown> = {};
+    next.forEach(([k, text]) => {
+      if (k) object[k] = parseScalarValue(text);
+    });
+    emittedRef.current = object;
+    onChange(object);
+  };
+
+  const replace = (index: number, key: string, text: string) =>
+    emit(rows.map((r, i) => (i === index ? [key, text] : r)));
+
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.map(([key, text], index) => (
+        <div key={index} className="flex items-center gap-2">
+          <InputText
+            className="w-full mono"
+            value={key}
+            placeholder="parameter"
+            onChange={(e) => replace(index, e.target.value, text)}
+          />
+          <span className="text-fg-secondary">&rarr;</span>
+          <InputText
+            className="w-full mono"
+            value={text}
+            placeholder={placeholder || 'true, 42, "text"'}
+            onChange={(e) => replace(index, key, e.target.value)}
+          />
+          <Button
+            type="button"
+            icon="pi pi-times"
+            text
+            aria-label={`Remove ${key || 'the empty entry'}`}
+            onClick={() => emit(rows.filter((_, i) => i !== index))}
+          />
+        </div>
+      ))}
+      <div>
+        <Button
+          type="button"
+          label="Add parameter"
+          icon="pi pi-plus"
+          text
+          onClick={() => emit([...rows, ['', '']])}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function DynamicSchemaForm({
   schema,
