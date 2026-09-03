@@ -309,7 +309,7 @@ export function ExternalSecretList() {
     // by the time Save is pressed, and the first read afterwards would differ
     // from it and be taken as the outcome of an edit it actually precedes.
     const previous = wasEdit
-      ? await externalSecretApi.getStatus(projectId, secretName).catch(() => null)
+      ? await externalSecretApi.getStatus(projectId, secretName).catch(() => 'unread' as const)
       : null;
 
     const save = wasEdit
@@ -339,10 +339,15 @@ export function ExternalSecretList() {
         // On an update the previous status is already settled, so it is handed
         // over to be skipped: taken as the answer, it would report the failure
         // the edit has just fixed.
-        const detail = await waitForSyncOutcome(
-          () => externalSecretApi.getStatus(projectId, secretName),
-          { ignoreUntilChanged: previous },
-        );
+        //
+        // With nothing to compare against, waiting cannot tell a new reading
+        // from the old one, so the answer is already known and the wait skipped.
+        const detail =
+          previous === 'unread'
+            ? null
+            : await waitForSyncOutcome(() => externalSecretApi.getStatus(projectId, secretName), {
+                ignoreUntilChanged: previous,
+              });
         const outcome = describeSyncOutcome(secretName, detail, wasEdit ? 'updated' : 'created', previous);
         loadSecrets();
         if (outcome.settled && !outcome.synced) {
