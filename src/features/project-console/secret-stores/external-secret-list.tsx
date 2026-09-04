@@ -382,7 +382,7 @@ export function ExternalSecretList() {
       onCancel={() => setDialogVisible(false)}
       onConfirm={saveSecret}
       confirmLabel={editMode ? 'Save' : 'Create'}
-      confirmDisabled={!formValid}
+      confirmDisabled={!formValid || checkingKeys}
       busy={saving}
       leading={
         <Button
