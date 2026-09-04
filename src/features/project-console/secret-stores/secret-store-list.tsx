@@ -147,9 +147,11 @@ export function SecretStoreList() {
     setTesting(true);
     secretStoreApi
       .testConnection(projectId, buildRequest())
-      .then(() => {
+      .then((result) => {
         setTesting(false);
-        showSuccess('Connection successful!');
+        // The server says what it could verify: with Kubernetes auth it only
+        // reached Vault, the role is checked by the operator at sync time.
+        showSuccess(result?.message || 'Connection successful!');
       })
       .catch((err) => {
         setTesting(false);
