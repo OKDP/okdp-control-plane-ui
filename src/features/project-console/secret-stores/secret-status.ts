@@ -11,6 +11,7 @@ export function statusTone(status: string, successStatus: string): StatusTone {
     case 'Error':
       return 'danger';
     case 'Pending':
+    case 'Syncing':
       return 'warning';
     default:
       return 'info';
