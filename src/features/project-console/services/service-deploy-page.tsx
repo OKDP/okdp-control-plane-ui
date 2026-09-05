@@ -12,6 +12,7 @@ import EmptyState from '../../../shared/components/empty-state';
 import { ProfileListEditor, type Profile } from '../../../shared/components/profile-list-editor';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { k8sNameError } from '../../../shared/utils/k8s-names';
+import { flattenReviewParams } from '../../../shared/utils/format-review-value';
 import {
   apiErrorMessage,
   areaBasePath,
@@ -192,12 +193,10 @@ export default function ServiceDeployPage() {
   };
 
   const reviewParams = useMemo(() => {
-    const out: { key: string; value: string }[] = [];
-    for (const [k, v] of Object.entries(parameters)) {
-      if (k === 'profiles') continue;
-      out.push({ key: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—') });
-    }
-    return out;
+    const entries = Object.fromEntries(
+      Object.entries(parameters).filter(([k]) => k !== 'profiles'),
+    );
+    return flattenReviewParams(entries);
   }, [parameters]);
 
   useEffect(() => {
