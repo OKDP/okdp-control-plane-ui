@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { HttpError } from '../../../core/api/http';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Dropdown } from 'primereact/dropdown';
@@ -34,6 +34,43 @@ const PROGRESS_STAGES = [
   { label: 'Scheduling pod' },
   { label: 'Waiting for readiness' },
 ];
+
+/** A reviewed parameter value as readable rows: an object becomes one line per
+ *  key, an array one block per entry, nested objects indent, and an empty value
+ *  shows a dash — rather than the raw JSON string the review used to print,
+ *  which turned a git-sync entry into {"enabled":"true","repo":"…"} on one line
+ *  and an empty object into a bare {}. */
+function ReviewValue({ value }: { value: unknown }): ReactNode {
+  if (value === null || value === undefined || value === '') {
+    return <span className="mono text-fg-muted">—</span>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="mono text-fg-muted">—</span>;
+    return (
+      <span className="flex flex-col items-end gap-1.5">
+        {value.map((item, i) => (
+          <span key={i} className="border-r-2 border-border-light pr-2">
+            <ReviewValue value={item} />
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return <span className="mono text-fg-muted">—</span>;
+    return (
+      <span className="flex flex-col items-end gap-0.5">
+        {entries.map(([k, v]) => (
+          <span key={k} className="mono text-[13px]">
+            <span className="text-fg-secondary">{k}:</span> <ReviewValue value={v} />
+          </span>
+        ))}
+      </span>
+    );
+  }
+  return <span className="mono">{String(value)}</span>;
+}
 
 export default function ServiceDeployPage() {
   const navigate = useNavigate();
@@ -192,10 +229,10 @@ export default function ServiceDeployPage() {
   };
 
   const reviewParams = useMemo(() => {
-    const out: { key: string; value: string }[] = [];
+    const out: { key: string; value: unknown }[] = [];
     for (const [k, v] of Object.entries(parameters)) {
       if (k === 'profiles') continue;
-      out.push({ key: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—') });
+      out.push({ key: k, value: v });
     }
     return out;
   }, [parameters]);
@@ -589,12 +626,21 @@ export default function ServiceDeployPage() {
                         </span>
                       </div>
                     ))}
-                    {reviewParams.map((entry) => (
-                      <div key={entry.key} className="review-row">
-                        <span className="review-label">{entry.key}</span>
-                        <span className="review-value mono">{entry.value}</span>
-                      </div>
-                    ))}
+                    {reviewParams.map((entry) => {
+                      const structured =
+                        entry.value !== null && typeof entry.value === 'object';
+                      return (
+                        <div
+                          key={entry.key}
+                          className={`review-row${structured ? ' items-start!' : ''}`}
+                        >
+                          <span className="review-label">{entry.key}</span>
+                          <span className="review-value">
+                            <ReviewValue value={entry.value} />
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
