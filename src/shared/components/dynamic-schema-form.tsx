@@ -232,10 +232,211 @@ function KeyValueField({
   );
 }
 
+/** Every connection contract referenced anywhere in a property tree, including
+ *  nested objects and the items of arrays. A structured value can carry a
+ *  connection reference at any depth (a datasource inside a realm), and each
+ *  one wants the project's connections of its contract rather than a name typed
+ *  from memory. */
+function collectContracts(props: Record<string, any>): string[] {
+  const found = new Set<string>();
+  const walk = (p: Record<string, any> | undefined) => {
+    for (const def of Object.values(p || {})) {
+      const contract = (def as any)?.['x-kubocd-connection-ref']?.contract;
+      if (contract) found.add(contract);
+      walk((def as any)?.properties);
+      walk((def as any)?.items?.properties);
+    }
+  };
+  walk(props);
+  return [...found];
+}
+
+/** Reads the project's connections for each contract a property tree names,
+ *  once per contract. Shared by the object and object-list editors so a
+ *  connection field is a picker at any depth. */
+function useContractConnections(projectId: string | undefined, props: Record<string, any>) {
+  const [connections, setConnections] = useState<Record<string, SelectableConnection[]>>({});
+
+  // Keyed on the contracts, not the field: when the schema is swapped under the
+  // same field (a version change), the options must not stay those of the
+  // previous schema.
+  const contracts = useMemo(
+    () => collectContracts(props).sort(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(props)],
+  );
+
+  useEffect(() => {
+    if (!projectId) return;
+    contracts.forEach((contract) => {
+      connectionApi
+        .selectable(projectId, contract)
+        .then((found) => setConnections((c) => ({ ...c, [contract]: found })))
+        .catch(() => setConnections((c) => ({ ...c, [contract]: [] })));
+    });
+  }, [projectId, contracts]);
+
+  return connections;
+}
+
+/** One control for one declared property, chosen from its type so the value
+ *  keeps that type: a boolean stays a boolean and an integer stays an integer
+ *  instead of every field collapsing to the string a text input produces. That
+ *  collapse is what made "enabled: true" reach Helm as the string "true" and a
+ *  typed deployment fail its schema validation. Nested objects recurse, so a
+ *  property two levels down (a realm's rootPrincipal.credentialsSecret.name) is
+ *  reachable rather than frozen as [object Object] in a text box. */
+function PropertyControl({
+  def,
+  value,
+  projectId,
+  connections,
+  onChange,
+}: {
+  def: any;
+  value: any;
+  projectId?: string;
+  connections: Record<string, SelectableConnection[]>;
+  onChange: (next: any) => void;
+}) {
+  const contract = def?.['x-kubocd-connection-ref']?.contract;
+  if (contract) {
+    return (
+      <Dropdown
+        value={value ?? null}
+        options={(connections[contract] || []).map((c) => ({ label: c.name, value: c.name }))}
+        optionLabel="label"
+        optionValue="value"
+        placeholder={`Select a ${contract} connection`}
+        appendTo={document.body}
+        className="w-full"
+        onChange={(e) => onChange(e.value)}
+      />
+    );
+  }
+  if (Array.isArray(def?.enum) && def.enum.length > 0) {
+    return (
+      <Dropdown
+        value={value ?? null}
+        options={toOptions(def.enum)}
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Select..."
+        appendTo={document.body}
+        className="w-full"
+        onChange={(e) => onChange(e.value)}
+      />
+    );
+  }
+  if (def?.type === 'boolean') {
+    return <InputSwitch checked={!!value} onChange={(e) => onChange(e.value)} />;
+  }
+  if (def?.type === 'integer' || def?.type === 'number') {
+    return (
+      <InputNumber
+        value={value ?? null}
+        useGrouping={false}
+        maxFractionDigits={def.type === 'number' ? 3 : 0}
+        min={def.minimum}
+        max={def.maximum}
+        className="w-full"
+        onValueChange={(e) => onChange(e.value)}
+      />
+    );
+  }
+  if (def?.type === 'object' && def.properties && Object.keys(def.properties).length > 0) {
+    return (
+      <ObjectFields
+        props={def.properties}
+        value={value && typeof value === 'object' ? value : {}}
+        projectId={projectId}
+        connections={connections}
+        onChange={onChange}
+      />
+    );
+  }
+  return (
+    <InputText
+      className="w-full"
+      value={value ?? ''}
+      placeholder={def?.default != null ? String(def.default) : ''}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+/** The declared properties of an object, each as its own typed control. Used
+ *  both for a standalone object parameter and, recursively, for a nested object
+ *  property. */
+function ObjectFields({
+  props,
+  value,
+  projectId,
+  connections,
+  onChange,
+}: {
+  props: Record<string, any>;
+  value: Record<string, any>;
+  projectId?: string;
+  connections: Record<string, SelectableConnection[]>;
+  onChange: (next: Record<string, any>) => void;
+}) {
+  const keys = Object.keys(props);
+  const patch = (key: string, columnValue: any) => onChange({ ...value, [key]: columnValue });
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border-light bg-surface-secondary px-3 py-2.5">
+      {keys.map((key) => (
+        <div key={key} className="flex flex-col gap-1">
+          <label className="text-[12px] text-fg-secondary">
+            {props[key]?.title || formatLabel(key)}
+          </label>
+          <PropertyControl
+            def={props[key]}
+            value={value?.[key]}
+            projectId={projectId}
+            connections={connections}
+            onChange={(columnValue) => patch(key, columnValue)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A single object parameter whose shape the schema declares, edited as typed
+ *  fields — one per property — rather than as a JSON blob or a free-form
+ *  key/value editor that neither validates the keys nor keeps their types. */
+function ObjectField({
+  field,
+  value,
+  projectId,
+  onChange,
+}: {
+  field: SchemaField;
+  value: Record<string, any>;
+  projectId?: string;
+  onChange: (next: Record<string, any>) => void;
+}) {
+  const props: Record<string, any> = field.properties || {};
+  const connections = useContractConnections(projectId, props);
+  return (
+    <ObjectFields
+      props={props}
+      value={value}
+      projectId={projectId}
+      connections={connections}
+      onChange={onChange}
+    />
+  );
+}
+
 /** A list of objects whose shape the schema knows: one row per entry, one
- *  column per property. A property carrying a connection marker gets the
- *  project's connections of that contract rather than a free-text field, which
- *  is the only way to name one without copying it by hand. */
+ *  column per property, each column typed from its property so a boolean stays
+ *  a boolean and a nested object stays editable. A property carrying a
+ *  connection marker gets the project's connections of that contract rather
+ *  than a free-text field, which is the only way to name one without copying it
+ *  by hand. */
 function ObjectListField({
   field,
   value,
@@ -249,35 +450,7 @@ function ObjectListField({
 }) {
   const props: Record<string, any> = field.items?.properties || {};
   const columns = Object.keys(props);
-  const [connections, setConnections] = useState<Record<string, SelectableConnection[]>>({});
-
-  // The contracts the columns point at. Keying the lookup on them rather than on
-  // the field name matters when the schema is swapped under the same field, as
-  // a version change does: the options would otherwise stay those of the
-  // previous schema.
-  const contracts = useMemo(
-    () =>
-      [
-        ...new Set(
-          columns
-            .map((c) => props[c]?.['x-kubocd-connection-ref']?.contract)
-            .filter((i): i is string => !!i)
-        ),
-      ].sort(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(field.items?.properties ?? {})]
-  );
-
-  // One lookup per contract used by the row, not per row.
-  useEffect(() => {
-    if (!projectId) return;
-    contracts.forEach((contract) => {
-      connectionApi
-        .selectable(projectId, contract)
-        .then((found) => setConnections((c) => ({ ...c, [contract]: found })))
-        .catch(() => setConnections((c) => ({ ...c, [contract]: [] })));
-    });
-  }, [projectId, contracts]);
+  const connections = useContractConnections(projectId, props);
 
   const patch = (index: number, column: string, columnValue: any) =>
     onChange(value.map((row, i) => (i === index ? { ...row, [column]: columnValue } : row)));
@@ -286,36 +459,18 @@ function ObjectListField({
     <div className="flex flex-col gap-2">
       {value.map((row, index) => (
         <div key={index} className="flex items-end gap-2">
-          {columns.map((column) => {
-            const contract = props[column]?.['x-kubocd-connection-ref']?.contract;
-            return (
-              <div key={column} className="flex-1">
-                <label className="text-[12px] text-fg-secondary">{formatLabel(column)}</label>
-                {contract ? (
-                  <Dropdown
-                    value={row[column] ?? null}
-                    options={(connections[contract] || []).map((c) => ({
-                      label: c.name,
-                      value: c.name,
-                    }))}
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder={`Select a ${contract} connection`}
-                    appendTo={document.body}
-                    className="w-full"
-                    onChange={(e) => patch(index, column, e.value)}
-                  />
-                ) : (
-                  <InputText
-                    className="w-full"
-                    value={row[column] ?? ''}
-                    placeholder={props[column]?.default ?? ''}
-                    onChange={(e) => patch(index, column, e.target.value)}
-                  />
-                )}
-              </div>
-            );
-          })}
+          {columns.map((column) => (
+            <div key={column} className="flex-1">
+              <label className="text-[12px] text-fg-secondary">{formatLabel(column)}</label>
+              <PropertyControl
+                def={props[column]}
+                value={row[column]}
+                projectId={projectId}
+                connections={connections}
+                onChange={(columnValue) => patch(index, column, columnValue)}
+              />
+            </div>
+          ))}
           <Button
             type="button"
             icon="pi pi-times"
@@ -348,8 +503,12 @@ function resolveWidget(field: SchemaField): string {
   // A structured value in a text input renders as [object Object], and editing
   // it would replace the structure by that string.
   if (field.type === 'array' && field.items?.properties) return 'object-list';
-  if (field.type === 'object' && Object.keys(field.properties || {}).length === 0) return 'key-value';
-  if (field.type === 'object' || field.type === 'array') return 'yaml';
+  // An object whose keys the schema declares is edited as typed fields, one per
+  // property. Only a genuinely open map — no declared properties — falls back to
+  // the free-form key/value editor.
+  if (field.type === 'object' && Object.keys(field.properties || {}).length > 0) return 'object';
+  if (field.type === 'object') return 'key-value';
+  if (field.type === 'array') return 'yaml';
   return 'text';
 }
 
@@ -551,6 +710,15 @@ const FieldWidget = memo(function FieldWidget({
             <ObjectListField
               field={field}
               value={Array.isArray(value) ? value : []}
+              projectId={projectId}
+              onChange={(next) => setValue(field.name, next)}
+            />
+          );
+        case 'object':
+          return (
+            <ObjectField
+              field={field}
+              value={value && typeof value === 'object' ? value : {}}
               projectId={projectId}
               onChange={(next) => setValue(field.name, next)}
             />
