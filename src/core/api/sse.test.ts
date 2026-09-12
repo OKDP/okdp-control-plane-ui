@@ -1,158 +1,240 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { subscribeTextStream, subscribeJsonStream, applyListEvent, StreamServerError } from './sse';
+import { setAuthTokenProvider } from './http';
 
-/**
- * Stands in for the browser's EventSource so a test can decide what the
- * connection looked like when the error fired, which is the only thing telling
- * a finished stream apart from a broken one.
- */
-class FakeEventSource {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSED = 2;
-  static last: FakeEventSource;
+// A controllable SSE response body: a test pushes frames and ends/fails it.
+class FakeStream {
+  private controllerRef!: ReadableStreamDefaultController<Uint8Array>;
+  readonly body: ReadableStream<Uint8Array>;
+  private readonly encoder = new TextEncoder();
 
-  readyState = FakeEventSource.OPEN;
-  closeCalls = 0;
-  onmessage: ((event: MessageEvent) => void) | null = null;
-  onerror: ((event: Event) => void) | null = null;
-  private listeners: Record<string, ((event: Event) => void)[]> = {};
-
-  constructor(readonly url: string) {
-    FakeEventSource.last = this;
+  constructor() {
+    this.body = new ReadableStream({
+      start: (controller) => {
+        this.controllerRef = controller;
+      },
+    });
   }
 
-  addEventListener(type: string, handler: (event: Event) => void) {
-    (this.listeners[type] ??= []).push(handler);
+  // No-op once closed/errored, like a real connection with nothing left to push into.
+  emit(data: string, event = 'message') {
+    try {
+      this.controllerRef.enqueue(this.encoder.encode(`event:${event}\ndata:${data}\n\n`));
+    } catch {
+      // already closed
+    }
   }
 
-  close() {
-    this.readyState = FakeEventSource.CLOSED;
-    this.closeCalls++;
+  emitKeepalive() {
+    this.controllerRef.enqueue(this.encoder.encode(': keepalive\n\n'));
   }
 
-  emitMessage(data: string) {
-    this.onmessage?.(new MessageEvent('message', { data }));
+  end() {
+    this.controllerRef.close();
   }
 
-  /** readyState is read before close(), so it is set first here too. */
-  emitError(readyState: number, data?: string) {
-    this.readyState = readyState;
-    const event = new MessageEvent('error', data === undefined ? {} : { data });
-    this.onerror?.(event);
-    (this.listeners.error ?? []).forEach((handler) => handler(event));
+  fail(reason: unknown) {
+    this.controllerRef.error(reason);
   }
 }
 
+let fetchMock: ReturnType<typeof vi.fn>;
+let streams: FakeStream[];
+
+function nextStream(): FakeStream {
+  return streams[streams.length - 1];
+}
+
 beforeEach(() => {
-  vi.stubGlobal('EventSource', FakeEventSource);
+  streams = [];
+  fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+    const stream = new FakeStream();
+    streams.push(stream);
+    // Mirrors a real fetch: aborting stops delivery, so unsubscribe is real.
+    init?.signal?.addEventListener('abort', () => stream.fail(new DOMException('aborted', 'AbortError')));
+    return Promise.resolve(new Response(stream.body, { status: 200 }));
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  setAuthTokenProvider(() => Promise.resolve('a-token'));
 });
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  setAuthTokenProvider(null);
+  vi.useRealTimers();
 });
 
+// Lets the async read loop catch up after pushing a chunk.
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
 describe('subscribeTextStream', () => {
-  it('delivers each line to next', () => {
+  it('delivers each line to next', async () => {
     const next = vi.fn();
     subscribeTextStream('/logs', { next });
+    await tick();
 
-    FakeEventSource.last.emitMessage('first');
-    FakeEventSource.last.emitMessage('second');
+    nextStream().emit('first');
+    nextStream().emit('second');
+    await tick();
 
     expect(next.mock.calls.map((c) => c[0])).toEqual(['first', 'second']);
   });
 
-  // The regression this file exists for. A log stream carries no end marker:
-  // the handler returns when the driver finishes and the browser, which cannot
-  // tell that apart from a drop, goes back to CONNECTING and fires `error`. A
-  // caller reporting every error would raise one at the end of every job, so
-  // the type must say whether the server actually complained.
-  it('does not raise a server error when the stream merely ends', () => {
-    const error = vi.fn();
-    subscribeTextStream('/logs', { next: vi.fn(), error });
+  it('sends the bearer token, not a plain EventSource connection', async () => {
+    subscribeTextStream('/logs', { next: vi.fn() });
+    await tick();
 
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
-
-    expect(error).toHaveBeenCalledTimes(1);
-    expect(error.mock.calls[0][0]).not.toBeInstanceOf(StreamServerError);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/logs',
+      expect.objectContaining({ headers: { Authorization: 'Bearer a-token' } }),
+    );
   });
 
-  it('raises a server error when the server describes a failure', () => {
+  it('drops keepalive comments without calling next', async () => {
+    const next = vi.fn();
+    subscribeTextStream('/logs', { next });
+    await tick();
+
+    nextStream().emitKeepalive();
+    await tick();
+
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  // A clean end must reach `complete`, not `error` — the response just closes,
+  // indistinguishable from a job finishing, so `error` would fire on every job.
+  it('completes, rather than errors, when the stream simply ends', async () => {
+    const error = vi.fn();
+    const complete = vi.fn();
+    subscribeTextStream('/logs', { next: vi.fn(), error, complete });
+    await tick();
+
+    nextStream().end();
+    await tick();
+
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('raises a server error when the server describes a failure', async () => {
     const error = vi.fn();
     subscribeTextStream('/logs', { next: vi.fn(), error });
+    await tick();
 
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING, 'pod not found');
+    nextStream().emit('pod not found', 'error');
+    nextStream().end();
+    await tick();
 
     const raised = error.mock.calls[0][0];
     expect(raised).toBeInstanceOf(StreamServerError);
     expect((raised as Error).message).toBe('pod not found');
   });
 
-  it('completes when the browser gives up for good', () => {
-    const complete = vi.fn();
+  it('reports a network failure as a plain error, not a server one', async () => {
     const error = vi.fn();
-    subscribeTextStream('/logs', { next: vi.fn(), complete, error });
+    subscribeTextStream('/logs', { next: vi.fn(), error });
+    await tick();
 
-    FakeEventSource.last.emitError(FakeEventSource.CLOSED);
+    nextStream().fail(new Error('network drop'));
+    await tick();
 
-    expect(complete).toHaveBeenCalledTimes(1);
-    expect(error).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).not.toBeInstanceOf(StreamServerError);
   });
 
-  // Left open, the browser reconnects on its own and replays the log from the
-  // top, so a finished job would stream itself again forever.
-  it('closes the connection whatever ended it', () => {
+  it('does not reconnect on its own', async () => {
     subscribeTextStream('/logs', { next: vi.fn() });
+    await tick();
 
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
+    nextStream().end();
+    await tick();
+    await tick();
 
-    expect(FakeEventSource.last.closeCalls).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the connection when unsubscribed', () => {
-    const unsubscribe = subscribeTextStream('/logs', { next: vi.fn() });
+  it('stops delivering events once unsubscribed', async () => {
+    const next = vi.fn();
+    const unsubscribe = subscribeTextStream('/logs', { next });
+    await tick();
     unsubscribe();
+    await tick();
 
-    expect(FakeEventSource.last.readyState).toBe(FakeEventSource.CLOSED);
+    nextStream().emit('too late');
+    await tick();
+
+    expect(next).not.toHaveBeenCalled();
   });
 });
 
 describe('subscribeJsonStream', () => {
-  it('parses each message', () => {
+  it('parses each message', async () => {
     const next = vi.fn();
     subscribeJsonStream<{ a: number }>('/watch', { next });
+    await tick();
 
-    FakeEventSource.last.emitMessage(JSON.stringify({ a: 1 }));
+    nextStream().emit(JSON.stringify({ a: 1 }));
+    await tick();
 
     expect(next).toHaveBeenCalledWith({ a: 1 });
   });
 
   // A single malformed frame must not tear down a watch that is otherwise fine.
-  it('survives a malformed message', () => {
+  it('survives a malformed message', async () => {
     const next = vi.fn();
     const error = vi.fn();
     subscribeJsonStream('/watch', { next, error });
+    await tick();
 
-    FakeEventSource.last.emitMessage('{not json');
-    FakeEventSource.last.emitMessage(JSON.stringify({ a: 2 }));
+    nextStream().emit('{not json');
+    nextStream().emit(JSON.stringify({ a: 2 }));
+    await tick();
 
     expect(error).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith({ a: 2 });
   });
 
-  it('reports a reconnecting stream as an error and a closed one as complete', () => {
-    const error = vi.fn();
-    const complete = vi.fn();
-    subscribeJsonStream('/watch', { next: vi.fn(), error, complete });
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
-    expect(error).toHaveBeenCalledTimes(1);
-    expect(complete).not.toHaveBeenCalled();
+  it('reconnects after the connection drops', async () => {
+    vi.useFakeTimers();
+    const next = vi.fn();
+    subscribeJsonStream('/watch', { next });
+    await vi.advanceTimersByTimeAsync(0);
 
-    subscribeJsonStream('/watch', { next: vi.fn(), error, complete });
-    FakeEventSource.last.emitError(FakeEventSource.CLOSED);
-    expect(complete).toHaveBeenCalledTimes(1);
+    nextStream().end();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    nextStream().emit(JSON.stringify({ a: 1 }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(next).toHaveBeenCalledWith({ a: 1 });
+  });
+
+  it('reports a dropped connection to the caller before retrying', async () => {
+    vi.useFakeTimers();
+    const error = vi.fn();
+    subscribeJsonStream('/watch', { next: vi.fn(), error });
+    await vi.advanceTimersByTimeAsync(0);
+
+    nextStream().fail(new Error('network drop'));
+    await vi.advanceTimersByTimeAsync(0);
+
     expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops reconnecting once unsubscribed', async () => {
+    vi.useFakeTimers();
+    const unsubscribe = subscribeJsonStream('/watch', { next: vi.fn() });
+    await vi.advanceTimersByTimeAsync(0);
+
+    nextStream().end();
+    unsubscribe();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -187,43 +269,5 @@ describe('applyListEvent', () => {
     const list = [{ name: 'a' }];
     applyListEvent(list, { type: 'ADDED', object: { name: 'b' } }, key);
     expect(list).toEqual([{ name: 'a' }]);
-  });
-});
-
-describe('subscribeTextStream, a stream that stops without a reason', () => {
-  // The half that was silent. A dropped connection closes the EventSource,
-  // which kills the browser's own reconnection, and raises an error carrying no
-  // server message. Reported as nothing at all, Follow mode froze with no
-  // notice and no way to tell it had stopped.
-  it('always tells the caller the stream ended, one way or the other', () => {
-    const error = vi.fn();
-    const complete = vi.fn();
-    subscribeTextStream('/logs', { next: vi.fn(), error, complete });
-
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
-
-    expect(error.mock.calls.length + complete.mock.calls.length).toBe(1);
-  });
-
-  // The distinction the viewers key off: a message from the server is a
-  // failure, anything else is just the end of the stream.
-  it('separates a server failure from a stream that merely stopped', () => {
-    const error = vi.fn();
-    subscribeTextStream('/logs', { next: vi.fn(), error });
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING, 'pod not found');
-    expect(error.mock.calls[0][0]).toBeInstanceOf(StreamServerError);
-
-    const other = vi.fn();
-    subscribeTextStream('/logs', { next: vi.fn(), error: other });
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
-    expect(other.mock.calls[0][0]).not.toBeInstanceOf(StreamServerError);
-  });
-
-  // Closing is deliberate: left open the browser reconnects and replays a
-  // finished log from the top. The caller is told instead.
-  it('closes rather than reconnecting, so the caller decides what to do', () => {
-    subscribeTextStream('/logs', { next: vi.fn(), error: vi.fn() });
-    FakeEventSource.last.emitError(FakeEventSource.CONNECTING);
-    expect(FakeEventSource.last.closeCalls).toBeGreaterThan(0);
   });
 });

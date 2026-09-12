@@ -27,6 +27,11 @@ export function setAuthTokenProvider(provider: TokenProvider | null): void {
   tokenProvider = provider;
 }
 
+// For a caller that attaches the token itself, outside `request` (the SSE client).
+export function getAuthToken(): Promise<string | undefined> {
+  return tokenProvider ? tokenProvider() : Promise.resolve(undefined);
+}
+
 export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
   unauthorizedHandler = handler;
 }
