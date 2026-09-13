@@ -36,6 +36,11 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   unauthorizedHandler = handler;
 }
 
+// For a caller outside `request` that hit a 401/403 itself (the SSE client).
+export function reportUnauthorized(status: number): void {
+  unauthorizedHandler?.(status);
+}
+
 function isSecureRoute(url: string): boolean {
   return url.includes('/api/');
 }
@@ -54,7 +59,7 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      unauthorizedHandler?.(response.status);
+      reportUnauthorized(response.status);
     }
     const body = await response.text().catch(() => '');
     throw new HttpError(response.status, response.statusText, body, url);
