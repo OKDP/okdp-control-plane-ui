@@ -1,5 +1,8 @@
 import { logger } from '../services/logger';
-import { getAuthToken } from './http';
+import { getAuthToken, reportUnauthorized } from './http';
+
+// A stream refused for lack of a valid session: never reconnected.
+class UnauthorizedStreamError extends Error {}
 
 export interface StreamSubscriber<T> {
   next: (value: T) => void;
@@ -12,16 +15,8 @@ export interface ListEvent<T> {
   object: T;
 }
 
-/**
- * A failure the server itself described, as opposed to a connection that
- * merely stopped.
- *
- * The distinction is not cosmetic. A log stream carries no end marker: when
- * the driver finishes, the handler returns and the caller cannot tell a
- * finished stream from a dropped one. Reporting every end as a failure would
- * raise one at the end of every successful job. Only this type means
- * something actually went wrong.
- */
+// A failure the server described, as opposed to a stream that just ended: a
+// log carries no end marker, so a clean finish must not read as an error.
 export class StreamServerError extends Error {
   constructor(message: string) {
     super(message);
@@ -60,7 +55,6 @@ interface SSEFrame {
 }
 
 // Splits a growing buffer into complete SSE frames (blank-line terminated).
-// Keepalive comment lines carry no `data:` and are dropped.
 function extractFrames(buffer: string): { frames: SSEFrame[]; rest: string } {
   const frames: SSEFrame[] = [];
   let rest = buffer;
@@ -79,15 +73,17 @@ function extractFrames(buffer: string): { frames: SSEFrame[]; rest: string } {
   return { frames, rest };
 }
 
-// A plain `fetch`, not `EventSource`, since EventSource cannot set the
-// Authorization header the API now requires. Resolves when the server closes
-// the response; rejects on a network failure or a non-2xx status.
+// fetch, not EventSource: EventSource cannot set the Authorization header.
 async function readStream(url: string, signal: AbortSignal, onFrame: (frame: SSEFrame) => void): Promise<void> {
   const token = await getAuthToken();
   const response = await fetch(url, {
     signal,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
+  if (response.status === 401 || response.status === 403) {
+    reportUnauthorized(response.status);
+    throw new UnauthorizedStreamError(`stream refused with status ${response.status}`);
+  }
   if (!response.ok || !response.body) {
     throw new Error(`stream request failed with status ${response.status}`);
   }
@@ -107,8 +103,7 @@ async function readStream(url: string, signal: AbortSignal, onFrame: (frame: SSE
 
 const RECONNECT_DELAY_MS = 3000;
 
-// Reconnects quietly on a dropped connection: the server's underlying
-// Kubernetes watch is recycled periodically, which is not a failure.
+// Reconnects on a dropped connection: the server's watch is recycled periodically.
 export function subscribeJsonStream<T>(
   url: string,
   subscriber: StreamSubscriber<T>,
@@ -132,6 +127,7 @@ export function subscribeJsonStream<T>(
         if (stopped) return;
         logger.error(`${label} error`, e);
         subscriber.error?.(e);
+        if (e instanceof UnauthorizedStreamError) return;
       }
       if (stopped) return;
       await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
@@ -144,8 +140,7 @@ export function subscribeJsonStream<T>(
   };
 }
 
-// Unlike subscribeJsonStream, never reconnects: a log has no replay, so
-// retrying it would duplicate everything already shown.
+// Unlike subscribeJsonStream, never reconnects: a log has no replay.
 export function subscribeTextStream(url: string, subscriber: StreamSubscriber<string>): () => void {
   const controller = new AbortController();
   let stopped = false;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { subscribeTextStream, subscribeJsonStream, applyListEvent, StreamServerError } from './sse';
-import { setAuthTokenProvider } from './http';
+import { setAuthTokenProvider, setUnauthorizedHandler } from './http';
 
 // A controllable SSE response body: a test pushes frames and ends/fails it.
 class FakeStream {
@@ -16,12 +16,12 @@ class FakeStream {
     });
   }
 
-  // No-op once closed/errored, like a real connection with nothing left to push into.
+  // No-op once closed: like a real connection, nothing left to push into.
   emit(data: string, event = 'message') {
     try {
       this.controllerRef.enqueue(this.encoder.encode(`event:${event}\ndata:${data}\n\n`));
     } catch {
-      // already closed
+      /* already closed */
     }
   }
 
@@ -40,6 +40,7 @@ class FakeStream {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let streams: FakeStream[];
+let nextStatus: number;
 
 function nextStream(): FakeStream {
   return streams[streams.length - 1];
@@ -47,12 +48,13 @@ function nextStream(): FakeStream {
 
 beforeEach(() => {
   streams = [];
+  nextStatus = 200;
   fetchMock = vi.fn((_url: string, init?: RequestInit) => {
     const stream = new FakeStream();
     streams.push(stream);
     // Mirrors a real fetch: aborting stops delivery, so unsubscribe is real.
     init?.signal?.addEventListener('abort', () => stream.fail(new DOMException('aborted', 'AbortError')));
-    return Promise.resolve(new Response(stream.body, { status: 200 }));
+    return Promise.resolve(new Response(stream.body, { status: nextStatus }));
   });
   vi.stubGlobal('fetch', fetchMock);
   setAuthTokenProvider(() => Promise.resolve('a-token'));
@@ -101,8 +103,7 @@ describe('subscribeTextStream', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  // A clean end must reach `complete`, not `error` — the response just closes,
-  // indistinguishable from a job finishing, so `error` would fire on every job.
+  // A clean end must reach `complete`, not `error`, or every job would log one.
   it('completes, rather than errors, when the stream simply ends', async () => {
     const error = vi.fn();
     const complete = vi.fn();
@@ -164,6 +165,18 @@ describe('subscribeTextStream', () => {
     await tick();
 
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('reports a 401 to the shared unauthorized handler', async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    nextStatus = 401;
+
+    subscribeTextStream('/logs', { next: vi.fn(), error: vi.fn() });
+    await tick();
+
+    expect(onUnauthorized).toHaveBeenCalledWith(401);
+    setUnauthorizedHandler(null);
   });
 });
 
@@ -235,6 +248,22 @@ describe('subscribeJsonStream', () => {
     await vi.advanceTimersByTimeAsync(5000);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // A 401 means the session is wrong, not the connection: not retried.
+  it('does not reconnect after a 401, and reports it to the unauthorized handler', async () => {
+    vi.useFakeTimers();
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    nextStatus = 401;
+
+    subscribeJsonStream('/watch', { next: vi.fn(), error: vi.fn() });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledWith(401);
+    setUnauthorizedHandler(null);
   });
 });
 
