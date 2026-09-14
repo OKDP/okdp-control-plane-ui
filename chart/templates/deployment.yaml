@@ -20,15 +20,24 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           # Written to /config.js by the entrypoint and read by the bundle at
           # startup: one image, any cluster, whose issuer it cannot know when built.
+          {{- if .Values.envFrom }}
+          envFrom:
+            {{- toYaml .Values.envFrom | nindent 12 }}
+          {{- end }}
           env:
             - name: OIDC_AUTHORITY
               value: {{ required "oidc.authority is required: the console has no issuer to authenticate against without it" .Values.oidc.authority | quote }}
+            {{- if .Values.oidc.clientId }}
             - name: OIDC_CLIENT_ID
               value: {{ .Values.oidc.clientId | quote }}
+            {{- end }}
             - name: OIDC_ROLES_CLAIM
               value: {{ .Values.identity.rolesClaim | quote }}
             - name: OIDC_ADMIN_ROLE
               value: {{ .Values.identity.adminRole | quote }}
+            {{- if .Values.env }}
+            {{- toYaml .Values.env | nindent 12 }}
+            {{- end }}
             {{- with .Values.proxy }}
             {{- if .httpProxy }}
             - { name: HTTP_PROXY,  value: {{ .httpProxy | quote }} }
