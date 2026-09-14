@@ -16,6 +16,8 @@ backend:
 # baked into the bundle, so one image serves any cluster.
 oidc:
   authority: ""
+  # Client ID used for OIDC authentication. Defaults to "okdp-ui".
+  # Set to "" or null when injecting OIDC_CLIENT_ID dynamically via secret (e.g., env/envFrom / dcr).
   clientId: okdp-ui
 
 # Which claim of the ID token carries the caller's roles, and which role opens
@@ -45,6 +47,10 @@ ingress:
   tlsSecretName: okdp-ui-tls
 
 resources: {}
+
+env: []
+
+envFrom: []
 
 # Forward proxy the pod must go through to reach anything outside the cluster.
 # Empty means no proxy, which is the case on any sandbox. Rendered as the three
