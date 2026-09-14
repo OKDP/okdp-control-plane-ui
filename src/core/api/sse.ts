@@ -64,7 +64,7 @@ function extractFrames(buffer: string): { frames: SSEFrame[]; rest: string } {
     const data: string[] = [];
     for (const line of rest.slice(0, boundary).split('\n')) {
       if (line.startsWith('event:')) event = line.slice('event:'.length).trim();
-      else if (line.startsWith('data:')) data.push(line.slice('data:'.length).trim());
+      else if (line.startsWith('data:')) data.push(line.slice('data:'.length).replace(/^ /, ''));
     }
     if (data.length > 0) frames.push({ event, data: data.join('\n') });
     rest = rest.slice(boundary + 2);
