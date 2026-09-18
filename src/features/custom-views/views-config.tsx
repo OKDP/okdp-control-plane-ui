@@ -104,6 +104,14 @@ export const BUILT_IN_VIEWS: BuiltInView[] = [
     categoryKey: 'data-engineering',
     path: (projectName) => `/projects/${projectName}/views/spark/applications`,
   },
+  {
+    label: 'SQL Editor',
+    description: "Write SQL and run it on the project's query engines (Trino)",
+    icon: 'pi pi-code',
+    tone: 'primary',
+    categoryKey: 'sql-bi',
+    path: (projectName) => `/projects/${projectName}/views/sql-editor`,
+  },
 ];
 
 /** Small glyph overlaid on a brand logo, telling sibling views of the same
