@@ -50,26 +50,26 @@ describe('describeSyncOutcome', () => {
   // can read its key. Announcing success on the 201 alone let a broken import
   // look created and fine.
   it('does not claim success while the status is unsettled', () => {
-    const o = describeSyncOutcome('mon-import', detail('Pending'));
+    const o = describeSyncOutcome('my-import', detail('Pending'));
     expect(o.settled).toBe(false);
     expect(o.synced).toBe(false);
     expect(o.message).not.toContain('synced.');
   });
 
   it('does not claim success when the status could not be read at all', () => {
-    const o = describeSyncOutcome('mon-import', null);
+    const o = describeSyncOutcome('my-import', null);
     expect(o.settled).toBe(false);
     expect(o.synced).toBe(false);
   });
 
   it('confirms a real sync', () => {
-    const o = describeSyncOutcome('mon-import', detail('Synced'));
+    const o = describeSyncOutcome('my-import', detail('Synced'));
     expect(o).toMatchObject({ settled: true, synced: true });
     expect(o.message).toContain('created and synced');
   });
 
   it('reports a failed sync and points at the key', () => {
-    const o = describeSyncOutcome('mon-import', detail('Error', 'could not get secret data'));
+    const o = describeSyncOutcome('my-import', detail('Error', 'could not get secret data'));
     expect(o).toMatchObject({ settled: true, synced: false });
     expect(o.message).toContain('could not get secret data');
     expect(o.message).toContain('remote key');
@@ -79,7 +79,7 @@ describe('describeSyncOutcome', () => {
   // produce a dangling sentence.
   it('still reports a failure with no reason attached', () => {
     for (const empty of [undefined, '', '   ']) {
-      const o = describeSyncOutcome('mon-import', detail('Error', empty));
+      const o = describeSyncOutcome('my-import', detail('Error', empty));
       expect(o.synced).toBe(false);
       expect(o.message).not.toContain('::');
       expect(o.message.trim().endsWith('.')).toBe(true);
@@ -148,7 +148,7 @@ describe('waitForSyncOutcome', () => {
     });
 
     expect(result).toBeNull();
-    expect(describeSyncOutcome('mon-import', result).synced).toBe(false);
+    expect(describeSyncOutcome('my-import', result).synced).toBe(false);
   });
 
   it('always asks at least once, whatever the timings say', async () => {
@@ -367,5 +367,28 @@ describe('waitForSyncOutcome, what the wait costs', () => {
     expect(result).toBeNull();
     expect(warned).toHaveBeenCalled();
     expect(warned.mock.calls[0][1]).toBeInstanceOf(TypeError);
+  });
+});
+
+describe('describeSyncOutcome, the pre-edit status could not be read', () => {
+  // The pre-write read fails, the first read after the write returns the
+  // pre-edit Synced, and nothing tells the two apart. Claiming success here is
+  // the false green this module exists to remove.
+  it('never claims success on an edit with no status to compare against', () => {
+    const o = describeSyncOutcome('my-import', detail('Synced'), 'updated', 'unread');
+    expect(o.synced).toBe(false);
+    expect(o.settled).toBe(false);
+    expect(o.message).not.toContain('and synced');
+    expect(o.message).toContain('could not be read');
+  });
+
+  it('does not blame the import for a pre-edit failure either', () => {
+    const o = describeSyncOutcome('my-import', detail('Error', 'old failure'), 'updated', 'unread');
+    expect(o.synced).toBe(false);
+    expect(o.message).not.toContain('old failure');
+  });
+
+  it('a creation still reports its own result', () => {
+    expect(describeSyncOutcome('my-import', detail('Synced'), 'created', null).synced).toBe(true);
   });
 });
