@@ -476,21 +476,30 @@ export default function ServiceDeployPage() {
                 </div>
               )}
 
-              {currentStepKey === 'params' &&
-                (schemaLoading ? (
-                  <div className="form-section">
-                    <div className="flex items-center gap-3 pt-2 pb-5">
-                      <i className="pi pi-spin pi-spinner text-[18px] text-primary"></i>
-                      <div>
-                        <strong>Loading parameter schema…</strong>
-                        <div className="muted-text small">
-                          Fetching {service.name}:{selectedTag} configuration.
-                        </div>
+              {/* The Parameters step stays mounted across steps, hidden when it
+                  is not the active one. The schema form keeps its edits in its
+                  own state; unmounting it on the way to Review dropped them and
+                  re-seeded the schema defaults on the way back, so a toggle the
+                  user had turned off came back on (#38). An inline display:none
+                  is used rather than the `hidden` attribute because
+                  `.form-section` sets `display: flex`, which would override the
+                  attribute and keep the step visible. */}
+              <div
+                className="form-section"
+                style={{ display: currentStepKey === 'params' ? undefined : 'none' }}
+              >
+                {schemaLoading ? (
+                  <div className="flex items-center gap-3 pt-2 pb-5">
+                    <i className="pi pi-spin pi-spinner text-[18px] text-primary"></i>
+                    <div>
+                      <strong>Loading parameter schema…</strong>
+                      <div className="muted-text small">
+                        Fetching {service.name}:{selectedTag} configuration.
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="form-section">
+                  <>
                     {/* Which connections this service needs is not known yet, or
                         could not be read. Deploying anyway would leave the
                         release waiting on a connection nobody was asked for. */}
@@ -539,8 +548,9 @@ export default function ServiceDeployPage() {
                     ) : packageInputs.length === 0 ? (
                       <p className="muted-text">No configurable parameters for this version.</p>
                     ) : null}
-                  </div>
-                ))}
+                  </>
+                )}
+              </div>
 
               {currentStepKey === 'profiles' && (
                 <div className="form-section">
