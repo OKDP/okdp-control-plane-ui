@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/OKDP/okdp-control-plane-ui/compare/v0.9.0...v0.9.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **forms:** type object-list cells from their schema, lists included ([ac32959](https://github.com/OKDP/okdp-control-plane-ui/commit/ac32959d8c180b0421de2384473eb73d47b9b65d))
+
 ## [0.9.0](https://github.com/OKDP/okdp-control-plane-ui/compare/v0.8.0...v0.9.0) (2026-09-18)
 
 
