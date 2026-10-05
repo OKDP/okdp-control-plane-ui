@@ -85,6 +85,11 @@ const toSecretFallbackDetail = (es: ExternalSecret): ExternalSecretStatusDetail 
   lastError: es.lastError,
 });
 
+// Syncing is a console-side state: the API never produces it.
+type ShownSecret = Omit<ExternalSecret, 'status'> & {
+  status: ExternalSecret['status'] | 'Syncing';
+};
+
 export function ExternalSecretList() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const { toast, showSuccess, showError } = useToastMessages();
@@ -109,6 +114,8 @@ export function ExternalSecretList() {
   // so a stale green never sits under a key that has since been edited.
   const [keyChecks, setKeyChecks] = useState<Record<number, CheckDisplay>>({});
   const [checkingKeys, setCheckingKeys] = useState(false);
+  // The imports whose save is still waiting for the operator's first answer.
+  const [syncingNames, setSyncingNames] = useState<ReadonlySet<string>>(new Set());
   // The store currently selected, read by the in-flight checks when their
   // answers come back: an answer about the store that was selected when the
   // question left says nothing about the one selected now.
@@ -329,6 +336,7 @@ export function ExternalSecretList() {
         setSaving(false);
         setDialogVisible(false);
         loadSecrets();
+        setSyncingNames((names) => new Set(names).add(secretName));
 
         // A 201 says the object was written, not that it can read its key: the
         // controller finds that out on its first sync. Announcing success on
@@ -354,8 +362,21 @@ export function ExternalSecretList() {
       .catch(() => {
         // Already reported above, or raised by the wait after a successful
         // write. Either way the object's row now carries the truth.
-      });
+      })
+      .finally(() =>
+        setSyncingNames((names) => {
+          const next = new Set(names);
+          next.delete(secretName);
+          return next;
+        }),
+      );
   };
+
+  // Until the operator answers, the stored status is the one from before the
+  // save and would be read as its outcome.
+  const shownSecrets: ShownSecret[] = secrets.map((es) =>
+    syncingNames.has(es.name) ? { ...es, status: 'Syncing' } : es,
+  );
 
   const confirmDelete = (es: ExternalSecret) => setDeleteTarget(es);
 
@@ -419,7 +440,7 @@ export function ExternalSecretList() {
       {/* Data Table */}
       <div className="table-wrapper">
         <DataTable paginator rows={25} paginatorTemplate="PrevPageLink PageLinks NextPageLink" alwaysShowPaginator={false}
-          value={secrets}
+          value={shownSecrets}
           loading={loading}
           globalFilter={globalFilter}
           globalFilterFields={['name', 'secretStoreRef', 'target.name', 'status']}
@@ -473,12 +494,12 @@ export function ExternalSecretList() {
             header="Status"
             field="status"
             style={{ width: '10%' }}
-            body={(es: ExternalSecret) => (
+            body={(es: ShownSecret) => (
               <span title={es.lastError || ''}>
                 <StatusTag
                   value={es.status}
                   tone={getStatusTone(es.status)}
-                  pulse={es.status === 'Pending'}
+                  pulse={es.status === 'Pending' || es.status === 'Syncing'}
                 />
               </span>
             )}
