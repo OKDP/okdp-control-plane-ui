@@ -146,8 +146,6 @@ export default function ServiceDetailPage() {
       return;
     }
     setLoading(true);
-    // A failed pods request must not hide an instance that loaded fine (e.g.
-    // one still waiting for its dependencies): it only empties the pod list.
     let podsFailed = false;
     Promise.all([
       serviceApi.getService(projectId, serviceName),

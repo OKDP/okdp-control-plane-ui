@@ -39,8 +39,6 @@ function renderPage() {
 
 describe('ServiceDetailPage', () => {
   beforeEach(() => {
-    // Node's experimental localStorage global shadows jsdom's with a stub
-    // lacking getItem; the page reads its delete-confirm preference from it.
     const store = new Map<string, string>();
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => store.get(key) ?? null,
