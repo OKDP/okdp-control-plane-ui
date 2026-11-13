@@ -8,6 +8,7 @@ import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { Toast } from 'primereact/toast';
 import { projectApi, type Project } from '../../../core/api/project-api';
+import { apiErrorMessage } from '../../../core/api/http';
 import { logger } from '../../../core/services/logger';
 import { useAuth } from '../../../core/auth/auth-context';
 import { useProjectContext } from '../../../core/context/project-context';
@@ -90,6 +91,7 @@ export default function ProjectList() {
   const [visible, setVisible] = useState(false);
   const [newProject, setNewProject] = useState<Project>({ name: '', description: '' });
   const [newColor, setNewColor] = useState<string>(PROJECT_COLOR_PALETTE[0]);
+  const [adminGroup, setAdminGroup] = useState('');
 
   // Watch-confirmed created/deleted toasts (covers other admins/tabs too):
   // diff against the previous snapshot. The ref is seeded from the first
@@ -118,6 +120,7 @@ export default function ProjectList() {
   const showDialog = () => {
     setNewProject({ name: '', description: '' });
     setNewColor(PROJECT_COLOR_PALETTE[0]);
+    setAdminGroup('');
     setVisible(true);
   };
 
@@ -125,9 +128,21 @@ export default function ProjectList() {
     // Store the color before the request: the watch ADDED event often beats
     // the HTTP response, and the new row must not flash the fallback color.
     setProjectColor(newProject.name, newColor);
+    const group = adminGroup.trim();
     projectApi
       .createProject(newProject)
-      .then(() => setVisible(false))
+      .then(() => {
+        setVisible(false);
+        if (!group) return;
+        projectApi
+          .setMember(newProject.name, { kind: 'group', name: group, role: 'admin' })
+          .catch((err) => {
+            showError(
+              apiErrorMessage(err, `Project created, but ${group} could not be made its admin`),
+            );
+            logger.error('Failed to set the project admin group', err);
+          });
+      })
       .catch((err) => {
         clearProjectColor(newProject.name);
         showError('Failed to create project');
@@ -357,6 +372,23 @@ export default function ProjectList() {
               className="w-full dialog-input"
               placeholder="Briefly describe the purpose of this project..."
             />
+          </div>
+
+          <div className="field">
+            <label htmlFor="admin-group">
+              Admin group <span className="optional">(optional)</span>
+            </label>
+            <InputText
+              id="admin-group"
+              value={adminGroup}
+              onChange={(e) => setAdminGroup(e.target.value)}
+              className="w-full dialog-input"
+              placeholder="e.g., data_engineer"
+            />
+            <small className="field-hint">
+              Its members manage who can access the project. Can be changed later in the project
+              settings.
+            </small>
           </div>
 
           <div className="field">

@@ -15,9 +15,10 @@ import {
 import SectionHeading from '../../../shared/components/section-heading';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 import CustomViewsSection from './custom-views-section';
+import MembersSection from './members-section';
 
 /** /projects/:projectId/settings — per-project settings: description
- *  update and project deletion (moved here from the former /admin/projects
+ *  update, members and project deletion (moved here from the former /admin/projects
  *  page, keeping the type-to-confirm dialog). */
 export default function ProjectSettingsPage() {
   // The route param is the project name and is available immediately;
@@ -114,6 +115,8 @@ export default function ProjectSettingsPage() {
           </div>
         </div>
       </div>
+
+      <MembersSection projectName={projectName} showSuccess={showSuccess} showError={showError} />
 
       <div className="flex flex-col gap-3">
         <SectionHeading>Color</SectionHeading>
