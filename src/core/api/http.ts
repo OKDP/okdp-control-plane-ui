@@ -2,8 +2,9 @@
 //
 // - Attaches the OIDC access token to secure routes (any URL containing
 //   '/api/'), mirroring the `secureRoutes` config of the Angular app.
-// - On 401/403 responses, invokes the registered unauthorized handler
-//   (forced logout + redirect to login), mirroring the auth interceptor.
+// - On 401 responses, invokes the registered unauthorized handler (forced
+//   logout + redirect to login). A 403 is a refused action, not a dead
+//   session: it reaches the caller as an HttpError like any other failure.
 
 export class HttpError extends Error {
   constructor(
@@ -36,7 +37,7 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   unauthorizedHandler = handler;
 }
 
-// For a caller outside `request` that hit a 401/403 itself (the SSE client).
+// For a caller outside `request` that hit a 401 itself (the SSE client).
 export function reportUnauthorized(status: number): void {
   unauthorizedHandler?.(status);
 }
@@ -58,7 +59,7 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
   const response = await fetch(url, { ...init, headers });
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       reportUnauthorized(response.status);
     }
     const body = await response.text().catch(() => '');

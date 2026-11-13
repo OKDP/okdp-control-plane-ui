@@ -1,8 +1,9 @@
 import { logger } from '../services/logger';
 import { getAuthToken, reportUnauthorized } from './http';
 
-// A stream refused for lack of a valid session: never reconnected.
-class UnauthorizedStreamError extends Error {}
+// A stream refused for lack of a valid session (401) or of the right to read
+// it (403): never reconnected, the answer would be the same.
+class RefusedStreamError extends Error {}
 
 export interface StreamSubscriber<T> {
   next: (value: T) => void;
@@ -81,8 +82,8 @@ async function readStream(url: string, signal: AbortSignal, onFrame: (frame: SSE
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   if (response.status === 401 || response.status === 403) {
-    reportUnauthorized(response.status);
-    throw new UnauthorizedStreamError(`stream refused with status ${response.status}`);
+    if (response.status === 401) reportUnauthorized(response.status);
+    throw new RefusedStreamError(`stream refused with status ${response.status}`);
   }
   if (!response.ok || !response.body) {
     throw new Error(`stream request failed with status ${response.status}`);
@@ -127,7 +128,7 @@ export function subscribeJsonStream<T>(
         if (stopped) return;
         logger.error(`${label} error`, e);
         subscriber.error?.(e);
-        if (e instanceof UnauthorizedStreamError) return;
+        if (e instanceof RefusedStreamError) return;
       }
       if (stopped) return;
       await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
