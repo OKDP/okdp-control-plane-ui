@@ -4,7 +4,7 @@ import { useAuth } from '../../core/auth/auth-context';
 
 export default function HomePage() {
   const auth = useAuth();
-  // Set by the 401/403 unauthorized handler (see AuthRedirector).
+  // Set by the 401 unauthorized handler (see AuthRedirector).
   const [searchParams] = useSearchParams();
   const sessionExpired = searchParams.get('sessionExpired') === 'true';
 

@@ -21,7 +21,7 @@ function shouldRedirect(target: string): boolean {
  * Post-login navigation (AuthRedirectService equivalent): once the user is
  * authenticated, restore the saved deep link, or land an admin on /admin and
  * everyone else on /home, which routes to the default project (or the
- * getting-started view). Also registers the 401/403 handler that forces a
+ * getting-started view). Also registers the 401 handler that forces a
  * logout and returns to the login page (auth interceptor equivalent).
  */
 export function AuthRedirector() {
