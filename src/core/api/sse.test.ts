@@ -265,6 +265,22 @@ describe('subscribeJsonStream', () => {
     expect(onUnauthorized).toHaveBeenCalledWith(401);
     setUnauthorizedHandler(null);
   });
+
+  // A 403 is a project the user may not watch: the session is fine.
+  it('does not reconnect after a 403, and does not log the user out', async () => {
+    vi.useFakeTimers();
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    nextStatus = 403;
+
+    subscribeJsonStream('/watch', { next: vi.fn(), error: vi.fn() });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    setUnauthorizedHandler(null);
+  });
 });
 
 describe('applyListEvent', () => {
