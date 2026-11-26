@@ -1,9 +1,11 @@
 // Minimal fetch wrapper replacing Angular's HttpClient.
 //
-// - Attaches the OIDC access token to secure routes (any URL containing
-//   '/api/'), mirroring the `secureRoutes` config of the Angular app.
+// - Attaches the OIDC access token to secure routes (API origin + '/api/'
+//   path prefix), mirroring the `secureRoutes` config of the Angular app.
 // - On 401/403 responses, invokes the registered unauthorized handler
 //   (forced logout + redirect to login), mirroring the auth interceptor.
+
+import { environment } from '../../config/environment';
 
 export class HttpError extends Error {
   constructor(
@@ -24,6 +26,9 @@ let tokenProvider: TokenProvider | null = null;
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 
 export function setAuthTokenProvider(provider: TokenProvider | null): void {
+  if (provider !== tokenProvider || provider === null) {
+    clearApiCache();
+  }
   tokenProvider = provider;
 }
 
@@ -41,8 +46,17 @@ export function reportUnauthorized(status: number): void {
   unauthorizedHandler?.(status);
 }
 
-function isSecureRoute(url: string): boolean {
-  return url.includes('/api/');
+export function isSecureRoute(url: string): boolean {
+  try {
+    const apiOrigin = new URL(
+      environment.apiBaseUrl || window.location.origin,
+      window.location.origin,
+    ).origin;
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === apiOrigin && parsed.pathname.startsWith('/api/');
+  } catch {
+    return false;
+  }
 }
 
 async function request(url: string, init: RequestInit = {}): Promise<Response> {
@@ -76,12 +90,12 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-function jsonInit(method: string, body: unknown): RequestInit {
-  return {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  };
+/** A JSON write. Headers from `init` are added to Content-Type, not swapped
+ *  for it. */
+function jsonInit(method: string, body: unknown, init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers);
+  headers.set('Content-Type', 'application/json');
+  return { ...init, method, headers, body: JSON.stringify(body) };
 }
 
 /**
@@ -142,6 +156,15 @@ export function clearApiCache(): void {
   getCache.clear();
 }
 
+/** Drops the cached GET answers for `url` and for the URLs under it. */
+export function invalidateApiCache(url: string): void {
+  for (const key of [...getCache.keys()]) {
+    if (key === url || key.startsWith(`${url}/`) || key.startsWith(`${url}?`)) {
+      getCache.delete(key);
+    }
+  }
+}
+
 function cachedGet<T>(url: string, init: RequestInit | undefined, fetcher: () => Promise<T>): Promise<T> {
   if (init) {
     return fetcher();
@@ -158,7 +181,11 @@ function cachedGet<T>(url: string, init: RequestInit | undefined, fetcher: () =>
   }
   const value = fetcher();
   getCache.set(url, { at: now, value });
-  value.catch(() => getCache.delete(url));
+  value.catch(() => {
+    if (getCache.get(url)?.value === value) {
+      getCache.delete(url);
+    }
+  });
   return value;
 }
 
@@ -177,7 +204,7 @@ export const http = {
 
   async post<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
     try {
-      return parseJson<T>(await request(url, { ...jsonInit('POST', body), ...init }));
+      return parseJson<T>(await request(url, jsonInit('POST', body, init)));
     } finally {
       clearApiCache();
     }
@@ -185,7 +212,7 @@ export const http = {
 
   async put<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
     try {
-      return parseJson<T>(await request(url, { ...jsonInit('PUT', body), ...init }));
+      return parseJson<T>(await request(url, jsonInit('PUT', body, init)));
     } finally {
       clearApiCache();
     }
@@ -193,7 +220,7 @@ export const http = {
 
   async patch<T>(url: string, body: unknown, init?: RequestInit): Promise<T> {
     try {
-      return parseJson<T>(await request(url, { ...jsonInit('PATCH', body), ...init }));
+      return parseJson<T>(await request(url, jsonInit('PATCH', body, init)));
     } finally {
       clearApiCache();
     }
@@ -202,6 +229,28 @@ export const http = {
   async delete(url: string, init?: RequestInit): Promise<void> {
     try {
       await request(url, { ...init, method: 'DELETE' });
+    } finally {
+      clearApiCache();
+    }
+  },
+
+  /** A DELETE that keeps the status (a 202 is asynchronous, a 204 is not)
+   *  and the parsed body. The body is undefined when empty or not JSON: a
+   *  deletion that succeeded never fails on what its body holds. */
+  async deleteWithStatus<T>(
+    url: string,
+    init?: RequestInit,
+  ): Promise<{ status: number; body: T | undefined }> {
+    try {
+      const response = await request(url, { ...init, method: 'DELETE' });
+      const text = await response.text();
+      let body: T | undefined;
+      try {
+        body = text ? (JSON.parse(text) as T) : undefined;
+      } catch {
+        body = undefined;
+      }
+      return { status: response.status, body };
     } finally {
       clearApiCache();
     }

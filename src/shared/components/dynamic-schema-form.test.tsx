@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DynamicSchemaForm } from './dynamic-schema-form';
+import { connectionApi } from '../../core/api/connection-api';
+
+vi.mock('../../core/api/connection-api', () => ({
+  connectionApi: { selectable: vi.fn() },
+}));
 
 const schema = {
   properties: {
@@ -255,4 +260,80 @@ describe('the key-value-scalar widget', () => {
     const last = onParametersChange.mock.calls.at(-1)![0];
     expect(last.dagsGitSync).toEqual({ k: expected });
   });
+});
+
+// A column carrying a connection marker offers the project's connections of
+// that contract. Both marker dialects are read.
+describe('connection markers in an object list', () => {
+  const selectable = vi.mocked(connectionApi.selectable);
+
+  function catalogs(column: Record<string, unknown>) {
+    return {
+      properties: {
+        catalogs: {
+          type: 'array',
+          items: { properties: { name: { type: 'string' }, connection: column } },
+        },
+      },
+    };
+  }
+
+  function renderWith(column: Record<string, unknown>) {
+    selectable.mockReset();
+    selectable.mockResolvedValue([]);
+    render(
+      <DynamicSchemaForm
+        schema={catalogs(column)}
+        projectId="team-a"
+        initialValues={{ catalogs: [{ name: 'lake' }] }}
+        onParametersChange={vi.fn()}
+      />,
+    );
+  }
+
+  it.each([
+    ['x-okdp-connection-ref', { 'x-okdp-connection-ref': { contract: 'polaris' } }],
+    ['x-kubocd-connection-ref', { 'x-kubocd-connection-ref': { contract: 'polaris' } }],
+  ])('offers the connections named by %s', (_marker, marker) => {
+    renderWith({ type: 'string', ...marker });
+
+    expect(selectable).toHaveBeenCalledWith('team-a', 'polaris');
+    expect(screen.getAllByText('Select a polaris connection').length).toBeGreaterThan(0);
+  });
+
+  it('prefers the neutral marker when both are set', () => {
+    renderWith({
+      type: 'string',
+      'x-okdp-connection-ref': { contract: 'polaris' },
+      'x-kubocd-connection-ref': { contract: 'hive-metastore' },
+    });
+
+    expect(selectable).toHaveBeenCalledTimes(1);
+    expect(selectable).toHaveBeenCalledWith('team-a', 'polaris');
+  });
+
+  it('keeps a free-text cell without a marker', () => {
+    renderWith({ type: 'string' });
+
+    expect(selectable).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Select a .* connection/)).toBeNull();
+  });
+
+  it.each(['toString', 'constructor'])(
+    'does not look up Object.prototype when a contract is named %s',
+    (contract) => {
+      selectable.mockReset();
+      selectable.mockReturnValue(new Promise(() => undefined));
+      render(
+        <DynamicSchemaForm
+          schema={catalogs({ type: 'string', 'x-okdp-connection-ref': { contract } })}
+          projectId="team-a"
+          initialValues={{ catalogs: [{ name: 'lake' }] }}
+          onParametersChange={vi.fn()}
+        />,
+      );
+
+      expect(screen.getAllByText(`Select a ${contract} connection`).length).toBeGreaterThan(0);
+    },
+  );
 });
