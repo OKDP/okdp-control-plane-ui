@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { formatCpuCores, formatMemoryBytes } from '../services/service-utils';
+import { formatCpuCores, formatMemoryBytes, instancePhase } from '../services/service-utils';
 import type { ProjectServicesSummary } from './use-project-services-summary';
 
 const ICON_TONES = {
@@ -39,7 +39,10 @@ function KpiTile({
 export default function ProjectKpis({ summary }: { summary: ProjectServicesSummary }) {
   const { instances, metrics, loaded } = summary;
 
-  const running = instances.filter((i) => i.status === 'Ready' || i.status === 'Running').length;
+  const running = instances.filter((i) => {
+    const phase = instancePhase(i);
+    return phase === 'Ready' || phase === 'Running';
+  }).length;
 
   let cpu = 0;
   let mem = 0;

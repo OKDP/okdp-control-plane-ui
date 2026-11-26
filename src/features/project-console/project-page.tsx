@@ -29,6 +29,8 @@ import {
   uiServiceLaunchers,
   uiServiceViewIcon,
 } from '../custom-views/views-config';
+import { instancePhase } from './services/service-utils';
+import { safeExternalUrl } from '../../shared/utils/safe-url';
 import { useViewServices } from '../custom-views/use-view-services';
 
 /** Per-category unfold overrides persisted across reloads; categories absent
@@ -126,14 +128,26 @@ interface ExternalNavLinkProps {
   title: string;
 }
 
-/** Views-sidebar launcher: opens a deployed service UI in a new tab — the
+/** Views-sidebar launcher: opens a deployed service UI in a new tab, the
  *  sidebar twin of the page's "Open" tiles. */
 function ExternalNavLink({ href, icon, label, collapsed, title }: ExternalNavLinkProps) {
+  const safeHref = safeExternalUrl(href);
+  if (!safeHref) {
+    return (
+      <DisabledNavLink
+        icon={icon}
+        label={label}
+        collapsed={collapsed}
+        title={title}
+        collapsedTitle={label}
+      />
+    );
+  }
   return (
     <a
-      href={href}
+      href={safeHref}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       className={sideNavLinkClass({ collapsed, sub: true })}
       title={collapsed ? label : title}
     >
@@ -476,7 +490,7 @@ export default function ProjectPage() {
                     (launcherCounts.get(view.label) ?? 0) > 1
                       ? `${view.label} · ${svc.name}`
                       : view.label;
-                  return svc.status === 'Ready' ? (
+                  return instancePhase(svc) === 'Ready' ? (
                     <ExternalNavLink
                       key={`${svc.name}:${view.label}`}
                       href={launcherUrl(launcher)}
@@ -491,8 +505,8 @@ export default function ProjectPage() {
                       icon={icon}
                       label={label}
                       collapsed={sidebarCollapsed}
-                      title={`${svc.name} — ${svc.status}`}
-                      collapsedTitle={`${label} — ${svc.status}`}
+                      title={`${svc.name} - ${instancePhase(svc)}`}
+                      collapsedTitle={`${label} - ${instancePhase(svc)}`}
                     />
                   );
                 })}

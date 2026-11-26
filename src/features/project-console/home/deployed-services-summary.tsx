@@ -4,7 +4,13 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import type { ServiceInstance, ServiceMetrics } from '../../../core/models/service.model';
 import MetricCell from '../../../shared/components/metric-cell';
-import { areaBasePath, isTransitioning, parentLabel, statusTone } from '../services/service-utils';
+import {
+  areaBasePath,
+  instancePhase,
+  isTransitioning,
+  parentLabel,
+  statusTone,
+} from '../services/service-utils';
 import { StatusTag } from '../../../shared/components/status-tag';
 import type { ProjectServicesSummary } from './use-project-services-summary';
 
@@ -72,9 +78,9 @@ export default function DeployedServicesSummary({
           header="Status"
           body={(svc: SummaryRow) => (
             <StatusTag
-              value={svc.status}
-              tone={statusTone(svc.status)}
-              pulse={isTransitioning(svc.status)}
+              value={instancePhase(svc)}
+              tone={statusTone(instancePhase(svc))}
+              pulse={isTransitioning(instancePhase(svc))}
               title={svc.statusMessage}
             />
           )}

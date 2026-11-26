@@ -35,7 +35,7 @@ export interface ConnectionField {
 }
 
 export interface ContractDescriptor {
-  /** Also the KuboCD Contract this descriptor produces. A package asking for
+  /** Also the engine contract this descriptor produces. A package asking for
    *  `database-server` is answered by the contract of the same name, whose
    *  engine field says whether it is PostgreSQL or MySQL. */
   name: string;
@@ -51,8 +51,8 @@ export interface ContractDescriptor {
 
 export interface ConnectionCatalog {
   types: ContractDescriptor[];
-  /** False while the KuboCD connection CRDs are not installed: external
-   *  connections cannot be persisted yet, internal ones still work. */
+  /** False while the platform cannot store external connections (with
+   *  KuboCD, its connection CRDs are not installed). Internal ones still work. */
   crdAvailable: boolean;
 }
 

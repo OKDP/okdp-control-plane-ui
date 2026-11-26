@@ -35,6 +35,8 @@ vi.mock('oidc-client-ts', () => {
 });
 
 import { AuthProvider, useAuth } from './auth-context';
+import { readUiCache, writeUiCache } from '../api/ui-cache';
+import { http } from '../api/http';
 
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
@@ -107,19 +109,34 @@ describe('AuthProvider', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should clear local storage keys on forceLogout', async () => {
+    it('should clear local storage keys and in-memory caches on forceLogout', async () => {
       sessionStorage.setItem('auth_return_url', '/somewhere');
       sessionStorage.setItem('okdp-selected-projectId', 'proj-a');
       sessionStorage.setItem('okdp-sql-query:proj-a', 'SELECT secret FROM t');
+      writeUiCache('services:proj-a', ['lake']);
 
-      const { result } = renderHook(() => useAuth(), { wrapper });
-      await waitFor(() => expect(result.current.ready).toBe(true));
+      const fetchMock = vi.fn(() => Promise.resolve(new Response('[]', { status: 200 })));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.ready).toBe(true));
 
-      act(() => result.current.forceLogout());
+        await http.get('/api/projects');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
 
-      expect(sessionStorage.getItem('auth_return_url')).toBeNull();
-      expect(sessionStorage.getItem('okdp-selected-projectId')).toBeNull();
-      expect(sessionStorage.getItem('okdp-sql-query:proj-a')).toBeNull();
+        act(() => result.current.forceLogout());
+
+        expect(sessionStorage.getItem('auth_return_url')).toBeNull();
+        expect(sessionStorage.getItem('okdp-selected-projectId')).toBeNull();
+        expect(sessionStorage.getItem('okdp-sql-query:proj-a')).toBeNull();
+        expect(readUiCache('services:proj-a')).toBeUndefined();
+
+        // API cache was purged: next GET hits fetch again.
+        await http.get('/api/projects');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 

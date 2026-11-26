@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { environment } from '../../config/environment';
 import { subscribeTextStream, subscribeJsonStream, applyListEvent, StreamServerError } from './sse';
 import { setAuthTokenProvider, setUnauthorizedHandler } from './http';
 
@@ -82,13 +83,31 @@ describe('subscribeTextStream', () => {
     expect(next.mock.calls.map((c) => c[0])).toEqual(['first', 'second']);
   });
 
-  it('sends the bearer token, not a plain EventSource connection', async () => {
-    subscribeTextStream('/logs', { next: vi.fn() });
+  it('sends the bearer token on secure API routes, not a plain EventSource connection', async () => {
+    const url = `${environment.apiBaseUrl}/api/projects/demo/services/app/pods/p/logs`;
+    subscribeTextStream(url, { next: vi.fn() });
     await tick();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/logs',
+      url,
       expect.objectContaining({ headers: { Authorization: 'Bearer a-token' } }),
+    );
+  });
+
+  it('does not attach the bearer token to cross-origin or non-/api/ stream URLs', async () => {
+    subscribeTextStream('https://evil.example/api/logs', { next: vi.fn() });
+    subscribeTextStream('/logs', { next: vi.fn() });
+    await tick();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://evil.example/api/logs',
+      expect.objectContaining({ headers: undefined }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/logs',
+      expect.objectContaining({ headers: undefined }),
     );
   });
 

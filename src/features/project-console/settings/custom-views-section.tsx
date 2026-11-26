@@ -9,6 +9,7 @@ import { useCustomViews, type CustomView } from '../../../core/preferences/custo
 import SectionHeading from '../../../shared/components/section-heading';
 import { NAV_CATEGORIES } from '../nav-config';
 import { DialogFooter } from '../../../shared/components/dialog-footer';
+import { safeExternalUrl } from '../../../shared/utils/safe-url';
 
 /** Curated primeicons palette for the tile icon picker. */
 const ICON_CHOICES = [
@@ -39,7 +40,7 @@ const EMPTY_DRAFT: Draft = {
 };
 
 function isValidUrl(url: string): boolean {
-  return /^https?:\/\/.+/.test(url.trim());
+  return safeExternalUrl(url) !== undefined;
 }
 
 /** Project Settings section for user-created views: launcher tiles
@@ -142,56 +143,65 @@ export default function CustomViewsSection({ projectName }: { projectName: strin
                 </tr>
               </thead>
               <tbody>
-                {views.map((view) => (
-                  <tr key={view.id}>
-                    <td>
-                      <span className="flex items-center gap-2 font-medium text-fg">
-                        <i className={`${view.icon} text-[0.95rem] text-fg-secondary`}></i>
-                        {view.label}
-                      </span>
-                    </td>
-                    <td>
-                      <a
-                        href={view.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mono text-sm break-all text-primary no-underline hover:underline"
-                      >
-                        {view.url}
-                      </a>
-                    </td>
-                    <td>
-                      <span className="text-sm text-fg-secondary">{view.category}</span>
-                    </td>
-                    <td>
-                      <span className="muted-text">{view.description || '—'}</span>
-                    </td>
-                    <td>
-                      {view.inMenu ? (
-                        <i
-                          className="pi pi-check text-sm text-(--db-success)"
-                          title="Shown in the views menu"
-                        ></i>
-                      ) : (
-                        <span className="muted-text">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="okdp-actions">
-                        <button className="icon-btn" title="Edit" onClick={() => openEdit(view)}>
-                          <i className="pi pi-pencil"></i>
-                        </button>
-                        <button
-                          className="icon-btn danger"
-                          title="Remove"
-                          onClick={() => confirmRemove(view)}
-                        >
-                          <i className="pi pi-trash"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {views.map((view) => {
+                  const safeHref = safeExternalUrl(view.url);
+                  return (
+                    <tr key={view.id}>
+                      <td>
+                        <span className="flex items-center gap-2 font-medium text-fg">
+                          <i className={`${view.icon} text-[0.95rem] text-fg-secondary`}></i>
+                          {view.label}
+                        </span>
+                      </td>
+                      <td>
+                        {safeHref ? (
+                          <a
+                            href={safeHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mono text-sm break-all text-primary no-underline hover:underline"
+                          >
+                            {safeHref}
+                          </a>
+                        ) : (
+                          <span className="mono text-sm break-all text-fg-secondary">
+                            {view.url}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="text-sm text-fg-secondary">{view.category}</span>
+                      </td>
+                      <td>
+                        <span className="muted-text">{view.description || '—'}</span>
+                      </td>
+                      <td>
+                        {view.inMenu ? (
+                          <i
+                            className="pi pi-check text-sm text-(--db-success)"
+                            title="Shown in the views menu"
+                          ></i>
+                        ) : (
+                          <span className="muted-text">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="okdp-actions">
+                          <button className="icon-btn" title="Edit" onClick={() => openEdit(view)}>
+                            <i className="pi pi-pencil"></i>
+                          </button>
+                          <button
+                            className="icon-btn danger"
+                            title="Remove"
+                            onClick={() => confirmRemove(view)}
+                          >
+                            <i className="pi pi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

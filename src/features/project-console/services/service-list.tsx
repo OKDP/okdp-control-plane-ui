@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Toast } from 'primereact/toast';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
@@ -7,18 +7,39 @@ import SearchFilter from '../../../shared/components/search-filter';
 import { serviceApi } from '../../../core/api/service-api';
 import { applyListEvent } from '../../../core/api/sse';
 import { readUiCache, writeUiCache } from '../../../core/api/ui-cache';
+import {
+  createDeletionGuard,
+  forgetDeletedInstance,
+  type DeletionGuard,
+  type GuardedRead,
+} from '../../../core/api/service-deletions';
 import type { ServiceInstance } from '../../../core/models/service.model';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
+import { useRouteNotice } from '../../../shared/hooks/use-route-notice';
 import {
   apiErrorMessage,
   formatMediumDate,
+  instancePhase,
+  isInProgress,
   isTransitioning,
+  needsAttention,
   openInNewTab,
+  safeExternalUrl,
   statusTone,
 } from './service-utils';
 import { StatusTag } from '../../../shared/components/status-tag';
+import {
+  acceptedDeletionDetail,
+  classifyDelete,
+  classifyWriteError,
+  CONFLICT_DETAIL,
+  UNKNOWN_DELETE_DETAIL,
+  type DeleteOutcome,
+} from './write-outcome';
 
-type StatusFilter = 'All' | 'Ready' | 'Installing' | 'Updating' | 'Error';
+type StatusFilter = 'All' | 'Ready' | 'In progress' | 'Error';
+
+const deletingKey = (scope: string, name: string) => `${scope}\n${name}`;
 
 export interface ServiceListProps {
   serviceFilter?: string;
@@ -43,20 +64,51 @@ export function ServiceList({
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: projectName } = useParams<{ projectId: string }>();
-  const { toast, showSuccess, showError } = useToastMessages();
+  const { toast, showSuccess, showError, showWarn } = useToastMessages();
+  useRouteNotice(toast);
 
   const [services, setServices] = useState<ServiceInstance[]>([]);
-  // Deletion runs until the backend confirms (slow helm uninstall); these
-  // names render as "Deleting…" with their row actions disabled.
-  const [deletingNames, setDeletingNames] = useState<Set<string>>(new Set());
+  // Deletion runs until the backend confirms, or, for a deletion the engine
+  // accepted asynchronously, until the stream reports the instance DELETED.
+  // These rows render as "Deleting…" with their actions disabled. Keyed by
+  // scope and name: a deletion in one project never marks a same-named
+  // instance of another.
+  const [deletingKeys, setDeletingKeys] = useState<Set<string>>(new Set());
+  const scope = projectName ? `${projectName}|${serviceFilter ?? ''}` : '';
   // Instance pending the type-to-confirm deletion dialog.
-  const [deleteTarget, setDeleteTarget] = useState<ServiceInstance | null>(null);
+  // Bound to the scope it was opened in: it never confirms a deletion in
+  // another project.
+  const [deleteTarget, setDeleteTarget] = useState<{
+    scope: string;
+    svc: ServiceInstance;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<StatusFilter>('All');
 
+  // Project and filter the rows belong to. A read started for another scope
+  // must not land on this one.
+  // Bumped whenever the scope changes or the page goes: an answer to a read
+  // or a deletion started under an older generation changes nothing, even
+  // once the page is back on the same scope.
+  const generationRef = useRef(0);
+  // Instances the stream deleted, for the reads of the current scope.
+  const deletionsRef = useRef<DeletionGuard | null>(null);
+  // Reloads still in flight, released with the scope they belong to.
+  const reloadsRef = useRef(new Set<GuardedRead>());
+
   useEffect(() => {
     if (!projectName) return;
+    const effectScope = `${projectName}|${serviceFilter ?? ''}`;
+    generationRef.current += 1;
+    const deletions = createDeletionGuard(projectName);
+    deletionsRef.current = deletions;
+    const read = deletions.startRead();
+    const reloads = reloadsRef.current;
+    // Marks of another scope mean nothing here, and would outlive their
+    // deletion.
+    setDeletingKeys(new Set());
+    setDeleteTarget(null);
 
     const matchesFilter = (instance: ServiceInstance) =>
       !serviceFilter || instance.service === serviceFilter;
@@ -70,11 +122,13 @@ export function ServiceList({
       .getServices(projectName)
       .then((data) => {
         if (cancelled) return;
-        writeUiCache(`services:${projectName}`, data);
-        setServices(data.filter(matchesFilter));
+        const current = read.reconcile(data);
+        writeUiCache(`services:${projectName}`, current);
+        setServices(current.filter(matchesFilter));
         setLoading(false);
       })
       .catch(() => {
+        read.release();
         if (cancelled) return;
         showError('Failed to load services');
         setLoading(false);
@@ -82,12 +136,18 @@ export function ServiceList({
 
     const unsubscribe = serviceApi.subscribeServices(projectName, {
       next: (event) => {
+        deletions.track(event);
+        if (event.type === 'DELETED') {
+          // A revisit must not read the instance back from a cache.
+          forgetDeletedInstance(projectName, event.object.name);
+        }
         if (!matchesFilter(event.object)) return;
         if (event.type === 'DELETED') {
-          setDeletingNames((names) => {
-            if (!names.has(event.object.name)) return names;
-            const next = new Set(names);
-            next.delete(event.object.name);
+          const key = deletingKey(effectScope, event.object.name);
+          setDeletingKeys((keys) => {
+            if (!keys.has(key)) return keys;
+            const next = new Set(keys);
+            next.delete(key);
             return next;
           });
         }
@@ -97,6 +157,11 @@ export function ServiceList({
 
     return () => {
       cancelled = true;
+      generationRef.current += 1;
+      deletionsRef.current = null;
+      read.release();
+      for (const reload of reloads) reload.release();
+      reloads.clear();
       unsubscribe();
     };
   }, [projectName, serviceFilter, showError]);
@@ -106,17 +171,17 @@ export function ServiceList({
       { key: 'All' as StatusFilter, count: services.length, tone: 'neutral' as const },
       {
         key: 'Ready' as StatusFilter,
-        count: services.filter((s) => s.status === 'Ready').length,
+        count: services.filter((s) => instancePhase(s) === 'Ready').length,
         tone: 'success' as const,
       },
       {
-        key: 'Installing' as StatusFilter,
-        count: services.filter((s) => s.status === 'Installing' || s.status === 'Updating').length,
+        key: 'In progress' as StatusFilter,
+        count: services.filter((s) => isInProgress(instancePhase(s))).length,
         tone: 'warn' as const,
       },
       {
         key: 'Error' as StatusFilter,
-        count: services.filter((s) => s.status === 'Error').length,
+        count: services.filter((s) => needsAttention(instancePhase(s))).length,
         tone: 'danger' as const,
       },
     ],
@@ -127,11 +192,12 @@ export function ServiceList({
     const q = query.trim().toLowerCase();
     return services.filter((s) => {
       if (filterStatus !== 'All') {
-        // "Installing" tab groups Installing + Updating (in-progress reconciliation)
         const matches =
-          filterStatus === 'Installing'
-            ? s.status === 'Installing' || s.status === 'Updating'
-            : s.status === filterStatus;
+          filterStatus === 'In progress'
+            ? isInProgress(instancePhase(s))
+            : filterStatus === 'Error'
+              ? needsAttention(instancePhase(s))
+              : instancePhase(s) === filterStatus;
         if (!matches) return false;
       }
       if (!q) return true;
@@ -146,7 +212,7 @@ export function ServiceList({
   const viewDetail = (svc: ServiceInstance) => {
     if (projectName) {
       navigate(
-        `/projects/${projectName}/${basePath.join('/')}/${svc.name}?returnTo=${encodeURIComponent(currentUrl)}`,
+        `/projects/${encodeURIComponent(projectName)}/${basePath.map(encodeURIComponent).join('/')}/${encodeURIComponent(svc.name)}?returnTo=${encodeURIComponent(currentUrl)}`,
       );
     }
   };
@@ -154,7 +220,7 @@ export function ServiceList({
   const editService = (svc: ServiceInstance) => {
     if (projectName) {
       navigate(
-        `/projects/${projectName}/${basePath.join('/')}/${svc.name}/edit?returnTo=${encodeURIComponent(currentUrl)}`,
+        `/projects/${encodeURIComponent(projectName)}/${basePath.map(encodeURIComponent).join('/')}/${encodeURIComponent(svc.name)}/edit?returnTo=${encodeURIComponent(currentUrl)}`,
       );
     }
   };
@@ -165,26 +231,91 @@ export function ServiceList({
     }
   };
 
-  const confirmDelete = (svc: ServiceInstance) => setDeleteTarget(svc);
+  const confirmDelete = (svc: ServiceInstance) => setDeleteTarget({ scope, svc });
+  const pendingDelete = deleteTarget?.scope === scope ? deleteTarget.svc : null;
+
+  /** Reads the list again, for a retry to start from the current state. The
+   *  deletion just cleared the GET cache. */
+  const reloadServices = () => {
+    if (!projectName || !deletionsRef.current) return;
+    const generation = generationRef.current;
+    const read = deletionsRef.current.startRead();
+    const reloads = reloadsRef.current;
+    reloads.add(read);
+    serviceApi
+      .getServices(projectName)
+      .then((data) => {
+        reloads.delete(read);
+        if (generationRef.current !== generation) {
+          read.release();
+          return;
+        }
+        const current = read.reconcile(data);
+        writeUiCache(`services:${projectName}`, current);
+        setServices(current.filter((s) => !serviceFilter || s.service === serviceFilter));
+      })
+      .catch(() => {
+        // The stream or the next visit reads it again.
+        reloads.delete(read);
+        read.release();
+      });
+  };
 
   const deleteInstance = (svc: ServiceInstance) => {
     setDeleteTarget(null);
     if (!projectName) return;
+    const project = projectName;
+    // Once the page shows another scope, or came back to this one since,
+    // the answer touches nothing on screen.
+    const generation = generationRef.current;
+    const key = deletingKey(scope, svc.name);
     const clearDeleting = () =>
-      setDeletingNames((names) => {
-        const next = new Set(names);
-        next.delete(svc.name);
+      setDeletingKeys((keys) => {
+        if (!keys.has(key)) return keys;
+        const next = new Set(keys);
+        next.delete(key);
         return next;
       });
-    setDeletingNames((names) => new Set(names).add(svc.name));
+    setDeletingKeys((keys) => new Set(keys).add(key));
+    const settle = (outcome: DeleteOutcome) => {
+      if (outcome.kind === 'deleted') forgetDeletedInstance(project, svc.name);
+      if (generationRef.current !== generation) return;
+      switch (outcome.kind) {
+        case 'deleted':
+          showSuccess(`"${svc.name}" has been removed`, 'Instance deleted');
+          clearDeleting();
+          setServices((current) => current.filter((s) => s.name !== svc.name));
+          return;
+        case 'accepted':
+          // The row stays until the stream reports the instance DELETED.
+          showSuccess(acceptedDeletionDetail(svc.name), 'Deletion requested');
+          return;
+        case 'conflict':
+          clearDeleting();
+          showError(CONFLICT_DETAIL, 'Instance not deleted');
+          reloadServices();
+          return;
+        case 'unknown':
+          clearDeleting();
+          showWarn(UNKNOWN_DELETE_DETAIL, 'Deletion not confirmed');
+          reloadServices();
+          return;
+        case 'rejected':
+          clearDeleting();
+          showError(outcome.message, 'Deletion refused');
+          return;
+      }
+    };
     serviceApi
-      .deleteService(projectName, svc.name)
-      .then(() => {
-        showSuccess(`"${svc.name}" has been removed`, 'Instance deleted');
-        clearDeleting();
-        setServices((current) => current.filter((s) => s.name !== svc.name));
-      })
+      .deleteService(project, svc.name, svc.desiredRevision)
+      .then((result) => settle(classifyDelete(result)))
       .catch((err) => {
+        const outcome = classifyWriteError(err);
+        if (outcome) {
+          settle(outcome);
+          return;
+        }
+        if (generationRef.current !== generation) return;
         clearDeleting();
         showError(apiErrorMessage(err, 'Failed to delete instance'));
       });
@@ -194,18 +325,18 @@ export function ServiceList({
     <>
       <Toast ref={toast} />
       <DeleteConfirmDialog
-        resourceName={deleteTarget?.name ?? null}
+        resourceName={pendingDelete?.name ?? null}
         resourceKind="instance"
         message={
-          deleteTarget && (
+          pendingDelete && (
             <>
-              This will remove <strong>{deleteTarget.name}</strong> and all its pods. This cannot be
-              undone.
+              This will remove <strong>{pendingDelete.name}</strong> and all its pods. This cannot
+              be undone.
             </>
           )
         }
         onHide={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteInstance(deleteTarget)}
+        onConfirm={() => pendingDelete && deleteInstance(pendingDelete)}
       />
 
       <div className="stat-strip">
@@ -269,7 +400,9 @@ export function ServiceList({
             </thead>
             <tbody>
               {filtered.map((svc) => {
-                const deleting = deletingNames.has(svc.name);
+                const deleting = deletingKeys.has(deletingKey(scope, svc.name));
+                // Edit and Delete make no sense on an instance on its way out.
+                const locked = deleting || instancePhase(svc) === 'Deleting';
                 return (
                   <tr
                     key={svc.name}
@@ -294,9 +427,9 @@ export function ServiceList({
                         />
                       ) : (
                         <StatusTag
-                          value={svc.status}
-                          tone={statusTone(svc.status)}
-                          pulse={isTransitioning(svc.status)}
+                          value={instancePhase(svc)}
+                          tone={statusTone(instancePhase(svc))}
+                          pulse={isTransitioning(instancePhase(svc))}
                         />
                       )}
                     </td>
@@ -320,16 +453,16 @@ export function ServiceList({
                         <button
                           className="icon-btn"
                           title="Edit"
-                          disabled={deleting}
+                          disabled={locked}
                           onClick={() => editService(svc)}
                         >
                           <i className="pi pi-pencil"></i>
                         </button>
-                        {svc.url && (
+                        {safeExternalUrl(svc.url) && (
                           <button
                             className="icon-btn primary"
                             title="Open in a new tab"
-                            disabled={svc.status !== 'Ready'}
+                            disabled={locked || instancePhase(svc) !== 'Ready'}
                             onClick={() => openService(svc)}
                           >
                             <i className="pi pi-external-link"></i>
@@ -338,7 +471,7 @@ export function ServiceList({
                         <button
                           className="icon-btn danger"
                           title="Delete"
-                          disabled={deleting}
+                          disabled={locked}
                           onClick={() => confirmDelete(svc)}
                         >
                           <i className="pi pi-trash"></i>

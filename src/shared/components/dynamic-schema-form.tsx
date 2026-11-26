@@ -38,7 +38,8 @@ export interface SchemaField {
   items?: any;
   additionalProperties?: any;
   properties?: any;
-  'x-kubocd-connection-ref'?: { contract: string };
+  /** Normalized connection marker, see connectionRefContract. */
+  'x-okdp-connection-ref'?: { contract: string };
   'x-ui-order'?: number;
   'x-ui-group'?: string;
   'x-ui-widget'?: string;
@@ -345,7 +346,7 @@ function ObjectListField({
       [
         ...new Set(
           columns
-            .map((c) => props[c]?.['x-kubocd-connection-ref']?.contract)
+            .map((c) => connectionRefContract(props[c]))
             .filter((i): i is string => !!i)
         ),
       ].sort(),
@@ -372,14 +373,17 @@ function ObjectListField({
       {value.map((row, index) => (
         <div key={index} className="flex items-end gap-2">
           {columns.map((column) => {
-            const contract = props[column]?.['x-kubocd-connection-ref']?.contract;
+            const contract = connectionRefContract(props[column]);
             return (
               <div key={column} className="flex-1">
                 <label className="text-[12px] text-fg-secondary">{formatLabel(column)}</label>
                 {contract ? (
                   <Dropdown
                     value={row[column] ?? null}
-                    options={(connections[contract] || []).map((c) => ({
+                    options={(Object.hasOwn(connections, contract)
+                      ? connections[contract]
+                      : []
+                    ).map((c) => ({
                       label: c.name,
                       value: c.name,
                     }))}
@@ -454,6 +458,22 @@ function toOptions(enumValues: any[]): { label: string; value: any }[] {
   return enumValues.map((v) => ({ label: String(v), value: v }));
 }
 
+/** The connection marker of a schema property. `x-okdp-connection-ref` is the
+ *  engine-neutral dialect, `x-kubocd-connection-ref` is what a KuboCD schema
+ *  carries. Both have the shape `{ contract }`, the neutral one wins. */
+function connectionRefMarker(def: any): { contract: string } | undefined {
+  for (const key of ['x-okdp-connection-ref', 'x-kubocd-connection-ref']) {
+    const contract = def?.[key]?.contract;
+    if (typeof contract === 'string' && contract !== '') return { contract };
+  }
+  return undefined;
+}
+
+/** Contract named by a property's connection marker, if any. */
+function connectionRefContract(def: any): string | undefined {
+  return connectionRefMarker(def)?.contract;
+}
+
 function buildFields(schema: any): SchemaField[] {
   const properties = schema?.properties || {};
   const required = new Set<string>(schema?.required || []);
@@ -475,7 +495,7 @@ function buildFields(schema: any): SchemaField[] {
     items: def.items,
     additionalProperties: def.additionalProperties,
     properties: def.properties,
-    'x-kubocd-connection-ref': def['x-kubocd-connection-ref'],
+    'x-okdp-connection-ref': connectionRefMarker(def),
     'x-ui-order': def['x-ui-order'] ?? 999,
     'x-ui-group': def['x-ui-group'] || 'General',
     'x-ui-widget': def['x-ui-widget'],

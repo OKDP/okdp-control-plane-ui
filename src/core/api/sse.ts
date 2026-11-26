@@ -1,5 +1,5 @@
 import { logger } from '../services/logger';
-import { getAuthToken, reportUnauthorized } from './http';
+import { getAuthToken, isSecureRoute, reportUnauthorized } from './http';
 
 // A stream refused for lack of a valid session: never reconnected.
 class UnauthorizedStreamError extends Error {}
@@ -75,7 +75,7 @@ function extractFrames(buffer: string): { frames: SSEFrame[]; rest: string } {
 
 // fetch, not EventSource: EventSource cannot set the Authorization header.
 async function readStream(url: string, signal: AbortSignal, onFrame: (frame: SSEFrame) => void): Promise<void> {
-  const token = await getAuthToken();
+  const token = isSecureRoute(url) ? await getAuthToken() : undefined;
   const response = await fetch(url, {
     signal,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,

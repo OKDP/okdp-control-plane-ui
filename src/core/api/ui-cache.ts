@@ -25,3 +25,7 @@ export function readUiCache<T>(key: string): T | undefined {
 export function writeUiCache<T>(key: string, value: T): void {
   cache.set(key, { value, at: Date.now() });
 }
+
+export function clearUiCache(): void {
+  cache.clear();
+}

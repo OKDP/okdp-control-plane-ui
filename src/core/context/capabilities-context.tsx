@@ -2,13 +2,20 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { capabilitiesApi, type Capabilities } from '../api/capabilities-api';
 import { logger } from '../services/logger';
+import {
+  resolveEngineCapability,
+  type EngineCapability,
+} from '../capabilities/deployment-capabilities';
 
 export interface CapabilitiesContextValue {
   capabilities: Capabilities | null;
   /** True while the platform has not answered yet. */
   loading: boolean;
-  /** Whether the kubauth user and group management screens are worth showing. */
+  /** Whether the user and group management screens are worth showing. */
   userManagement: boolean;
+  /** Engine capabilities, resolved. Defaults while loading and when the
+   *  platform does not publish them. */
+  engine: EngineCapability;
 }
 
 const CapabilitiesContext = createContext<CapabilitiesContextValue | null>(null);
@@ -44,6 +51,7 @@ export function CapabilitiesProvider({ children }: { children: ReactNode }) {
       capabilities,
       loading,
       userManagement: capabilities ? capabilities.identity.userManagement : true,
+      engine: resolveEngineCapability(capabilities),
     }),
     [capabilities, loading],
   );

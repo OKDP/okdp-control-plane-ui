@@ -10,6 +10,7 @@ import {
   uiServiceLaunchers,
   uiServiceViewIcon,
 } from './views-config';
+import { instancePhase } from '../project-console/services/service-utils';
 import type { ViewServicesState } from './use-view-services';
 
 /** /views — service UI launchers plus rich technology-specific views that
@@ -112,7 +113,7 @@ export default function CustomViewsPage() {
               <QuickActions>
                 {launchers.map((launcher) => {
                   const { svc, view } = launcher;
-                  const ready = svc.status === 'Ready';
+                  const ready = instancePhase(svc) === 'Ready';
                   return (
                     <ActionCard
                       key={`${svc.name}:${view.label}`}
@@ -125,7 +126,7 @@ export default function CustomViewsPage() {
                       description={
                         ready
                           ? (view.description ?? `Open ${svc.name} in a new tab`)
-                          : `${svc.name} — ${svc.status}`
+                          : `${svc.name} - ${instancePhase(svc)}`
                       }
                     />
                   );

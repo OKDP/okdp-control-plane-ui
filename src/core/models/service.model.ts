@@ -69,6 +69,11 @@ export interface ServiceInstance {
   service: string;
   serviceTag: string;
   status: string;
+  /** State in the vocabulary every engine shares (Pending, Installing,
+   *  Updating, Ready, Degraded, Error, Suspended, Deleting, Unknown). Absent
+   *  from older servers, which send `status` alone. Read through
+   *  instancePhase, never directly. */
+  phase?: string;
   /**
    * Human-readable explanation set by the backend when status is not
    * "Ready". Typically the latest K8s Warning event in the namespace
@@ -82,6 +87,44 @@ export interface ServiceInstance {
    *  as opposed to what the service asked for. */
   connections?: ServiceConnection[];
   createdAt?: string;
+  /** Opaque version of the desired state, sent back as `If-Match` on an
+   *  update or a deletion. Never displayed. Absent or empty when the engine
+   *  reports none. */
+  desiredRevision?: string;
+}
+
+/** Problem attached to a rejected write. */
+export interface WriteProblem {
+  code?: string;
+  field?: string;
+  message?: string;
+}
+
+/** How the engine answered a write. `unknown` means it gave no definite
+ *  answer (timeout, push without reply): the state must be read again.
+ *  Accepted writes include it in a 2xx response, rejected writes in a 409 or
+ *  500 error body, and unknown outcomes in a 504 error body. */
+export interface WriteOperation {
+  outcome?: 'accepted' | 'rejected' | 'unknown' | (string & {});
+  desiredRevision?: string;
+  problems?: WriteProblem[];
+  message?: string;
+}
+
+/** Response envelope carrying an engine write operation. */
+export interface OperationResponse {
+  operation?: WriteOperation;
+}
+
+/** Response of an instance write. Servers without pluggable engines send the
+ *  instance alone. */
+export interface ServiceWriteResult extends ServiceInstance, OperationResponse {}
+
+/** Answer to an instance deletion: its HTTP status and, when the server
+ *  sends one as JSON, the engine's answer. */
+export interface ServiceDeleteAnswer {
+  status: number;
+  result?: OperationResponse;
 }
 
 /** One connection a deployed service is bound to. */
@@ -92,6 +135,9 @@ export interface ServiceConnection {
   kind: string;
   /** False while the release is still waiting for it. */
   resolved: boolean;
+  /** How far the connection got: declared, published, bound or ready.
+   *  Absent from older servers and when the engine cannot tell. */
+  state?: string;
 }
 
 export type ServiceEvent = ListEvent<ServiceInstance>;
