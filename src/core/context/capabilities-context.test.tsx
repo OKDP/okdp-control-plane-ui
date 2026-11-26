@@ -62,4 +62,57 @@ describe('CapabilitiesProvider', () => {
 
     expect(get).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the area visible and the defaults while the platform has not answered', () => {
+    get.mockReturnValue(new Promise<Capabilities>(() => undefined));
+
+    const { result } = renderHook(() => useCapabilities(), { wrapper });
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.userManagement).toBe(true);
+    expect(result.current.engine).toEqual({ renderedValues: false, suspend: false });
+  });
+});
+
+describe('useCapabilities engine resolution', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([true, false])(
+    'defaults the engine on a server without engine fields (userManagement %s)',
+    async (userManagement) => {
+      get.mockResolvedValue(caps(userManagement, userManagement ? 'kubauth' : 'external'));
+
+      const { result } = renderHook(() => useCapabilities(), { wrapper });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.userManagement).toBe(userManagement);
+      expect(result.current.engine).toEqual({ renderedValues: false, suspend: false });
+    },
+  );
+
+  it('defaults the engine when the platform does not answer', async () => {
+    get.mockRejectedValue(new Error('404 Not Found'));
+
+    const { result } = renderHook(() => useCapabilities(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.engine).toEqual({ renderedValues: false, suspend: false });
+  });
+
+  it('surfaces the resolved engine capability and ignores unrelated fields', async () => {
+    get.mockResolvedValue({
+      ...caps(true, 'kubauth'),
+      engine: { name: 'kubocd', renderedValues: true, suspend: false },
+      storage: { backend: 'custom', revisions: true },
+    } as Capabilities);
+
+    const { result } = renderHook(() => useCapabilities(), { wrapper });
+
+    await waitFor(() => expect(result.current.engine.name).toBe('kubocd'));
+    expect(result.current.engine).toEqual({
+      name: 'kubocd',
+      renderedValues: true,
+      suspend: false,
+    });
+  });
 });

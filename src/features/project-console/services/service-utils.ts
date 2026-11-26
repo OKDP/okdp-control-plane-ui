@@ -1,9 +1,65 @@
 import { useCallback, useState } from 'react';
 import { serviceApi } from '../../../core/api/service-api';
-import type { PlatformService } from '../../../core/models/service.model';
+import type {
+  PlatformService,
+  ServiceConnection,
+  ServiceInstance,
+} from '../../../core/models/service.model';
 import type { StatusTone } from '../../../shared/components/status-tag';
+import { safeExternalUrl } from '../../../shared/utils/safe-url';
 
-/** Map an instance status to its StatusTag tone. */
+const COMMON_PHASES = new Set([
+  'Pending',
+  'Installing',
+  'Updating',
+  'Ready',
+  'Degraded',
+  'Error',
+  'Suspended',
+  'Deleting',
+  'Unknown',
+]);
+
+/** The state an instance shows: its common `phase` when the server sends one
+ *  of the nine, else its historical `status` (Ready, Error, Updating,
+ *  Installing), which is all an older server sends. */
+export function instancePhase(instance: Pick<ServiceInstance, 'status' | 'phase'>): string {
+  return instance.phase && COMMON_PHASES.has(instance.phase) ? instance.phase : instance.status;
+}
+
+/** Whether an instance belongs under the list's Error chip: Degraded counts,
+ *  as the historical status reports it as Error. */
+export function needsAttention(phase: string): boolean {
+  return phase === 'Error' || phase === 'Degraded';
+}
+
+const CONNECTION_STATES: Record<string, { label: string; tone: StatusTone }> = {
+  ready: { label: 'Ready', tone: 'success' },
+  bound: { label: 'Bound', tone: 'info' },
+  published: { label: 'Published', tone: 'warning' },
+  declared: { label: 'Declared', tone: 'warning' },
+};
+
+/** Pill for one connection of an instance: its state when the server sends
+ *  one of the four, else whether it resolved, which is all an older server
+ *  sends. */
+export function connectionStateTag(connection: Pick<ServiceConnection, 'resolved' | 'state'>): {
+  label: string;
+  tone: StatusTone;
+} {
+  const known =
+    connection.state && Object.hasOwn(CONNECTION_STATES, connection.state)
+      ? CONNECTION_STATES[connection.state]
+      : undefined;
+  if (known) return known;
+  return connection.resolved
+    ? { label: 'Resolved', tone: 'success' }
+    : { label: 'Waiting', tone: 'warning' };
+}
+
+/** Map an instance status to its StatusTag tone. Covers the phases common to
+ *  every engine: Pending, Installing, Updating, Ready, Degraded, Error,
+ *  Suspended, Deleting, Unknown. */
 export function statusTone(status: string): StatusTone {
   switch (status) {
     case 'Ready':
@@ -11,20 +67,44 @@ export function statusTone(status: string): StatusTone {
       return 'success';
     case 'Installing':
     case 'Updating':
+    case 'Degraded':
+    case 'Deleting':
       return 'warning';
     case 'Error':
     case 'CrashLoopBackOff':
     case 'Failed':
       return 'danger';
+    case 'Suspended':
+    case 'Unknown':
+      return 'neutral';
     default:
       return 'info';
   }
 }
 
-/** In-flight instance states — rendered with the animated activity dot. */
+/** In-flight instance states, rendered with the animated activity dot. */
 export function isTransitioning(status: string): boolean {
-  return status === 'Installing' || status === 'Updating';
+  return isInProgress(status);
 }
+
+/** States the instance moves out of on its own: accepted and not yet observed,
+ *  being installed, updated or deleted. Unknown is not one of them, the engine
+ *  cannot tell. */
+export function isInProgress(status: string): boolean {
+  return (
+    status === 'Pending' ||
+    status === 'Installing' ||
+    status === 'Updating' ||
+    status === 'Deleting'
+  );
+}
+
+/** Stages the deploy wizard shows while its write is in flight. They end when
+ *  the engine accepts the write: what follows is observed on the instance. */
+export const DEPLOY_STAGES: readonly { label: string }[] = Object.freeze([
+  { label: 'Validating parameters' },
+  { label: 'Submitting to the deployment engine' },
+]);
 
 export interface ServiceArea {
   /** Breadcrumb / back-link label. */
@@ -62,9 +142,32 @@ export function areaBasePath(service: string | undefined | null): string[] {
   return SERVICE_AREAS[service]?.basePath ?? ['services', service];
 }
 
-/** Open an external (cluster-workload) URL without handing it window.opener. */
+export { safeExternalUrl };
+
+/** Open an external (cluster-workload) URL without handing it window.opener.
+ *  Anything but an http(s) URL is ignored. */
 export function openInNewTab(url: string): void {
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const safe = safeExternalUrl(url);
+  if (safe) window.open(safe, '_blank', 'noopener,noreferrer');
+}
+
+/** A `returnTo` query value when it is a path inside the console, else
+ *  undefined. URL parsing drops tabs and line breaks and reads a backslash as
+ *  a slash, so `/\host` or `/<tab>/host` would leave the console like
+ *  `//host`: such values are refused, and what remains must resolve to the
+ *  console's own origin. */
+export function safeReturnTo(value: string | null | undefined): string | undefined {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return undefined;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u0020\u007f\\]/.test(value)) return undefined;
+  try {
+    const { origin } = window.location;
+    const parsed = new URL(value, origin);
+    if (parsed.origin !== origin || parsed.pathname.startsWith('//')) return undefined;
+    return value;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Version dropdown options for a platform service, flagging the default. */

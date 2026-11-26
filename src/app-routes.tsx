@@ -157,7 +157,7 @@ export function AppRoutes() {
               })}
 
               {/* Services on the OKDP roadmap but not yet packaged. */}
-              {/* Polaris (Lakehouse / data-catalog) — kubocd Package: polaris@0.1.0 */}
+              {/* Polaris (Lakehouse / data-catalog) */}
               {serviceRoutes('polaris', {
                 title: 'Polaris',
                 deployLabel: 'Deploy',
@@ -165,7 +165,7 @@ export function AppRoutes() {
                 emptyMessage: 'No Polaris instances deployed yet.',
               })}
 
-              {/* Trino (Lakehouse / data-querying) — kubocd Package: trino@0.1.0 */}
+              {/* Trino (Lakehouse / data-querying) */}
               {serviceRoutes('trino', {
                 title: 'Trino',
                 deployLabel: 'Deploy',
@@ -181,7 +181,7 @@ export function AppRoutes() {
                 emptyMessage: 'No Hive Metastore instances deployed yet.',
               })}
 
-              {/* Airflow (Data Engineering / orchestration) — kubocd Package: airflow@0.1.0 */}
+              {/* Airflow (Data Engineering / orchestration) */}
               {serviceRoutes('airflow', {
                 title: 'Airflow',
                 deployLabel: 'Deploy',
@@ -189,7 +189,7 @@ export function AppRoutes() {
                 emptyMessage: 'No Airflow instances deployed yet.',
               })}
 
-              {/* Superset (SQL & BI / data-visualization) — kubocd Package: superset@0.1.0 */}
+              {/* Superset (SQL & BI / data-visualization) */}
               {serviceRoutes('superset', {
                 title: 'Superset',
                 deployLabel: 'Deploy',

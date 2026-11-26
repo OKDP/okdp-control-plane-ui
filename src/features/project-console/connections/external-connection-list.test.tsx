@@ -107,20 +107,20 @@ describe('ExternalConnectionList', () => {
     expect(screen.getByText('Corporate warehouse')).toBeInTheDocument();
   });
 
-  it('explains the situation and blocks creation while the CRDs are missing', async () => {
+  it('explains the situation and blocks creation while the platform cannot store them', async () => {
     catalog.mockResolvedValue({ ...CATALOG, crdAvailable: false });
 
     renderList();
 
-    expect(await screen.findByText(/connection CRDs, which are not installed/)).toBeInTheDocument();
+    expect(await screen.findByText(/External connections are not available on this platform/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add connection/ })).toBeDisabled();
   });
 
-  it('offers no such warning once the CRDs are installed', async () => {
+  it('offers no such warning once the platform can store them', async () => {
     renderList();
     await screen.findByText('warehouse');
 
-    expect(screen.queryByText(/not installed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not available on this platform/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add connection/ })).toBeEnabled();
   });
 

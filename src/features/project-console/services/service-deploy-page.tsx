@@ -14,10 +14,19 @@ import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { k8sNameError } from '../../../shared/utils/k8s-names';
 import { flattenReviewParams } from '../../../shared/utils/format-review-value';
 import {
+  classifyWrite,
+  classifyWriteError,
+  UNKNOWN_WRITE_DETAIL,
+  type WriteOutcome,
+} from './write-outcome';
+import { withNotice } from '../../../shared/hooks/use-route-notice';
+import {
   apiErrorMessage,
   areaBasePath,
+  DEPLOY_STAGES,
   hasProfileEditorWidget,
   parentLabel,
+  safeReturnTo,
   useServiceSchema,
   versionOptionsFor,
 } from './service-utils';
@@ -29,26 +38,50 @@ interface WizardStep {
   label: string;
 }
 
-const PROGRESS_STAGES = [
-  { label: 'Validating parameters' },
-  { label: 'Creating release' },
-  { label: 'Scheduling pod' },
-  { label: 'Waiting for readiness' },
-];
+const DEPLOY_CONFLICT_DETAIL =
+  'A conflicting change occurred while creating this instance. Check existing instances and try again.';
 
 export default function ServiceDeployPage() {
   const navigate = useNavigate();
   const { projectId, svcType } = useParams<{ projectId: string; svcType: string }>();
   const [searchParams] = useSearchParams();
-  const { toast, showSuccess, showError, showWarn } = useToastMessages();
+  const { toast, showError, showWarn } = useToastMessages();
   const progressTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Post-deploy redirect timer — cleared on unmount so a navigation during
-  // the success pause can't be yanked back to the instances list.
+  // Post-deploy redirect timer — cleared on unmount or scope change so a
+  // navigation during the success pause can't be yanked back to the list.
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on scope change and unmount so a slow write cannot navigate after
+  // the user already moved elsewhere.
+  const activeScopeRef = useRef(0);
 
   const [service, setService] = useState<PlatformService | null>(null);
   const [loading, setLoading] = useState(true);
   const [deploying, setDeploying] = useState(false);
+
+  const clearProgressTick = useCallback(() => {
+    if (progressTickRef.current !== null) {
+      clearInterval(progressTickRef.current);
+      progressTickRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    activeScopeRef.current += 1;
+    setDeploying(false);
+    clearProgressTick();
+    if (navTimerRef.current !== null) {
+      clearTimeout(navTimerRef.current);
+      navTimerRef.current = null;
+    }
+    return () => {
+      activeScopeRef.current += 1;
+      clearProgressTick();
+      if (navTimerRef.current !== null) {
+        clearTimeout(navTimerRef.current);
+        navTimerRef.current = null;
+      }
+    };
+  }, [projectId, svcType, clearProgressTick]);
   // Track the dynamic schema form validity so Next on the Parameters step
   // is blocked when a CPU/memory quantity field is malformed.
   const [paramsValid, setParamsValid] = useState(true);
@@ -240,25 +273,6 @@ export default function ServiceDeployPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const clearProgressTick = useCallback(() => {
-    if (progressTickRef.current !== null) {
-      clearInterval(progressTickRef.current);
-      progressTickRef.current = null;
-    }
-  }, []);
-
-  // Route change during an in-flight deploy must not leak the interval, nor
-  // let the success-redirect timer navigate after the user already left.
-  useEffect(
-    () => () => {
-      clearProgressTick();
-      if (navTimerRef.current !== null) {
-        clearTimeout(navTimerRef.current);
-      }
-    },
-    [clearProgressTick],
-  );
-
   const onVersionChange = (tag: string) => {
     if (!service || !tag) return;
     setSelectedTag(tag);
@@ -272,11 +286,13 @@ export default function ServiceDeployPage() {
   const goBack = () => {
     if (!projectId) return;
 
-    const returnTo = searchParams.get('returnTo');
+    const returnTo = safeReturnTo(searchParams.get('returnTo'));
     if (returnTo) {
       navigate(returnTo);
     } else {
-      navigate(`/projects/${projectId}/${areaBasePath(service?.name).join('/')}`);
+      navigate(
+        `/projects/${encodeURIComponent(projectId)}/${areaBasePath(service?.name).map(encodeURIComponent).join('/')}`,
+      );
     }
   };
 
@@ -299,8 +315,8 @@ export default function ServiceDeployPage() {
         mergedParams[input.parameter] = chosen;
         continue;
       }
-      // Writing an empty string here is not the same as writing nothing: KuboCD
-      // merges the submitted parameters over the package defaults, so the empty
+      // Writing an empty string here is not the same as writing nothing: the
+      // engine merges the submitted parameters over the package defaults, so the empty
       // value wins and the default, a template the Environment answers, never
       // renders. A choice not made is left out.
       delete mergedParams[input.parameter];
@@ -308,10 +324,49 @@ export default function ServiceDeployPage() {
 
     // Animate progress stages while the request is in flight.
     progressTickRef.current = setInterval(() => {
-      setDeployProgress((current) =>
-        current < PROGRESS_STAGES.length - 1 ? current + 1 : current,
-      );
+      setDeployProgress((current) => (current < DEPLOY_STAGES.length - 1 ? current + 1 : current));
     }, 700);
+
+    const scope = activeScopeRef.current;
+    const settle = (outcome: WriteOutcome) => {
+      clearProgressTick();
+      if (scope !== activeScopeRef.current) return;
+      const area = `/projects/${encodeURIComponent(projectId)}/${areaBasePath(service.name).map(encodeURIComponent).join('/')}`;
+      if (outcome.kind === 'rejected' || outcome.kind === 'conflict') {
+        showError(
+          outcome.kind === 'rejected' ? outcome.message : DEPLOY_CONFLICT_DETAIL,
+          'Deployment refused',
+        );
+        setDeploying(false);
+        return;
+      }
+      if (outcome.kind === 'unknown') {
+        setDeploying(false);
+        const returnTo = safeReturnTo(searchParams.get('returnTo')) ?? area;
+        navigate(
+          `${area}/${encodeURIComponent(instanceName)}?returnTo=${encodeURIComponent(returnTo)}`,
+          {
+            state: withNotice({
+              severity: 'warn',
+              summary: 'Deployment not confirmed',
+              detail: UNKNOWN_WRITE_DETAIL,
+            }),
+          },
+        );
+        return;
+      }
+      setDeployProgress(DEPLOY_STAGES.length);
+      const notice = withNotice({
+        severity: 'success',
+        summary: 'Deploying instance',
+        detail: `${instanceName} is being provisioned.`,
+      });
+      navTimerRef.current = setTimeout(() => {
+        if (scope !== activeScopeRef.current) return;
+        setDeploying(false);
+        navigate(safeReturnTo(searchParams.get('returnTo')) ?? area, { state: notice });
+      }, 400);
+    };
 
     serviceApi
       .deployService(projectId, {
@@ -320,22 +375,15 @@ export default function ServiceDeployPage() {
         instanceName,
         parameters: mergedParams,
       })
-      .then(() => {
-        clearProgressTick();
-        setDeployProgress(PROGRESS_STAGES.length);
-        showSuccess(`${instanceName} is being provisioned.`, 'Deploying instance');
-        navTimerRef.current = setTimeout(() => {
-          setDeploying(false);
-          const returnTo = searchParams.get('returnTo');
-          if (returnTo) {
-            navigate(returnTo);
-          } else {
-            navigate(`/projects/${projectId}/${areaBasePath(service.name).join('/')}`);
-          }
-        }, 400);
-      })
+      .then((result) => settle(classifyWrite(result)))
       .catch((err) => {
         clearProgressTick();
+        if (scope !== activeScopeRef.current) return;
+        const outcome = classifyWriteError(err);
+        if (outcome) {
+          settle(outcome);
+          return;
+        }
         showError(apiErrorMessage(err, 'Deployment failed'));
         setDeploying(false);
       });
@@ -381,7 +429,7 @@ export default function ServiceDeployPage() {
           />
         ) : deploying ? (
           <div className="form-card deploy-progress">
-            {PROGRESS_STAGES.map((stage, i) => (
+            {DEPLOY_STAGES.map((stage, i) => (
               <div
                 key={stage.label}
                 className={[

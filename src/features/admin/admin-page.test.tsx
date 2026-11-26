@@ -39,6 +39,23 @@ describe('AdminPage', () => {
     expect(await screen.findByText('Identity')).toBeTruthy();
   });
 
+  it('names the deployment engine when the platform publishes it', async () => {
+    get.mockResolvedValue({ ...caps(true), engine: { name: 'kubocd' } });
+
+    renderAdmin();
+
+    expect(await screen.findByText('kubocd')).toBeTruthy();
+  });
+
+  it('names no engine on a platform that does not publish one', async () => {
+    get.mockResolvedValue(caps(true));
+
+    renderAdmin();
+
+    expect(await screen.findByText('Identity')).toBeTruthy();
+    expect(screen.queryByText(/Deployment engine/)).toBeNull();
+  });
+
   it('drops the Identity tile when the platform serves no user management', async () => {
     get.mockResolvedValue(caps(false));
 

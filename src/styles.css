@@ -1360,6 +1360,12 @@ h1 {
   color: #92400e;
 }
 
+@utility alert-info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
 /* ========== Log viewer (terminal surface) ========== */
 /* Deliberately dark in BOTH themes — a terminal, not a themed panel. One
    definition shared by the pod log viewer and the spark executor logs so
@@ -1832,6 +1838,11 @@ h1 {
     color: var(--db-text-secondary);
   }
 
+  /* Toasts — preserve line breaks in multi-problem error details */
+  .p-toast .p-toast-message .p-toast-detail {
+    white-space: pre-line;
+  }
+
   /* ============================================================
    9. Dark mode — PrimeReact component surfaces
    ============================================================
@@ -2234,6 +2245,12 @@ body.dark-mode .alert-warn {
   background: rgba(217, 119, 6, 0.12);
   border-color: rgba(217, 119, 6, 0.35);
   color: #fcd34d;
+}
+
+body.dark-mode .alert-info {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
 }
 
 body.dark-mode .stat-chip.chip-warn.active {

@@ -14,13 +14,23 @@ import {
   apiErrorMessage,
   areaBasePath,
   hasProfileEditorWidget,
+  instancePhase,
   isTransitioning,
   parentLabel,
+  safeReturnTo,
   statusTone,
   useServiceSchema,
   versionOptionsFor,
 } from './service-utils';
 import { StatusTag } from '../../../shared/components/status-tag';
+import {
+  classifyWrite,
+  classifyWriteError,
+  CONFLICT_DETAIL,
+  UNKNOWN_WRITE_DETAIL,
+  type WriteOutcome,
+} from './write-outcome';
+import { withNotice } from '../../../shared/hooks/use-route-notice';
 
 export default function ServiceEditPage() {
   const navigate = useNavigate();
@@ -29,7 +39,7 @@ export default function ServiceEditPage() {
     serviceName: string;
   }>();
   const [searchParams] = useSearchParams();
-  const { toast, showSuccess, showError, showWarn } = useToastMessages();
+  const { toast, showError, showWarn } = useToastMessages();
 
   const [instance, setInstance] = useState<ServiceInstance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,13 +63,33 @@ export default function ServiceEditPage() {
   // asking for a name from memory.
   const [packageInputs, setPackageInputs] = useState<PackageInput[]>([]);
   const [connectionChoices, setConnectionChoices] = useState<Record<string, string>>({});
+  // Disable Save until connection inputs finish loading, so choices match the
+  // loaded instance revision.
+  const [inputsSettled, setInputsSettled] = useState(false);
   const [existingProfiles, setExistingProfiles] = useState<Profile[]>([]);
   const [versionOptions, setVersionOptions] = useState<{ label: string; value: string }[]>([]);
   const [selectedTag, setSelectedTag] = useState('');
+  // Set by a 409 on save: the form edits a revision the instance moved past,
+  // so saving again would hit the same conflict until the instance is reread.
+  const [conflict, setConflict] = useState(false);
+  // Bumped by Reload. Also keys the form widgets, which read their initial
+  // values once.
+  const [reloadKey, setReloadKey] = useState(0);
 
   const originalTagRef = useRef('');
   const parametersRef = useRef<Record<string, any>>({});
   const profilesRef = useRef<Profile[]>([]);
+  // Bumped on scope change and unmount so a slow write cannot navigate after
+  // the user already moved elsewhere.
+  const activeScopeRef = useRef(0);
+
+  useEffect(() => {
+    activeScopeRef.current += 1;
+    setSaving(false);
+    return () => {
+      activeScopeRef.current += 1;
+    };
+  }, [projectName, serviceName]);
 
   const hasPendingChanges = selectedTag !== originalTagRef.current;
 
@@ -85,8 +115,14 @@ export default function ServiceEditPage() {
     }
 
     let cancelled = false;
+    setLoading(true);
+    setInstance(null);
+    setConflict(false);
+    setInputsSettled(false);
     Promise.all([
-      serviceApi.getService(projectName, serviceName),
+      // Always bypass the GET cache so the form starts from the current
+      // revision instead of a stale cached read that would 409 on save.
+      serviceApi.getService(projectName, serviceName, true),
       serviceApi.getProfileImages(),
       serviceApi.getPlatformServices(),
     ])
@@ -118,15 +154,20 @@ export default function ServiceEditPage() {
                 offered.map((input) => [input.parameter!, String(params[input.parameter!] ?? '')]),
               ),
             );
+            setInputsSettled(true);
           })
           // A package without inputs, or an older server: nothing to offer, and
           // the parameters stay as they are.
-          .catch(() => setPackageInputs([]));
+          .catch(() => {
+            if (cancelled) return;
+            setPackageInputs([]);
+            setInputsSettled(true);
+          });
 
-        if (Array.isArray(profiles) && profiles.length > 0) {
-          setExistingProfiles(profiles);
-          profilesRef.current = [...profiles];
-        }
+        const loadedProfiles = Array.isArray(profiles) ? profiles : [];
+        setExistingProfiles(loadedProfiles);
+        profilesRef.current = [...loadedProfiles];
+        setConflict(false);
 
         loadSchema(inst.service, inst.serviceTag);
         setLoading(false);
@@ -139,7 +180,7 @@ export default function ServiceEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectName, serviceName, loadSchema, showError]);
+  }, [projectName, serviceName, loadSchema, showError, reloadKey]);
 
   const onVersionChange = (tag: string) => {
     if (!instance || !tag) return;
@@ -148,12 +189,15 @@ export default function ServiceEditPage() {
     loadSchema(instance.service, tag);
   };
 
-  const navigateBack = (project: string) => {
-    const returnTo = searchParams.get('returnTo');
+  const navigateBack = (project: string, state?: ReturnType<typeof withNotice>) => {
+    const returnTo = safeReturnTo(searchParams.get('returnTo'));
     if (returnTo) {
-      navigate(returnTo);
+      navigate(returnTo, { state });
     } else {
-      navigate(`/projects/${project}/${areaBasePath(instance?.service).join('/')}`);
+      navigate(
+        `/projects/${encodeURIComponent(project)}/${areaBasePath(instance?.service).map(encodeURIComponent).join('/')}`,
+        { state },
+      );
     }
   };
 
@@ -189,14 +233,53 @@ export default function ServiceEditPage() {
     if (selectedTag && selectedTag !== originalTagRef.current) {
       body.tag = selectedTag;
     }
+    const scope = activeScopeRef.current;
+    const settle = (outcome: WriteOutcome) => {
+      if (scope !== activeScopeRef.current) return;
+      setSaving(false);
+      if (outcome.kind === 'rejected') {
+        showError(outcome.message, 'Changes refused');
+        return;
+      }
+      if (outcome.kind === 'conflict') {
+        setConflict(true);
+        return;
+      }
+      if (outcome.kind === 'unknown') {
+        const area = `/projects/${encodeURIComponent(projectName)}/${areaBasePath(instance.service).map(encodeURIComponent).join('/')}`;
+        const returnTo = safeReturnTo(searchParams.get('returnTo')) ?? area;
+        navigate(
+          `${area}/${encodeURIComponent(instance.name)}?returnTo=${encodeURIComponent(returnTo)}`,
+          {
+            state: withNotice({
+              severity: 'warn',
+              summary: 'Changes not confirmed',
+              detail: UNKNOWN_WRITE_DETAIL,
+            }),
+          },
+        );
+        return;
+      }
+      navigateBack(
+        projectName,
+        withNotice({
+          severity: 'success',
+          summary: 'Changes saved',
+          detail: `${instance.name} has been updated.`,
+        }),
+      );
+    };
+
     serviceApi
-      .updateServiceParameters(projectName, instance.name, body)
-      .then(() => {
-        showSuccess(`${instance.name} has been updated.`, 'Changes saved');
-        setSaving(false);
-        navigateBack(projectName);
-      })
+      .updateServiceParameters(projectName, instance.name, body, instance.desiredRevision)
+      .then((result) => settle(classifyWrite(result)))
       .catch((err) => {
+        if (scope !== activeScopeRef.current) return;
+        const outcome = classifyWriteError(err);
+        if (outcome) {
+          settle(outcome);
+          return;
+        }
         showError(apiErrorMessage(err, 'Failed to save changes'));
         setSaving(false);
       });
@@ -240,9 +323,9 @@ export default function ServiceEditPage() {
                     </span>
                   </h2>
                   <StatusTag
-                    value={instance.status}
-                    tone={statusTone(instance.status)}
-                    pulse={isTransitioning(instance.status)}
+                    value={instancePhase(instance)}
+                    tone={statusTone(instancePhase(instance))}
+                    pulse={isTransitioning(instancePhase(instance))}
                   />
                 </div>
                 <p className="page-desc">
@@ -261,7 +344,7 @@ export default function ServiceEditPage() {
           />
         ) : instance ? (
           <>
-            {hasPendingChanges && instance.status === 'Ready' && (
+            {hasPendingChanges && instancePhase(instance) === 'Ready' && (
               <div className="edit-banner">
                 <i className="pi pi-info-circle"></i>
                 <div>
@@ -271,6 +354,20 @@ export default function ServiceEditPage() {
                     the persistent volume.
                   </span>
                 </div>
+              </div>
+            )}
+
+            {conflict && (
+              <div className="alert alert-danger mb-4" role="alert">
+                <i className="pi pi-exclamation-circle"></i>
+                <div className="flex-1">
+                  <strong>Changes not saved</strong>
+                  <p>{CONFLICT_DETAIL}</p>
+                </div>
+                <button className="btn-secondary" onClick={() => setReloadKey((k) => k + 1)}>
+                  <i className="pi pi-refresh"></i>
+                  Reload
+                </button>
               </div>
             )}
 
@@ -338,6 +435,7 @@ export default function ServiceEditPage() {
                     />
                   ))}
                   <DynamicSchemaForm
+                    key={reloadKey}
                     schema={visibleSchema}
                     projectId={projectName}
                     initialValues={parameterValues}
@@ -358,6 +456,7 @@ export default function ServiceEditPage() {
                     </span>
                   </div>
                   <ProfileListEditor
+                    key={reloadKey}
                     profileImages={profileImages}
                     initialProfiles={existingProfiles}
                     onProfilesChange={(profiles) => {
@@ -373,7 +472,11 @@ export default function ServiceEditPage() {
                 Cancel
               </button>
               <div className="wa-right">
-                <button className="create-btn" onClick={save} disabled={saving || !paramsValid}>
+                <button
+                  className="create-btn"
+                  onClick={save}
+                  disabled={saving || !paramsValid || conflict || !inputsSettled}
+                >
                   {saving ? (
                     <>
                       <i className="pi pi-spin pi-spinner"></i>

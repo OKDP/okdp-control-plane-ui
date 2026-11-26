@@ -16,6 +16,17 @@ export interface Capabilities {
   oidcProvisioning: {
     provider: string; // "none" (default), "kubauth" or "keycloak"
   };
+  /** Deployment engine in use. Absent from servers that predate pluggable
+   *  engines. Read through resolveEngineCapability, never directly. */
+  engine?: EngineCapabilityWire;
+}
+
+/** Wire shape of `engine`: every field may be missing or mistyped. */
+export interface EngineCapabilityWire {
+  /** Display only: screens branch on capabilities, never on the name. */
+  name?: unknown;
+  renderedValues?: unknown;
+  suspend?: unknown;
 }
 
 export const capabilitiesApi = {

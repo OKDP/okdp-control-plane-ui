@@ -12,6 +12,7 @@ Tech stack: React 19, react-router 7, PrimeReact 10 (styled mode, lara theme),
 Tailwind CSS v4, oidc-client-ts 3, Vite 7, Vitest 3.
 
 - [Bootstrap & provider tree](#bootstrap--provider-tree)
+- [Platform capabilities](#platform-capabilities)
 - [Routing](#routing)
 - [Authentication](#authentication)
 - [HTTP & API clients](#http--api-clients)
@@ -42,8 +43,129 @@ provider tree — **order is intentional**, outermost first:
 | 8 | `AuthProvider` | OIDC state machine around `oidc-client-ts` `UserManager` |
 | 9 | `AuthGate` | renders `null` until the one-shot OIDC check resolves — **no route mounts before auth state is known** (the `APP_INITIALIZER` equivalent) |
 | 10 | `AuthRedirector` | post-login deep-link restore + global 401/403 handler |
-| 11 | `ProjectContextProvider` | available projects (REST + SSE) and the selected project |
-| 12 | `AppRoutes` | the route table |
+| 11 | `CapabilitiesProvider` | reads `GET /api/capabilities` once (see [Platform capabilities](#platform-capabilities)) |
+| 12 | `ProjectContextProvider` | available projects (REST + SSE) and the selected project |
+| 13 | `AppRoutes` | the route table |
+
+## Platform capabilities
+
+### Capability discovery
+
+`GET /api/capabilities` tells the console what the platform serves. Two readers:
+
+- `src/core/capabilities/use-capabilities.ts` fetches it before mount
+  (`main.tsx`) for the OIDC client, with a per-tab cache.
+- `CapabilitiesProvider` (`src/core/context/capabilities-context.tsx`) exposes
+  it to screens through `useCapabilities()`: `userManagement` gates the
+  identity screens, and `engine` holds the engine capabilities resolved by
+  `resolveEngineCapability()` in
+  `src/core/capabilities/deployment-capabilities.ts`.
+
+| Field | Effect | Default when absent |
+|-------|--------|---------------------|
+| `engine.name` | display only (administration page), never branched on | not shown |
+| `engine.renderedValues`, `engine.suspend` | not used by any screen yet | `false` |
+
+The console is shared by every engine and never knows where an engine stores
+its desired state. No screen branches on a storage mode, and no screen shows
+a revision. Screens test capabilities, never the engine name. Missing or
+mistyped fields resolve to the defaults, which match a server that publishes
+no engine capabilities. The deployment-capability resolver reads only `engine`,
+while identity and OIDC provisioning capabilities are handled separately.
+
+### Instance phases and connections
+
+Instance phases common to every engine: `Pending`, `Installing`, `Updating`,
+`Ready`, `Degraded`, `Error`, `Suspended`, `Deleting`, `Unknown`
+(`service-utils.ts`, `instance-status-alert.tsx`). `Unknown` means the engine
+cannot observe the instance and is never shown as `Pending`. Screens read an
+instance's state through `instancePhase()`: its `phase` when the server sends
+one of the nine, else its historical `status` (`Ready`, `Error`, `Updating`,
+`Installing`), which is all an older server sends. The list's Error chip counts
+`Degraded` too, as the historical status reports it as `Error`. The connections
+on an instance's detail show their `state` (`declared`, `published`, `bound`,
+`ready`) when the server sends it, else `Resolved` or `Waiting` from
+`resolved`.
+
+What a screen shows of an instance comes from its phase, the `Deleting…` of a
+deletion requested from this page, and `InstanceStatusAlert`. The alert shows
+the server's `statusMessage`, or a generic text for the phase, for every phase
+but `Ready`. A `Ready` instance shows the alert only when the server sends a
+`statusMessage`, for example about a change the engine could not apply while
+the instance keeps running.
+
+### Write outcomes and optimistic concurrency
+
+Instance writes (deploy, edit) carry `operation: { outcome, desiredRevision,
+problems }` (`write-outcome.ts`). An accepted write answers 2xx with it next to
+the instance. A rejected write answers 409 or 500, and an unknown write outcome
+answers 504, with `operation` in the error body next to `error` and `code` (a
+bare 504 without a body is treated as `unknown` too). `rejected` keeps the form
+and shows the problems, or the server's `error` text when the code says the
+name is taken (`instance-exists`), since those problems carry the engine's raw
+error. `unknown` opens the instance detail (preserving `returnTo`) so its state
+is read again. A 2xx without `operation` is an accepted write, and an error
+body without it is reported as an error. The toast of a write travels with the
+navigation that follows it (`useRouteNotice`,
+`src/shared/hooks/use-route-notice.ts`) and shows on the service list or the
+instance detail.
+
+Instances may carry `desiredRevision`, an opaque version of the desired state,
+empty when the engine reports none. It is never displayed. Edit always fetches
+the instance uncached (`fresh = true`) so it starts from the current revision.
+Edit and delete send `desiredRevision` back as `If-Match: "<desiredRevision>"`
+when the loaded instance has one and its characters are all visible ASCII
+excluding `"` and `,`. Anything else would break the header, so no `If-Match`
+is sent. A stale one answers 409 with code `conflict`: the edit form stays,
+Save is blocked until Reload fetches the current instance without using the
+cache and finishes loading its connection inputs, and delete reads the instance
+or the list again.
+
+### Deletion lifecycle
+
+Delete reads the engine answer with its HTTP status (`classifyDelete`):
+
+| Answer | Outcome | Screen |
+|--------|---------|--------|
+| `operation.outcome` `rejected` (code `conflict`: conflict) or `unknown`, any 2xx | rejected, conflict or unknown | error, or warning and reread |
+| 204, or 200 | deleted | the row goes, the detail page goes back to the list |
+| 202 with `operation.outcome: "accepted"` | accepted | the row, or the detail page, shows `Deleting…` with Edit, Delete and Open disabled until the stream sends `DELETED`. The detail page then goes back to the list |
+| 202 without an accepted `operation` | unknown | warning, the instance or the list is read again |
+
+An engine that deletes asynchronously must answer 202 with an accepted
+`operation`: a 204 removes the row at once. While a DELETE request is in
+flight, Edit, Delete and Open stay disabled, and an early stream `DELETED`
+navigates back without flashing `Instance not found`.
+
+An instance in the `Deleting` phase, from a read or from the stream, has Edit,
+Delete and Open disabled too, and the detail page goes back to the list when
+the stream sends its `DELETED`. A list read that lands after the stream deleted
+a row does not bring it back, and neither does a revisit: a `DELETED` event, or
+a deletion that answers 204 or 200, drops the instance from the `ui-cache`
+snapshot and the project's cached GET answers, and from every read of the
+project still in flight (`forgetDeletedInstance`,
+`src/core/api/service-deletions.ts`). The deletions a tab saw are shared by the
+reads of every screen of the project, `useLiveServices` included, and kept only
+while a read started before them is in flight. A later `ADDED` or `MODIFIED`
+lifts a deletion only for the screen whose stream sent it, since another stream
+may be late.
+
+A deletion belongs to the project it was asked from. The list marks
+`Deleting…` rows per project and filter, and the detail page identifies an
+instance on its way out by project and name. A confirmation dialog closes when
+the page moves to another project or instance. A DELETE answer that arrives
+after the page moved, after it was left, or after it came back to the same
+place, changes nothing on screen (a generation counter, not the route, tells
+them apart), so a same-named instance elsewhere is never locked or removed.
+
+### Untrusted values
+
+Values the server or the URL hand to the console are checked before use. An
+instance `url` is opened or linked only when it is an absolute `http:` or
+`https:` URL (`safeExternalUrl`, `openInNewTab`). A `returnTo` query value is
+followed only when it starts with `/` but not `//`, holds no whitespace,
+control character or backslash, and resolves to the console's own origin
+(`safeReturnTo`), else the page goes back to its service area.
 
 ## Routing
 
@@ -148,6 +270,10 @@ interceptors equivalent):
   list endpoint instead of hand-rolling `|| []`.
 - Every method accepts an optional trailing `init?: RequestInit`, used e.g. to
   thread an `AbortSignal` through (`sqlApi.execute`).
+- `get` and `getList` without `init` share one answer per URL for 5 s. Every
+  write clears that cache. `invalidateApiCache(url)` drops the answers for a
+  URL and the URLs under it: `serviceApi.forgetServiceReads(projectId)` uses
+  it when the stream reports an instance deleted.
 
 Each domain has a `*-api.ts` exporting a plain object of methods, with URLs
 built from `environment.apiBaseUrl`. Path segments are encoded with
@@ -174,11 +300,12 @@ request always runs and overwrites. It is never a reason to skip a fetch.
 
 `src/core/api/sse.ts` holds the primitives:
 
-- `subscribeJsonStream<T>(url, subscriber, label)` — `EventSource` emitting
-  parsed JSON; relies on the browser's auto-reconnect and only completes when
-  the connection is permanently closed.
-- `subscribeTextStream(url, subscriber)` — raw text lines (log following);
-  completes silently on error.
+- `subscribeJsonStream<T>(url, subscriber, label)`: `fetch`-based SSE reader
+  carrying the OIDC `Authorization: Bearer` header, emitting parsed JSON and
+  reconnecting after 3 s on disconnect (stopping without retry on `401` or
+  `403`).
+- `subscribeTextStream(url, subscriber)`: authenticated `fetch` stream for raw
+  text lines (log following), forwarding failures to `subscriber.error`.
 - `applyListEvent<T>(list, event, key)` — folds a watch-style
   `{ type: 'ADDED' | 'MODIFIED' | 'DELETED', object }` event into an immutable
   list, upserting by key. The event types (`ProjectEvent`, `ServiceEvent`,
@@ -192,6 +319,7 @@ follow this pattern for new lists. Current consumers:
 | `core/context/project-context.tsx` | projects |
 | `core/hooks/use-live-services.ts` | service instances (shared hook) |
 | `features/project-console/services/service-list.tsx` | service instances (filtered per area) |
+| `features/project-console/services/service-detail-page.tsx` | one service instance: an event about it triggers an uncached GET (since the stream payload lacks the bound connections) and refreshes pods on `ADDED`/`MODIFIED`. Reads are numbered and a read lands only if no later one did. `DELETED` shows the instance as gone, or goes back to the list for an instance being deleted |
 | `features/project-console/spark/spark-list.tsx` | spark applications |
 
 `useLiveServices(projectName)` (`src/core/hooks/use-live-services.ts`) is the
@@ -257,6 +385,7 @@ keys:
 | `x-ui-advanced` | moves the field behind the per-group "Show advanced options" expander |
 | `x-ui-columns` / `x-ui-col-span` | group grid columns / per-field span |
 | `x-ui-placeholder` | input placeholder |
+| `x-okdp-connection-ref` | `{ contract }` on an object-list column: a dropdown of the project's connections of that contract. `x-kubocd-connection-ref` is read the same way, the `x-okdp-` key wins when both are set |
 
 Without `x-ui-widget`: `enum` → select, `boolean` → toggle, numbers → number
 input, else text. Validation checks Kubernetes `resource.Quantity` format on
@@ -330,8 +459,8 @@ render with line/column info, transport errors separately.
 - **Dev server**: `npm start` → Vite on **port 4200**. The port is
   load-bearing: the OIDC redirect URIs registered with the IdP point at
   `localhost:4200`. Do not change it. Development talks to the control plane at
-  `http://localhost:8093` with a sandbox OIDC authority
-  (`src/config/environment.ts`, statically branched on `import.meta.env.PROD`).
+  `http://localhost:8093` (`src/config/environment.ts`, statically branched on
+  `import.meta.env.PROD`).
 - **Build**: `npm run build` = `tsc -b && vite build` → `dist/`. Strict TS with
   `noUnusedLocals` / `noUnusedParameters` / `noImplicitReturns`;
   `vite.config.ts` is included in type-checking. The app version rendered in
@@ -365,7 +494,8 @@ src/
   core/
     api/                 # http.ts, sse.ts, ui-cache.ts, domain clients (*-api.ts)
     auth/                # auth-context, auth-redirector, require-auth/admin
-    context/             # project-context
+    capabilities/        # bootstrap capabilities cache, deployment-capabilities resolver
+    context/             # project-context, capabilities-context
     guards/              # project-route (ProjectRouteSync)
     hooks/               # use-live-services (REST + SSE instance hook),
                          # use-polled-resources (poll a list while any row is transient)
@@ -386,8 +516,8 @@ src/
   shared/
     components/          # page-header, status-tag, empty-state, dynamic-schema-form,
                          # profile-list-editor, console-shell, brand-icon, …
-    hooks/               # use-toast-messages, use-row-actions-menu
-    utils/               # k8s-names
+    hooks/               # use-toast-messages, use-row-actions-menu, use-route-notice
+    utils/               # k8s-names, safe-url
 ```
 
 Conventions: feature code under `src/features/<area>/`, cross-cutting infra
@@ -396,20 +526,15 @@ under `src/core/`, reusable presentational pieces under
 
 ## Known limitations & open decisions
 
-- **SSE streams are unauthenticated.** `EventSource` cannot send an
-  `Authorization` header, so the live-list and log-follow streams hit the
-  `/api/.../stream` endpoints without credentials while every REST call is
-  bearer-protected. Closing this requires backend coordination (a short-lived
-  stream ticket, or replacing `EventSource` with a fetch-based SSE reader once
-  the control plane enforces auth on stream endpoints).
 - **OIDC config is read at startup, not baked into the bundle.** The container
   entrypoint writes `/config.js`, which `index.html` loads before the bundle:
   authority, client id, the claim carrying the roles, and the role granting
-  administration. One image therefore runs against any
-  cluster. The values in `src/config/environment.ts` are only the fallback for
-  `npm run dev`, and point at okdp-sandbox.
-- **Production API base path.** `environment.apiBaseUrl` is `/api` in
-  production while every client appends `/api/...`, so requests leave the
-  browser as `/api/api/...`. This assumes the fronting ingress strips the first
-  `/api` prefix; if the ingress routes without a rewrite, `apiBaseUrl` should
-  be `''` instead. Verify against the actual deployment.
+  administration. One image therefore runs against any cluster. The values in
+  `src/config/environment.ts` act only as local development defaults when
+  `/config.js` is absent.
+- **Production API base path.** `environment.apiBaseUrl` is `''` in production
+  so requests leave the browser as `/api/...` on the same origin as the console
+  (routed by ingress to the control plane server).
+- **SSE reconnect does not trigger a full REST resync.** `subscribeJsonStream`
+  reconnects after 3 s without notifying the caller, so a `DELETED` event missed
+  during a disconnect window requires a manual refresh (or revisiting the view).

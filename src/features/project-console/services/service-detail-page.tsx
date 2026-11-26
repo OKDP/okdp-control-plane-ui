@@ -3,7 +3,9 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { Toast } from 'primereact/toast';
 import DeleteConfirmDialog from '../../../shared/components/delete-confirm-dialog';
 import EmptyState from '../../../shared/components/empty-state';
+import { HttpError } from '../../../core/api/http';
 import { serviceApi } from '../../../core/api/service-api';
+import { forgetDeletedInstance } from '../../../core/api/service-deletions';
 import type { Pod, ServiceInstance, ServiceMetrics } from '../../../core/models/service.model';
 import { useToastMessages } from '../../../shared/hooks/use-toast-messages';
 import { PodList } from './pod-list';
@@ -11,13 +13,31 @@ import { PodLogViewer } from './pod-log-viewer';
 import {
   apiErrorMessage,
   areaBasePath,
+  connectionStateTag,
   formatMediumDateTime,
+  instancePhase,
   isTransitioning,
   openInNewTab,
   parentLabel,
+  safeExternalUrl,
+  safeReturnTo,
   statusTone,
 } from './service-utils';
 import { StatusTag } from '../../../shared/components/status-tag';
+import { InstanceStatusAlert } from './instance-status-alert';
+import {
+  acceptedDeletionDetail,
+  classifyDelete,
+  classifyWriteError,
+  CONFLICT_DETAIL,
+  UNKNOWN_DELETE_DETAIL,
+  type DeleteOutcome,
+} from './write-outcome';
+import {
+  useRouteNotice,
+  withNotice,
+  type RouteNotice,
+} from '../../../shared/hooks/use-route-notice';
 
 type Tab = 'overview' | 'pods' | 'logs' | 'parameters';
 
@@ -99,6 +119,17 @@ function MetricCard({
   );
 }
 
+/** An instance on its way out, identified within its project. */
+interface DeletionMark {
+  projectId: string;
+  name: string;
+  service: string;
+}
+
+function marks(mark: DeletionMark | null, projectId: string, name: string): boolean {
+  return !!mark && mark.projectId === projectId && mark.name === name;
+}
+
 export default function ServiceDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,10 +138,21 @@ export default function ServiceDetailPage() {
     serviceName: string;
   }>();
   const [searchParams] = useSearchParams();
-  const { toast, showSuccess, showError } = useToastMessages();
+  const { toast, showSuccess, showError, showWarn } = useToastMessages();
+  useRouteNotice(toast);
   // Stale-response guard: only the latest loadAll call may commit state
   // (params can change mid-flight when navigating between instances).
   const reqIdRef = useRef(0);
+  // Number instance requests so an older response cannot overwrite a newer
+  // successful response. Failed requests do not advance the last landed number.
+  const instanceReadRef = useRef(0);
+  const instanceLandedRef = useRef(0);
+  const landInstance = useCallback((read: number, next: ServiceInstance | null) => {
+    if (read < instanceLandedRef.current) return false;
+    instanceLandedRef.current = read;
+    setInstance(next);
+    return true;
+  }, []);
 
   const [instance, setInstance] = useState<ServiceInstance | null>(null);
   const [pods, setPods] = useState<Pod[]>([]);
@@ -120,6 +162,66 @@ export default function ServiceDetailPage() {
   const [metrics, setMetrics] = useState<ServiceMetrics | null>(null);
   // Type-to-confirm deletion dialog visibility.
   const [deleteVisible, setDeleteVisible] = useState(false);
+  // Instance whose DELETE request is currently in flight: locks actions and
+  // avoids an "Instance not found" flash if SSE DELETED arrives before the HTTP
+  // response.
+  const [deletingInFlight, setDeletingInFlight] = useState<DeletionMark | null>(null);
+  // Instance whose deletion the engine accepted asynchronously: it shows as
+  // "Deleting…" until the stream reports it DELETED, and its going away is
+  // that deletion landing, not an instance that could not be found. Its
+  // service keeps navigation in the instance's area once the instance is gone.
+  const [requestedDeletion, setRequestedDeletion] = useState<DeletionMark | null>(null);
+  // Last instance seen in the Deleting phase: its going away is that deletion
+  // landing too, even when it was requested from another page.
+  const [seenDeleting, setSeenDeleting] = useState<DeletionMark | null>(null);
+
+  // The page stays mounted when it moves to another instance: what it shows
+  // of the previous one goes, so nothing below mistakes it for the new one.
+  const navKey = `${projectId}/${serviceName}`;
+  const [shownNav, setShownNav] = useState(navKey);
+  // In the render that sees the move, `instance` is still the previous one.
+  const navMoved = shownNav !== navKey;
+  if (navMoved) {
+    setShownNav(navKey);
+    // A confirmation opened for the previous instance never deletes this one.
+    setDeleteVisible(false);
+    setDeletingInFlight(null);
+    setRequestedDeletion(null);
+    setSeenDeleting(null);
+    setMetrics(null);
+    setSelectedPod(null);
+    setInstance(null);
+    setPods([]);
+    setLoading(true);
+  }
+  // Bumped on every move and when the page goes: a DELETE answer from an
+  // older generation changes nothing, even once the page is back on the same
+  // instance.
+  const navGenerationRef = useRef(0);
+  useEffect(() => {
+    navGenerationRef.current += 1;
+    return () => {
+      navGenerationRef.current += 1;
+    };
+  }, [navKey]);
+
+  const inFlightHere = marks(deletingInFlight, projectId, serviceName) ? deletingInFlight : null;
+  const deletingHere = marks(requestedDeletion, projectId, serviceName) ? requestedDeletion : null;
+  if (
+    !navMoved &&
+    instance &&
+    instancePhase(instance) === 'Deleting' &&
+    (!marks(seenDeleting, projectId, instance.name) || seenDeleting?.service !== instance.service)
+  ) {
+    setSeenDeleting({ projectId, name: instance.name, service: instance.service });
+  }
+  const leavingHere =
+    deletingHere ??
+    inFlightHere ??
+    (marks(seenDeleting, projectId, serviceName) ? seenDeleting : null);
+  // Edit, Delete and Open make no sense on an instance on its way out.
+  const actionsLocked =
+    !!inFlightHere || !!deletingHere || (!!instance && instancePhase(instance) === 'Deleting');
 
   const runningPods = useMemo(
     () => pods.filter((p) => p.status === 'Running' || p.status === 'Ready').length,
@@ -146,26 +248,90 @@ export default function ServiceDetailPage() {
       return;
     }
     setLoading(true);
-    Promise.all([
-      serviceApi.getService(projectId, serviceName),
-      serviceApi.getPods(projectId, serviceName),
-    ])
-      .then(([inst, podList]) => {
+    const read = ++instanceReadRef.current;
+    // Uncached: a cached answer may predate what the stream already showed.
+    // Instance and pods are fetched independently so a pod-list failure never
+    // hides the instance, and an authoritative 404 clears a pending deletion.
+    serviceApi
+      .getService(projectId, serviceName, true)
+      .then((inst) => {
         if (reqId !== reqIdRef.current) return;
-        setInstance(inst);
-        setPods(podList);
+        if (!landInstance(read, inst)) return;
         setLoading(false);
+        serviceApi
+          .getPods(projectId, serviceName)
+          .then((podList) => {
+            if (reqId !== reqIdRef.current || read < instanceLandedRef.current) return;
+            setPods(podList);
+          })
+          .catch(() => {
+            // Keep the loaded instance visible even if pod listing fails.
+          });
       })
-      .catch(() => {
+      .catch((err) => {
         if (reqId !== reqIdRef.current) return;
+        if (err instanceof HttpError && err.status === 404) {
+          forgetDeletedInstance(projectId, serviceName);
+          landInstance(read, null);
+          setLoading(false);
+          return;
+        }
         showError('Failed to load instance details');
         setLoading(false);
       });
-  }, [projectId, serviceName, showError]);
+  }, [projectId, serviceName, showError, landInstance]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // Follows the instance on the project's live stream, so a status the engine
+  // reports later (Pending to Ready, a write it did not confirm) shows without
+  // a reload. An event only triggers a fresh read: the stream payload lacks
+  // fields the GET carries (bound connections).
+  useEffect(() => {
+    if (!projectId || !serviceName) return;
+    // A read still in flight when the page moves to another instance must not
+    // land on it.
+    let active = true;
+    const unsubscribe = serviceApi.subscribeServices(projectId, {
+      next: (event) => {
+        if (!active || event.object.name !== serviceName) return;
+        if (instancePhase(event.object) === 'Deleting') {
+          setSeenDeleting({ projectId, name: event.object.name, service: event.object.service });
+        }
+        const read = ++instanceReadRef.current;
+        if (event.type === 'DELETED') {
+          // The list this page goes back to must not read it back from a cache.
+          forgetDeletedInstance(projectId, event.object.name);
+          landInstance(read, null);
+          setLoading(false);
+          return;
+        }
+        serviceApi
+          .getService(projectId, serviceName, true)
+          .then((inst) => {
+            if (!active || !landInstance(read, inst)) return;
+            setLoading(false);
+            serviceApi
+              .getPods(projectId, serviceName)
+              .then((podList) => {
+                if (active && read >= instanceLandedRef.current) setPods(podList);
+              })
+              .catch(() => {
+                // Keep the loaded instance visible even if pod listing fails.
+              });
+          })
+          .catch(() => {
+            // The next event or Refresh reads it again.
+          });
+      },
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [projectId, serviceName, landInstance]);
 
   // Metrics: fetch immediately then every 10s.
   useEffect(() => {
@@ -190,28 +356,54 @@ export default function ServiceDetailPage() {
   }, [projectId, serviceName]);
 
   // Navigation stays inside the instance's own console area (e.g. a Trino
-  // instance edits/returns under /trino, not /services).
-  const basePath = areaBasePath(instance?.service).join('/');
+  // instance edits/returns under /trino, not /services). When the instance
+  // could not be loaded (null), derive the parent area from the current path
+  // rather than falling back to the non-existent /projects/:projectId/services
+  // route.
+  const encodedProject = encodeURIComponent(projectId);
+  const knownService = instance?.service ?? leavingHere?.service;
+  const basePath = areaBasePath(knownService).map(encodeURIComponent).join('/');
+  const projectPrefix = `/projects/${encodedProject}/`;
+  const trimmedPath = location.pathname.replace(/\/+$/, '');
+  const rawFallback = knownService
+    ? `/projects/${encodedProject}/${basePath}`
+    : trimmedPath.startsWith(projectPrefix)
+      ? trimmedPath.slice(0, trimmedPath.lastIndexOf('/'))
+      : `/projects/${encodedProject}`;
+  const fallbackBackPath = safeReturnTo(rawFallback) ?? `/projects/${encodedProject}`;
 
-  const goBack = () => {
-    if (!projectId) return;
-    const returnTo = searchParams.get('returnTo');
-    if (returnTo) {
-      navigate(returnTo);
-    } else {
-      navigate(`/projects/${projectId}/${basePath}`);
-    }
-  };
+  const goBack = useCallback(
+    (notice?: RouteNotice) => {
+      if (!projectId) return;
+      const target = safeReturnTo(searchParams.get('returnTo')) ?? fallbackBackPath;
+      navigate(target, notice ? { state: withNotice(notice) } : undefined);
+    },
+    [projectId, searchParams, fallbackBackPath, navigate],
+  );
 
+  // The stream reported gone an instance being deleted.
+  const deletionLanded = !!leavingHere && !loading && !instance;
+  useEffect(() => {
+    if (!deletionLanded || !leavingHere) return;
+    goBack({
+      severity: 'success',
+      summary: 'Instance deleted',
+      detail: `"${leavingHere.name}" has been removed`,
+    });
+  }, [deletionLanded, leavingHere, goBack]);
+
+  // Only an http(s) URL is opened or linked.
+  const externalUrl = safeExternalUrl(instance?.url);
   const openExternal = () => {
-    const url = instance?.url;
-    if (url) openInNewTab(url);
+    if (externalUrl) openInNewTab(externalUrl);
   };
 
   const editInstance = () => {
     if (projectId) {
       const returnTo = encodeURIComponent(location.pathname + location.search);
-      navigate(`/projects/${projectId}/${basePath}/${serviceName}/edit?returnTo=${returnTo}`);
+      navigate(
+        `/projects/${encodedProject}/${basePath}/${encodeURIComponent(serviceName)}/edit?returnTo=${returnTo}`,
+      );
     }
   };
 
@@ -222,13 +414,57 @@ export default function ServiceDetailPage() {
   const deleteInstance = () => {
     setDeleteVisible(false);
     if (!instance) return;
+    // Once the page moved, or came back here since, the answer touches
+    // nothing on screen.
+    const generation = navGenerationRef.current;
+    const mark: DeletionMark = { projectId, name: instance.name, service: instance.service };
+    setDeletingInFlight(mark);
+    const settle = (outcome: DeleteOutcome) => {
+      if (outcome.kind === 'deleted') forgetDeletedInstance(projectId, instance.name);
+      if (navGenerationRef.current !== generation) return;
+      switch (outcome.kind) {
+        case 'deleted':
+          // The notice travels with the navigation: this page's toast goes
+          // with it.
+          goBack({
+            severity: 'success',
+            summary: 'Instance deleted',
+            detail: `"${instance.name}" has been removed`,
+          });
+          return;
+        case 'accepted':
+          // The live stream reports the deletion landing.
+          setDeletingInFlight(null);
+          setRequestedDeletion(mark);
+          showSuccess(acceptedDeletionDetail(instance.name), 'Deletion requested');
+          return;
+        case 'conflict':
+          setDeletingInFlight(null);
+          showError(CONFLICT_DETAIL, 'Instance not deleted');
+          loadAll();
+          return;
+        case 'unknown':
+          setDeletingInFlight(null);
+          showWarn(UNKNOWN_DELETE_DETAIL, 'Deletion not confirmed');
+          loadAll();
+          return;
+        case 'rejected':
+          setDeletingInFlight(null);
+          showError(outcome.message, 'Deletion refused');
+          return;
+      }
+    };
     serviceApi
-      .deleteService(projectId, instance.name)
-      .then(() => {
-        showSuccess(`"${instance.name}" has been removed`, 'Instance deleted');
-        goBack();
-      })
+      .deleteService(projectId, instance.name, instance.desiredRevision)
+      .then((result) => settle(classifyDelete(result)))
       .catch((err) => {
+        const outcome = classifyWriteError(err);
+        if (outcome) {
+          settle(outcome);
+          return;
+        }
+        if (navGenerationRef.current !== generation) return;
+        setDeletingInFlight(null);
         showError(apiErrorMessage(err, 'Failed to delete instance'));
       });
   };
@@ -263,12 +499,12 @@ export default function ServiceDetailPage() {
           <nav className="breadcrumb">
             <a
               className="breadcrumb-link"
-              onClick={goBack}
+              onClick={() => goBack()}
               onKeyDown={(e) => e.key === 'Enter' && goBack()}
               tabIndex={0}
             >
               <i className="pi pi-arrow-left text-[11px]"></i>
-              {parentLabel(instance?.service)}
+              {parentLabel(knownService)}
             </a>
             <i className="pi pi-angle-right text-[10px] text-fg-muted"></i>
             <span className="breadcrumb-current">{instance?.name || serviceName}</span>
@@ -282,21 +518,29 @@ export default function ServiceDetailPage() {
               <div className="header-text">
                 <div className="header-title-row">
                   <h2>{instance.name}</h2>
-                  <StatusTag
-                    value={instance.status}
-                    tone={statusTone(instance.status)}
-                    pulse={isTransitioning(instance.status)}
-                  />
+                  {deletingHere ? (
+                    <StatusTag
+                      value="Deleting…"
+                      tone="warning"
+                      icon={<i className="pi pi-spin pi-spinner text-[0.7rem]" />}
+                    />
+                  ) : (
+                    <StatusTag
+                      value={instancePhase(instance)}
+                      tone={statusTone(instancePhase(instance))}
+                      pulse={isTransitioning(instancePhase(instance))}
+                    />
+                  )}
                 </div>
                 <p className="page-desc">
                   {instance.service} · <span className="mono">{instance.serviceTag}</span>
                 </p>
               </div>
               <div className="header-actions">
-                {instance.url && (
+                {externalUrl && (
                   <button
                     className="btn-secondary"
-                    disabled={instance.status !== 'Ready'}
+                    disabled={actionsLocked || instancePhase(instance) !== 'Ready'}
                     onClick={openExternal}
                   >
                     <i className="pi pi-external-link"></i>
@@ -307,11 +551,15 @@ export default function ServiceDetailPage() {
                   <i className="pi pi-refresh"></i>
                   Refresh
                 </button>
-                <button className="btn-secondary" onClick={editInstance}>
+                <button className="btn-secondary" disabled={actionsLocked} onClick={editInstance}>
                   <i className="pi pi-pencil"></i>
                   Edit
                 </button>
-                <button className="btn-secondary danger" onClick={confirmDelete}>
+                <button
+                  className="btn-secondary danger"
+                  disabled={actionsLocked}
+                  onClick={confirmDelete}
+                >
                   <i className="pi pi-trash"></i>
                   Delete
                 </button>
@@ -343,45 +591,10 @@ export default function ServiceDetailPage() {
 
             {tab === 'overview' && (
               <div className="detail-content">
-                {instance.status === 'Error' && (
-                  <div className="alert alert-danger">
-                    <i className="pi pi-exclamation-circle"></i>
-                    <div>
-                      <strong>Instance failed to start</strong>
-                      {instance.statusMessage ? (
-                        <p className="mono">{instance.statusMessage}</p>
-                      ) : (
-                        <p className="mono">Check the pod logs for the underlying error.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {instance.status === 'Updating' && (
-                  <div className="alert alert-warn">
-                    <i className="pi pi-spin pi-spinner"></i>
-                    <div>
-                      <strong>Updating…</strong>
-                      {instance.statusMessage ? (
-                        <p className="mono">{instance.statusMessage}</p>
-                      ) : (
-                        <p>KuboCD is rolling out the new configuration.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {instance.status === 'Installing' && (
-                  <div className="alert alert-warn">
-                    <i className="pi pi-spin pi-spinner"></i>
-                    <div>
-                      <strong>Installing…</strong>
-                      {instance.statusMessage ? (
-                        <p className="mono">{instance.statusMessage}</p>
-                      ) : (
-                        <p>Pulling image and scheduling pod. This usually takes ~30s.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <InstanceStatusAlert
+                  status={deletingHere ? 'Deleting' : instancePhase(instance)}
+                  message={instance.statusMessage}
+                />
 
                 <div className="info-card">
                   <div className="info-grid">
@@ -414,15 +627,19 @@ export default function ServiceDetailPage() {
                     {instance.url && (
                       <div className="info-item info-item-wide">
                         <span className="info-label">URL</span>
-                        <a
-                          className="info-link mono"
-                          href={instance.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {instance.url}
-                          <i className="pi pi-external-link text-[11px]"></i>
-                        </a>
+                        {externalUrl ? (
+                          <a
+                            className="info-link mono"
+                            href={externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {externalUrl}
+                            <i className="pi pi-external-link text-[11px]"></i>
+                          </a>
+                        ) : (
+                          <span className="info-value mono">{instance.url}</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -466,8 +683,8 @@ export default function ServiceDetailPage() {
                             <span className="muted-text small">platform</span>
                           )}
                           <StatusTag
-                            value={connection.resolved ? 'Resolved' : 'Waiting'}
-                            tone={connection.resolved ? 'success' : 'warning'}
+                            value={connectionStateTag(connection).label}
+                            tone={connectionStateTag(connection).tone}
                           />
                         </li>
                       ))}
@@ -535,6 +752,19 @@ export default function ServiceDetailPage() {
               </div>
             )}
           </>
+        ) : leavingHere ? (
+          <EmptyState
+            variant="panel"
+            icon="pi pi-check-circle"
+            title="Instance deleted"
+            description="The instance has been removed."
+            action={
+              <button className="btn-secondary" onClick={() => goBack()}>
+                <i className="pi pi-arrow-left"></i>
+                Back to instances
+              </button>
+            }
+          />
         ) : (
           <EmptyState
             variant="panel"
@@ -542,7 +772,7 @@ export default function ServiceDetailPage() {
             title="Instance not found"
             description="The service instance could not be loaded."
             action={
-              <button className="btn-secondary" onClick={goBack}>
+              <button className="btn-secondary" onClick={() => goBack()}>
                 <i className="pi pi-arrow-left"></i>
                 Back to instances
               </button>
