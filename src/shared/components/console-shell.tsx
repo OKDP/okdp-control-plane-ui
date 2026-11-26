@@ -98,7 +98,7 @@ export function ConsoleShell({
             icon: 'pi pi-shield',
             command: () => navigate('/admin'),
           },
-          // Identity is served by kubauth only.
+          // Shown only when the platform serves user management.
           ...(userManagement
             ? [
                 {

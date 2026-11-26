@@ -317,13 +317,10 @@ export function ExternalConnectionList() {
       />
 
       {!crdAvailable && (
-        // The CRDs ship with a KuboCD version the platform does not run yet.
-        // Say so plainly rather than letting the user fill a form that cannot
-        // be saved.
         <Message
           severity="info"
           className="mb-4 w-full justify-start"
-          text="External connections need the KuboCD connection CRDs, which are not installed on this cluster yet. Internal connections are unaffected."
+          text="External connections are not available on this platform yet. Internal connections are unaffected."
         />
       )}
 

@@ -4,8 +4,8 @@ import { useCapabilities } from '../../core/context/capabilities-context';
 /** /admin — control plane administration zone. Tiles fan out to the
  *  individual administration areas. */
 export default function AdminPage() {
-  // Identity is served by kubauth only.
-  const { userManagement } = useCapabilities();
+  // Shown only when the platform serves user management.
+  const { userManagement, engine } = useCapabilities();
 
   return (
     <section className="flex animate-[fadeInUp_0.4s_ease-out] flex-col gap-7">
@@ -14,6 +14,11 @@ export default function AdminPage() {
         <p className="page-sub mt-1">
           Control plane administration. These settings apply to the whole platform.
         </p>
+        {engine.name && (
+          <p className="page-sub mt-1">
+            Deployment engine: <span className="mono">{engine.name}</span>
+          </p>
+        )}
       </div>
 
       <QuickActions>

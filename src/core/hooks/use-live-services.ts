@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { serviceApi } from '../api/service-api';
 import { applyListEvent } from '../api/sse';
+import { createDeletionGuard, forgetDeletedInstance } from '../api/service-deletions';
 import { readUiCache, writeUiCache } from '../api/ui-cache';
 import type { ServiceInstance } from '../models/service.model';
 import { logger } from '../services/logger';
@@ -25,6 +26,8 @@ export function useLiveServices(projectName: string | undefined): LiveServicesSt
   useEffect(() => {
     if (!projectName) return;
     let cancelled = false;
+    const deletions = createDeletionGuard(projectName);
+    const read = deletions.startRead();
 
     // Recent snapshot: paint immediately; the fetch below still runs.
     const cached = readUiCache<ServiceInstance[]>(`services:${projectName}`);
@@ -34,10 +37,12 @@ export function useLiveServices(projectName: string | undefined): LiveServicesSt
       .getServices(projectName)
       .then((data) => {
         if (cancelled) return;
-        writeUiCache(`services:${projectName}`, data);
-        setState({ project: projectName, instances: data, loaded: true });
+        const current = read.reconcile(data);
+        writeUiCache(`services:${projectName}`, current);
+        setState({ project: projectName, instances: current, loaded: true });
       })
       .catch((err) => {
+        read.release();
         if (cancelled) return;
         logger.error('Failed to load services', err);
         setState((curr) =>
@@ -46,16 +51,20 @@ export function useLiveServices(projectName: string | undefined): LiveServicesSt
       });
 
     const unsubscribe = serviceApi.subscribeServices(projectName, {
-      next: (event) =>
+      next: (event) => {
+        deletions.track(event);
+        if (event.type === 'DELETED') forgetDeletedInstance(projectName, event.object.name);
         setState((curr) =>
           curr && curr.project === projectName
             ? { ...curr, instances: applyListEvent(curr.instances, event, (s) => s.name) }
             : curr,
-        ),
+        );
+      },
     });
 
     return () => {
       cancelled = true;
+      read.release();
       unsubscribe();
     };
   }, [projectName]);
