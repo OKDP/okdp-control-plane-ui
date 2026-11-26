@@ -7,6 +7,7 @@ import type { Project, ProjectEvent } from '../api/project-api';
 const mocks = vi.hoisted(() => ({
   getProjects: vi.fn(),
   subscribers: [] as { next: (event: unknown) => void }[],
+  isAuthenticated: true,
 }));
 
 vi.mock('../api/project-api', () => ({
@@ -24,7 +25,7 @@ vi.mock('../api/project-api', () => ({
 
 // The provider only fetches while authenticated
 vi.mock('../auth/auth-context', () => ({
-  useAuth: () => ({ isAuthenticated: true }),
+  useAuth: () => ({ isAuthenticated: mocks.isAuthenticated }),
 }));
 
 import { ProjectContextProvider, useProjectContext } from './project-context';
@@ -68,6 +69,7 @@ describe('ProjectContextProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.subscribers.length = 0;
+    mocks.isAuthenticated = true;
     sessionStorage.clear();
     currentPath = '';
     mocks.getProjects.mockResolvedValue(mockProjects);
@@ -185,6 +187,27 @@ describe('ProjectContextProvider', () => {
       await waitFor(() => expect(result.current.loadError).toBe(false));
       expect(result.current.availableProjects).toEqual(mockProjects);
       expect(result.current.currentProjectId).toBe('proj-a');
+    });
+  });
+
+  describe('Logout cleanup', () => {
+    it('clears projects and selection when authentication drops without navigating', async () => {
+      sessionStorage.setItem('okdp-selected-projectId', 'proj-a');
+      const { result, rerender } = renderHook(() => useProjectContext(), {
+        wrapper: makeWrapper(['/projects/proj-a/views']),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.availableProjects).toEqual(mockProjects);
+      expect(result.current.currentProject?.name).toBe('proj-a');
+
+      mocks.isAuthenticated = false;
+      rerender();
+
+      await waitFor(() => expect(result.current.availableProjects).toEqual([]));
+      expect(result.current.currentProject).toBeNull();
+      expect(result.current.currentProjectId).toBeNull();
+      expect(currentPath).toBe('/projects/proj-a/views');
     });
   });
 });

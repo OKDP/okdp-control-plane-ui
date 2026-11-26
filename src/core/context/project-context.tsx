@@ -61,10 +61,17 @@ export function ProjectContextProvider({ children }: { children: ReactNode }) {
   // trigger the forced-logout handler.
   useEffect(() => {
     if (!isAuthenticated) {
+      setAvailableProjects([]);
+      setCurrentProjectId(null);
+      setLoaded(false);
+      setIsLoading(true);
+      setLoadError(false);
       return;
     }
 
     let cancelled = false;
+    setIsLoading(true);
+    setCurrentProjectId((prev) => prev ?? sessionStorage.getItem(STORAGE_KEY));
 
     projectApi
       .getProjects()

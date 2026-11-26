@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { safeExternalUrl } from '../utils/safe-url';
 
 /** Responsive grid wrapping a set of action cards. */
 export function QuickActions({ children }: { children: ReactNode }) {
@@ -59,12 +60,13 @@ export function ActionCard({
     </>
   );
 
-  if (disabled) {
+  const safeHref = external ? safeExternalUrl(to) : undefined;
+  if (disabled || (external && !safeHref)) {
     return <div className={`${CARD_CLASS} cursor-not-allowed opacity-55`}>{body}</div>;
   }
   if (external) {
     return (
-      <a href={to} target="_blank" rel="noreferrer" className={CARD_CLASS}>
+      <a href={safeHref} target="_blank" rel="noopener noreferrer" className={CARD_CLASS}>
         {body}
       </a>
     );

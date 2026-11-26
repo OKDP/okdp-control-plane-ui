@@ -12,7 +12,8 @@ import {
 import { Log, User, UserManager, WebStorageStateStore } from 'oidc-client-ts';
 import { environment } from '../../config/environment';
 import { logger } from '../services/logger';
-import { setAuthTokenProvider } from '../api/http';
+import { clearApiCache, setAuthTokenProvider } from '../api/http';
+import { clearUiCache } from '../api/ui-cache';
 import { AUTH_RETURN_URL_KEY, PROJECT_STORAGE_KEY, SQL_QUERY_KEY } from '../storage-keys';
 import type { UserProfile } from './user-profile';
 
@@ -145,6 +146,8 @@ function AuthProviderInner({ children }: { children: ReactNode }) {
   });
 
   const clearLocalState = useCallback(() => {
+    clearApiCache();
+    clearUiCache();
     setState((s) => ({ ...s, isAuthenticated: false, profile: null, roles: [] }));
     sessionStorage.removeItem(AUTH_RETURN_URL_KEY);
     sessionStorage.removeItem(PROJECT_STORAGE_KEY);
@@ -212,6 +215,10 @@ function AuthProviderInner({ children }: { children: ReactNode }) {
     }
 
     const applyUser = (user: User | null) => {
+      if (!user || user.expired) {
+        clearApiCache();
+        clearUiCache();
+      }
       setState((s) => ({ ...s, ...toAuthState(user) }));
     };
 
